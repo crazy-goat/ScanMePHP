@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-03-16
+
+### Added
+
+- GitHub Actions CI workflow with permission checks
+- Support for PHP 8.1, 8.2, 8.3, 8.4 in CI pipeline
+- Automatic CI runs for repo owner and developers with write access
+
+### Fixed
+
+- PHP 8.1 compatibility - replaced `readonly class` with `readonly` properties
+
 ## [0.1.0] - 2026-03-16
 
 ### Added
@@ -37,5 +49,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive test suite with PHPUnit
 - Full documentation and usage examples
 
-[Unreleased]: https://github.com/crazy-goat/ScanMePHP/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/crazy-goat/ScanMePHP/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/crazy-goat/ScanMePHP/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/crazy-goat/ScanMePHP/releases/tag/v0.1.0
