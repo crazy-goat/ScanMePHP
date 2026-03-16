@@ -41,6 +41,10 @@ inline Row3Sse2 operator~(Row3Sse2 a) noexcept {
     return {_mm_xor_si128(a.lo, ones), ~a.hi};
 }
 
+inline Row3Sse2 andnot(Row3Sse2 mask, Row3Sse2 a) noexcept {
+    return {_mm_andnot_si128(mask.lo, a.lo), ~mask.hi & a.hi};
+}
+
 inline bool is_zero(Row3Sse2 r) noexcept {
     alignas(16) uint64_t buf[2];
     _mm_store_si128(reinterpret_cast<__m128i*>(buf), r.lo);

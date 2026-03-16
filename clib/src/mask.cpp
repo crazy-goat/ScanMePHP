@@ -8,25 +8,32 @@
 
 namespace scanme {
 
-Row3 build_mask_row(int mask_id, int y, int size, const Row3& func_row) {
-    Row3 r = Row3::zero();
-    for (int x = 0; x < size; ++x) {
-        // Set bit x if mask_condition is true AND cell is NOT a function cell
-        bool is_func = (func_row.w[x >> 6] >> (x & 63)) & 1;
-        if (!is_func && mask_condition(mask_id, x, y)) {
-            r.w[x >> 6] |= uint64_t(1) << (x & 63);
+static constexpr int MASK_Y_PERIOD = 12;
+
+static const auto MASK_TILES = []() {
+    std::array<std::array<Row3, MASK_Y_PERIOD>, 8> t{};
+    for (int m = 0; m < 8; ++m) {
+        for (int y = 0; y < MASK_Y_PERIOD; ++y) {
+            Row3 r = Row3::zero();
+            for (int x = 0; x < 192; ++x) {
+                if (mask_condition(m, x, y))
+                    r.w[x >> 6] |= uint64_t(1) << (x & 63);
+            }
+            t[m][y] = r;
         }
     }
-    return r;
+    return t;
+}();
+
+Row3 build_mask_row(int mask_id, int y, int size, const Row3& func_row) {
+    return MASK_TILES[mask_id][y % MASK_Y_PERIOD] & ~func_row & mask_low_n(size);
 }
 
 void apply_mask(QRMatrix& m, int mask_id) {
-    // XOR each row with the mask pattern (non-function cells only)
     for (int y = 0; y < m.size; ++y) {
         Row3 mask_row = build_mask_row(mask_id, y, m.size, m.func[y]);
         m.rows[y] = m.rows[y] ^ mask_row;
     }
-    // Rebuild cols from rows to maintain consistency
     std::memset(m.cols, 0, sizeof(m.cols));
     for (int y = 0; y < m.size; ++y) {
         for (int word = 0; word < 3; ++word) {
@@ -37,19 +44,14 @@ void apply_mask(QRMatrix& m, int mask_id) {
                 if (x < m.size) {
                     m.cols[x].w[y >> 6] |= uint64_t(1) << (y & 63);
                 }
-                bits &= bits - 1; // clear lowest set bit
+                bits &= bits - 1;
             }
         }
     }
 }
 
-// Build format info as Row3 bitmaps for a given ecl and mask.
-// Returns the format info bits placed at the correct positions in each row.
-// format_rows[y] has bits set at the x-positions where format info goes on row y.
-// format_dark[y] has bits set where the format info bit is 1 (dark).
 static void build_format_bitmaps(int ecl, int mask_id, int size,
                                   Row3* format_mask, Row3* format_dark) {
-    // Zero out
     for (int y = 0; y < size; ++y) {
         format_mask[y] = Row3::zero();
         format_dark[y] = Row3::zero();
@@ -58,7 +60,6 @@ static void build_format_bitmaps(int ecl, int mask_id, int size,
     uint16_t fmt = FORMAT_INFO[ecl * 8 + mask_id];
     int n = size;
 
-    // Helper to set a format bit at position (x, y)
     auto set_fmt = [&](int x, int y, bool dark) {
         format_mask[y].w[x >> 6] |= uint64_t(1) << (x & 63);
         if (dark) {
@@ -66,7 +67,6 @@ static void build_format_bitmaps(int ecl, int mask_id, int size,
         }
     };
 
-    // Top-left: column x=8, rows 0-5,7,8
     set_fmt(8, 0, (fmt >> 0) & 1);
     set_fmt(8, 1, (fmt >> 1) & 1);
     set_fmt(8, 2, (fmt >> 2) & 1);
@@ -76,7 +76,6 @@ static void build_format_bitmaps(int ecl, int mask_id, int size,
     set_fmt(8, 7, (fmt >> 6) & 1);
     set_fmt(8, 8, (fmt >> 7) & 1);
 
-    // Top-left: row y=8, cols 7,5,4,3,2,1,0
     set_fmt(7, 8, (fmt >> 8) & 1);
     set_fmt(5, 8, (fmt >> 9) & 1);
     set_fmt(4, 8, (fmt >> 10) & 1);
@@ -85,11 +84,9 @@ static void build_format_bitmaps(int ecl, int mask_id, int size,
     set_fmt(1, 8, (fmt >> 13) & 1);
     set_fmt(0, 8, (fmt >> 14) & 1);
 
-    // Top-right: row y=8, cols n-1 down to n-8
     for (int i = 0; i < 8; ++i)
         set_fmt(n - 1 - i, 8, (fmt >> i) & 1);
 
-    // Bottom-left: col x=8, rows n-7 up to n-1
     for (int i = 8; i < 15; ++i)
         set_fmt(8, n - 15 + i, (fmt >> i) & 1);
 }
@@ -174,13 +171,16 @@ int calculate_penalty_scalar(const Row3* masked_rows, const Row3* /*masked_cols*
     result += r1_pen;
     result += r3_pen;
 
-    for (int y = 0; y < size - 1; ++y) {
-        for (int x = 0; x < size - 1; ++x) {
-            bool color = getModule(x, y);
-            if (color == getModule(x + 1, y) &&
-                color == getModule(x, y + 1) &&
-                color == getModule(x + 1, y + 1))
-                r2_pen += 3;
+    {
+        Row3 valid_r2 = mask_low_n(size - 1);
+        for (int y = 0; y < size - 1; ++y) {
+            Row3 cur  = masked_rows[y];
+            Row3 next = masked_rows[y + 1];
+            Row3 cur_s  = shr1(cur);
+            Row3 next_s = shr1(next);
+            Row3 all_dark  = cur & cur_s & next & next_s & valid_r2;
+            Row3 all_light = ~cur & ~cur_s & ~next & ~next_s & valid_r2;
+            r2_pen += (popcnt(all_dark) + popcnt(all_light)) * 3;
         }
     }
     result += r2_pen;
@@ -206,7 +206,6 @@ int calculate_penalty_scalar(const Row3* masked_rows, const Row3* /*masked_cols*
     return result;
 }
 
-// Rebuild cols from rows
 static void rows_to_cols(const Row3* rows, Row3* cols, int size) {
     std::memset(cols, 0, sizeof(Row3) * MAX_QR_SIZE);
     for (int y = 0; y < size; ++y) {
@@ -225,40 +224,25 @@ static void rows_to_cols(const Row3* rows, Row3* cols, int size) {
 }
 
 int select_best_mask(QRMatrix& m, int ecl, int* penalties_out) {
-    // m has: function patterns, version info, data placed — but NO format info, NO mask applied.
-    // For each mask candidate, we build the fully masked+formatted rows and evaluate penalty.
-
     int best_mask = 0;
     int best_penalty = INT_MAX;
 
-    // Use thread_local static buffers to avoid stack overflow
-    // (8 × 177 × 24 bytes per array = ~34KB each, total ~170KB)
     static thread_local Row3 masked_rows[MAX_QR_SIZE];
     static thread_local Row3 masked_cols[MAX_QR_SIZE];
-    static thread_local Row3 cur_mask_rows[MAX_QR_SIZE];
     static thread_local Row3 cur_fmt_mask[MAX_QR_SIZE];
     static thread_local Row3 cur_fmt_dark[MAX_QR_SIZE];
 
-    for (int mask_id = 0; mask_id < 8; ++mask_id) {
-        // Build mask rows for this mask
-        for (int y = 0; y < m.size; ++y) {
-            cur_mask_rows[y] = build_mask_row(mask_id, y, m.size, m.func[y]);
-        }
+    Row3 valid = mask_low_n(m.size);
 
-        // Build format info bitmaps for this mask
+    for (int mask_id = 0; mask_id < 8; ++mask_id) {
         build_format_bitmaps(ecl, mask_id, m.size, cur_fmt_mask, cur_fmt_dark);
 
-        // Build masked rows:
-        // Start with m.rows[y] (has data + function patterns, no format info)
-        // XOR with mask_rows (flips non-function data cells)
-        // Replace format info positions with correct format info values
         for (int y = 0; y < m.size; ++y) {
-            Row3 row = m.rows[y] ^ cur_mask_rows[y];
-            row = (row & ~cur_fmt_mask[y]) | cur_fmt_dark[y];
-            masked_rows[y] = row;
+            Row3 pattern = MASK_TILES[mask_id][y % MASK_Y_PERIOD] & ~m.func[y] & valid;
+            Row3 row = m.rows[y] ^ pattern;
+            masked_rows[y] = andnot(cur_fmt_mask[y], row) | cur_fmt_dark[y];
         }
 
-        // Build cols from masked rows
         rows_to_cols(masked_rows, masked_cols, m.size);
 
         int rule_vals[5] = {};

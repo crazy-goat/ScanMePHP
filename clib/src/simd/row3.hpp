@@ -7,9 +7,9 @@ namespace scanme {
 struct Row3 {
     uint64_t w[3];
 
-    static Row3 zero() noexcept { return {{0, 0, 0}}; }
+    static constexpr Row3 zero() noexcept { return {{0, 0, 0}}; }
 
-    static Row3 from_words(uint64_t w0, uint64_t w1, uint64_t w2) noexcept {
+    static constexpr Row3 from_words(uint64_t w0, uint64_t w1, uint64_t w2) noexcept {
         return {{w0, w1, w2}};
     }
 };
@@ -64,6 +64,10 @@ inline Row3 shl(Row3 r, int n) noexcept {
 
 inline bool is_zero(Row3 r) noexcept {
     return (r.w[0] | r.w[1] | r.w[2]) == 0;
+}
+
+inline Row3 andnot(Row3 mask, Row3 a) noexcept {
+    return {{~mask.w[0] & a.w[0], ~mask.w[1] & a.w[1], ~mask.w[2] & a.w[2]}};
 }
 
 inline int popcnt(Row3 r) noexcept {
