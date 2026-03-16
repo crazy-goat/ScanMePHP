@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  check-permissions:
+    runs-on: ubuntu-latest
+    outputs:
+      has-permissions: ${{ steps.check.outputs.has-permissions }}
+    steps:
+      - name: Check if actor has write permissions
+        id: check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const actor = context.actor;
+            const owner = context.repo.owner;
+            
+            // Always allow repo owner
+            if (actor === owner) {
+              core.setOutput('has-permissions', 'true');
+              return;
+            }
+            
+            // Check if actor has write permissions
+            try {
+              const { data: permission } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                username: actor
+              });
+              
+              const allowedPermissions = ['admin', 'write', 'maintain'];
+              if (allowedPermissions.includes(permission.permission)) {
+                core.setOutput('has-permissions', 'true');
+              } else {
+                core.setOutput('has-permissions', 'false');
+                core.info(`User ${actor} has permission level: ${permission.permission}. Skipping CI.`);
+              }
+            } catch (error) {
+              core.setOutput('has-permissions', 'false');
+              core.info(`Could not verify permissions for ${actor}. Skipping CI.`);
+            }
+
+  test:
+    needs: check-permissions
+    if: needs.check-permissions.outputs.has-permissions == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php-version: ['8.1', '8.2', '8.3', '8.4']
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: ${{ matrix.php-version }}
+        coverage: xdebug
+
+    - name: Validate composer.json and composer.lock
+      run: composer validate --strict
+
+    - name: Cache Composer packages
+      id: composer-cache
+      uses: actions/cache@v3
+      with:
+        path: vendor
+        key: ${{ runner.os }}-php-${{ matrix.php-version }}-${{ hashFiles('**/composer.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-php-${{ matrix.php-version }}-
+
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-progress
+
+    - name: Run test suite
+      run: composer run-script test
