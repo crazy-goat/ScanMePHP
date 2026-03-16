@@ -84,20 +84,25 @@ class ReedSolomon
         $expTable = $this->expTable;
         $logTable = $this->logTable;
 
-        // Pre-compute log of each generator coefficient (all are non-zero for RS)
+        // Pre-compute log of each generator coefficient.
+        // Most coefficients are non-zero, but intermediate coefficients CAN be zero
+        // in GF(256) for large ECC counts (e.g., 264 for v11-High).
+        // Use -1 as sentinel for zero coefficients (log(0) is undefined).
         $genLog = [];
         for ($i = 0; $i < $eccCount; $i++) {
-            $genLog[$i] = $logTable[$generator[$i + 1]];
+            $coeff = $generator[$i + 1];
+            $genLog[$i] = $coeff !== 0 ? $logTable[$coeff] : -1;
         }
 
         // Build transposed table: for each possible factor (1-255),
-        // pre-compute the XOR contribution to each ECC position
+        // pre-compute the XOR contribution to each ECC position.
+        // Zero coefficients contribute 0 (multiplication by zero in GF(256)).
         $factorTable = [];
         for ($f = 1; $f < 256; $f++) {
             $lf = $logTable[$f];
             $row = [];
             for ($i = 0; $i < $eccCount; $i++) {
-                $row[$i] = $expTable[$genLog[$i] + $lf];
+                $row[$i] = $genLog[$i] !== -1 ? $expTable[$genLog[$i] + $lf] : 0;
             }
             $factorTable[$f] = $row;
         }
@@ -129,7 +134,7 @@ class ReedSolomon
         for ($i = 0; $i < $degree; $i++) {
             $polyLen = count($poly);
             $newPoly = array_fill(0, $polyLen + 1, 0);
-            $alphaI = $expTable[$i];
+            $alphaI = $expTable[$i % 255];
 
             for ($j = 0; $j < $polyLen; $j++) {
                 $newPoly[$j] ^= $poly[$j];

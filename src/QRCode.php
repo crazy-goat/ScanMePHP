@@ -21,7 +21,16 @@ class QRCode
         $this->validateUrl($url);
         $this->url = $url;
         $this->config = $config ?? new QRCodeConfig();
-        $this->encoder = $encoder ?? new Encoder();
+        $this->encoder = $encoder ?? self::createDefaultEncoder();
+    }
+
+    private static function createDefaultEncoder(): EncoderInterface
+    {
+        if (\PHP_INT_SIZE >= 8) {
+            return new FastEncoder();
+        }
+
+        return new Encoder();
     }
 
     private function validateUrl(string $url): void
@@ -39,14 +48,22 @@ class QRCode
     private function ensureMatrix(): Matrix
     {
         if ($this->matrix === null) {
-            if ($this->config->size !== 0 && $this->encoder instanceof Encoder) {
-                $this->matrix = $this->encoder->encode(
+            $encoder = $this->encoder;
+
+            // If a specific version is requested and we're using FastEncoder,
+            // fall back to Encoder which supports the $requestedVersion parameter
+            if ($this->config->size !== 0 && $encoder instanceof FastEncoder) {
+                $encoder = new Encoder();
+            }
+
+            if ($this->config->size !== 0 && $encoder instanceof Encoder) {
+                $this->matrix = $encoder->encode(
                     $this->url,
                     $this->config->errorCorrectionLevel,
                     $this->config->size
                 );
             } else {
-                $this->matrix = $this->encoder->encode(
+                $this->matrix = $encoder->encode(
                     $this->url,
                     $this->config->errorCorrectionLevel,
                 );

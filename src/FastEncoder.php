@@ -8,54 +8,101 @@ use ScanMePHP\Exception\DataTooLargeException;
 use ScanMePHP\Exception\InvalidDataException;
 
 /**
- * High-performance monolithic QR encoder for URLs (Byte mode, v1-v11).
+ * High-performance monolithic QR encoder for URLs (Byte mode, v1-v27).
  *
  * Requires 64-bit PHP (PHP_INT_SIZE === 8). Trades readability for raw speed:
  * all encoding, Reed-Solomon, matrix building, mask selection, and data placement
  * are inlined with zero internal method calls in the hot path.
  *
- * Works entirely in int-packed representation (one 64-bit int per row/column).
- * Only creates a Matrix object at the very end for renderer compatibility.
+ * Uses int-pair representation: each row/column is stored as two 64-bit ints
+ * [$hi, $lo] giving 128 usable bits. This covers QR sizes up to 125 modules
+ * (v1-v27). Bit layout: hi holds bits [size-1 .. 64], lo holds bits [63 .. 0].
+ * For v1-v11 (size ≤ 61), hi is always 0.
  *
- * Falls back to the standard Encoder for URLs exceeding v11 capacity (321 chars at Medium ECL).
+ * Falls back to the standard Encoder for URLs exceeding v27 capacity.
  */
 class FastEncoder implements EncoderInterface
 {
+    private const MAX_VERSION = 27;
+
     // Byte-mode capacity: [version-1][ecl] = max URL length
     private const BYTE_CAPACITY = [
-        [ 17,  14,  11,   7], // v1
-        [ 32,  26,  20,  14], // v2
-        [ 53,  42,  32,  24], // v3
-        [ 78,  62,  46,  34], // v4
-        [106,  84,  60,  44], // v5
-        [134, 106,  74,  58], // v6
-        [154, 122,  86,  64], // v7
-        [192, 152, 108,  84], // v8
-        [230, 180, 130,  98], // v9
-        [271, 213, 151, 119], // v10
-        [321, 251, 177, 137], // v11
+        [  17,   14,   11,    7], // v1
+        [  32,   26,   20,   14], // v2
+        [  53,   42,   32,   24], // v3
+        [  78,   62,   46,   34], // v4
+        [ 106,   84,   60,   44], // v5
+        [ 134,  106,   74,   58], // v6
+        [ 154,  122,   86,   64], // v7
+        [ 192,  152,  108,   84], // v8
+        [ 230,  180,  130,   98], // v9
+        [ 271,  213,  151,  119], // v10
+        [ 321,  251,  177,  137], // v11
+        [ 367,  287,  203,  155], // v12
+        [ 425,  331,  241,  177], // v13
+        [ 458,  362,  258,  194], // v14
+        [ 520,  412,  292,  220], // v15
+        [ 586,  450,  322,  250], // v16
+        [ 644,  504,  364,  280], // v17
+        [ 718,  560,  394,  310], // v18
+        [ 792,  624,  442,  338], // v19
+        [ 858,  666,  482,  382], // v20
+        [ 929,  711,  509,  403], // v21
+        [1003,  779,  565,  439], // v22
+        [1091,  857,  611,  461], // v23
+        [1171,  911,  661,  511], // v24
+        [1273,  997,  715,  535], // v25
+        [1367, 1059,  751,  593], // v26
+        [1465, 1125,  805,  625], // v27
     ];
 
     private const ECC_COUNT = [
-        [  7,  10,  13,  17], // v1
-        [ 10,  16,  22,  28], // v2
-        [ 15,  26,  36,  44], // v3
-        [ 20,  36,  52,  64], // v4
-        [ 26,  48,  72,  88], // v5
-        [ 36,  64,  96, 112], // v6
-        [ 40,  72, 108, 130], // v7
-        [ 48,  88, 132, 156], // v8
-        [ 60, 110, 160, 192], // v9
-        [ 72, 130, 192, 224], // v10
-        [ 80, 150, 224, 264], // v11
+        [   7,   10,   13,   17], // v1
+        [  10,   16,   22,   28], // v2
+        [  15,   26,   36,   44], // v3
+        [  20,   36,   52,   64], // v4
+        [  26,   48,   72,   88], // v5
+        [  36,   64,   96,  112], // v6
+        [  40,   72,  108,  130], // v7
+        [  48,   88,  132,  156], // v8
+        [  60,  110,  160,  192], // v9
+        [  72,  130,  192,  224], // v10
+        [  80,  150,  224,  264], // v11
+        [  96,  176,  260,  308], // v12
+        [ 104,  198,  288,  352], // v13
+        [ 120,  216,  320,  384], // v14
+        [ 132,  240,  360,  432], // v15
+        [ 144,  280,  408,  480], // v16
+        [ 168,  308,  448,  532], // v17
+        [ 180,  338,  504,  588], // v18
+        [ 196,  364,  546,  650], // v19
+        [ 224,  416,  600,  700], // v20
+        [ 224,  442,  644,  750], // v21
+        [ 252,  476,  690,  816], // v22
+        [ 270,  504,  750,  900], // v23
+        [ 300,  560,  810,  960], // v24
+        [ 312,  588,  870, 1050], // v25
+        [ 336,  644,  952, 1110], // v26
+        [ 360,  700, 1020, 1200], // v27
     ];
 
-    private const TOTAL_CODEWORDS = [0, 26, 44, 70, 100, 134, 172, 196, 242, 292, 346, 404];
+    private const TOTAL_CODEWORDS = [
+        0,
+        26, 44, 70, 100, 134, 172, 196, 242, 292, 346,
+        404, 466, 532, 581, 655, 733, 815, 901, 991, 1085,
+        1156, 1258, 1364, 1474, 1588, 1706, 1828,
+    ];
 
     private const ALIGNMENT_POSITIONS = [
         [], [],
         [6, 18], [6, 22], [6, 26], [6, 30], [6, 34],
         [6, 22, 38], [6, 24, 42], [6, 26, 46], [6, 28, 50], [6, 30, 54],
+        [6, 32, 58], [6, 34, 62],
+        [6, 26, 46, 66], [6, 26, 48, 70], [6, 26, 50, 74],
+        [6, 30, 54, 78], [6, 30, 56, 82], [6, 30, 58, 86], [6, 34, 62, 90],
+        [6, 28, 50, 72, 94], [6, 26, 50, 74, 98], [6, 30, 54, 78, 102],
+        [6, 28, 54, 80, 106], [6, 32, 58, 84, 110], [6, 30, 58, 86, 114],
+        [6, 34, 62, 90, 118],
     ];
 
     /** @var int[] Galois field exp table (512 entries) */
@@ -68,30 +115,16 @@ class FastEncoder implements EncoderInterface
     private static array $pop = [];
 
     /**
-     * Per-version cached data, keyed by version.
-     * @var array<int, array{
-     *   baseRows: int[],
-     *   baseCols: int[],
-     *   zigX: int[],
-     *   zigY: int[],
-     *   zigRowBit: int[],
-     *   zigColBit: int[],
-     *   maskRows: array<int, int[]>,
-     *   maskCols: array<int, int[]>,
-     * }>
+     * Per-version cached data. All row/col arrays use int-pair layout:
+     * baseHi/baseLo are parallel int[] arrays (one pair per row/col).
+     * @var array<int, array>
      */
     private static array $versionCache = [];
 
-    /**
-     * Per-(version, ecl) cached format info as full int rows/cols per mask.
-     * @var array<string, array{fmtRows: array<int, int[]>, fmtCols: array<int, int[]>}>
-     */
+    /** @var array<string, array> */
     private static array $formatCache = [];
 
-    /**
-     * Per-(eccCount) cached RS factor tables.
-     * @var array<int, array<int, int[]>>
-     */
+    /** @var array<int, array<int, int[]>> */
     private static array $rsCache = [];
 
     private ?Encoder $fallback = null;
@@ -100,7 +133,7 @@ class FastEncoder implements EncoderInterface
     {
         if (\PHP_INT_SIZE < 8) {
             throw new \RuntimeException(
-                'ScanMePHP requires 64-bit PHP (PHP_INT_SIZE >= 8). '
+                'FastEncoder requires 64-bit PHP (PHP_INT_SIZE >= 8). '
                 . 'Current PHP_INT_SIZE is ' . \PHP_INT_SIZE . '.'
             );
         }
@@ -118,14 +151,14 @@ class FastEncoder implements EncoderInterface
         // Determine version
         $eclVal = $errorCorrectionLevel->value;
         $version = 0;
-        for ($v = 1; $v <= 11; $v++) {
+        for ($v = 1; $v <= self::MAX_VERSION; $v++) {
             if ($dataLen <= self::BYTE_CAPACITY[$v - 1][$eclVal]) {
                 $version = $v;
                 break;
             }
         }
 
-        // Fall back to standard encoder for URLs too long for v11
+        // Fall back to standard encoder for URLs too long for v27
         if ($version === 0) {
             $this->fallback ??= new Encoder();
             return $this->fallback->encode($url, $errorCorrectionLevel);
@@ -168,59 +201,20 @@ class FastEncoder implements EncoderInterface
         $pop = self::$pop;
 
         // === 1. Byte-mode encode: URL bytes → codeword array ===
-        // Mode indicator (0100 = Byte) + character count + data bytes + terminator + padding
-        // All packed directly into byte array (no intermediate bit array)
-
         $charCountBits = $version <= 9 ? 8 : 16;
-        $overheadBits = 4 + $charCountBits; // mode indicator + char count
-
-        // Build the bit stream as bytes directly
-        // First: mode indicator (0100) + char count + data bytes
         $codewords = [];
 
         if ($charCountBits === 8) {
-            // v1-v9: 4-bit mode + 8-bit count = 12 bits overhead
-            // First byte: 0100 LLLL (mode + upper 4 bits of length)
-            // Second byte: remaining data starts
-            // Actually: 0100 CCCC CCCC DDDD DDDD DDDD ...
-            // 4 bits mode + 8 bits count = 12 bits, then data bytes
-            // Byte 0: 0100 cccc  (mode + top 4 of count)
-            // Byte 1: cccc dddd  (bottom 4 of count + top 4 of data[0])
-            // This is messy with bit packing. Let me use a simpler approach:
-            // Build as bits, then pack to bytes.
-
-            // Actually for speed, let's just do the bit math inline:
-            // Total bits = 4 + 8 + dataLen*8 = 12 + dataLen*8
-            // Byte 0: bits 0-7 = 0100 LLLL  where L = top 4 bits of dataLen (dataLen < 256)
-            // Wait, mode=0100, count is 8 bits for v1-9
-            // Stream: 0100 CCCCCCCC D0D0D0D0D0D0D0D0 D1D1D1D1D1D1D1D1 ...
-            // Byte 0: 0100 CCCC  (4 mode bits + top 4 of 8-bit count)
-            // Byte 1: CCCC D0D0  (bottom 4 of count + top 4 of data[0])
-            // Byte 2: D0D0 D1D1  (bottom 4 of data[0] + top 4 of data[1])
-            // ... this is a 4-bit shift of all data bytes
-
-            // First codeword: 0100_LLLL where LLLL = (dataLen >> 4) & 0xF
-            // But mode is 0100 = 0x4, so first byte = (0x4 << 4) | (($dataLen >> 4) & 0xF)
             $codewords[0] = 0x40 | (($dataLen >> 4) & 0x0F);
-            // Second codeword: lower 4 of count + upper 4 of first data byte
             $prev4 = ($dataLen & 0x0F) << 4;
             for ($i = 0; $i < $dataLen; $i++) {
                 $b = ord($url[$i]);
                 $codewords[$i + 1] = $prev4 | (($b >> 4) & 0x0F);
                 $prev4 = ($b & 0x0F) << 4;
             }
-            // Last partial byte (lower 4 bits of last data byte + 0000 terminator start)
-            $codewords[$dataLen + 1] = $prev4; // terminator bits fill the rest
-
+            $codewords[$dataLen + 1] = $prev4;
             $usedCodewords = $dataLen + 2;
         } else {
-            // v10-v11: 4-bit mode + 16-bit count = 20 bits overhead
-            // Stream: 0100 CCCCCCCCCCCCCCCC D0D0D0D0D0D0D0D0 ...
-            // Byte 0: 0100 CCCC  (mode + top 4 of 16-bit count)
-            // Byte 1: CCCCCCCC  (middle 8 of count)
-            // Byte 2: CCCC D0D0  (bottom 4 of count + top 4 of data[0])
-            // ... then same 4-bit shift pattern
-
             $codewords[0] = 0x40 | (($dataLen >> 12) & 0x0F);
             $codewords[1] = ($dataLen >> 4) & 0xFF;
             $prev4 = ($dataLen & 0x0F) << 4;
@@ -230,18 +224,17 @@ class FastEncoder implements EncoderInterface
                 $prev4 = ($b & 0x0F) << 4;
             }
             $codewords[$dataLen + 2] = $prev4;
-
             $usedCodewords = $dataLen + 3;
         }
 
-        // Pad to dataCodewords with alternating 0xEC, 0x11
+        // Pad to dataCodewords
         $padByte = 0xEC;
         for ($i = $usedCodewords; $i < $dataCodewords; $i++) {
             $codewords[$i] = $padByte;
             $padByte = $padByte === 0xEC ? 0x11 : 0xEC;
         }
 
-        // === 2. Reed-Solomon ECC (inlined with factor table) ===
+        // === 2. Reed-Solomon ECC ===
         $ecc = array_fill(0, $eccCount, 0);
         for ($i = 0; $i < $dataCodewords; $i++) {
             $factor = $codewords[$i] ^ array_shift($ecc);
@@ -254,12 +247,12 @@ class FastEncoder implements EncoderInterface
             }
         }
 
-        // === 3. Place data into int-packed rows/cols ===
-        // Start with base matrix (function patterns) as int rows/cols
-        $rows = $vc['baseRows'];
-        $cols = $vc['baseCols'];
+        // === 3. Place data into int-pair rows/cols ===
+        $rowsHi = $vc['baseRowsHi'];
+        $rowsLo = $vc['baseRowsLo'];
+        $colsHi = $vc['baseColsHi'];
+        $colsLo = $vc['baseColsLo'];
 
-        // Merge data + ecc into one codeword stream
         $allCount = $dataCodewords + $eccCount;
         for ($i = 0; $i < $eccCount; $i++) {
             $codewords[$dataCodewords + $i] = $ecc[$i];
@@ -268,72 +261,118 @@ class FastEncoder implements EncoderInterface
         // Place data bits using pre-computed zigzag positions
         $zigX = $vc['zigX'];
         $zigY = $vc['zigY'];
-        $zigRowBit = $vc['zigRowBit'];
-        $zigColBit = $vc['zigColBit'];
+        $zigRowBitHi = $vc['zigRowBitHi'];
+        $zigRowBitLo = $vc['zigRowBitLo'];
+        $zigColBitHi = $vc['zigColBitHi'];
+        $zigColBitLo = $vc['zigColBitLo'];
         $zigCount = count($zigX);
 
         $bitIndex = 0;
         for ($p = 0; $p < $zigCount; $p++) {
             $byteIndex = $bitIndex >> 3;
             if ($byteIndex < $allCount && (($codewords[$byteIndex] >> (7 - ($bitIndex & 7))) & 1)) {
-                $rows[$zigY[$p]] |= $zigRowBit[$p];
-                $cols[$zigX[$p]] |= $zigColBit[$p];
+                $y = $zigY[$p];
+                $x = $zigX[$p];
+                $rowsHi[$y] |= $zigRowBitHi[$p];
+                $rowsLo[$y] |= $zigRowBitLo[$p];
+                $colsHi[$x] |= $zigColBitHi[$p];
+                $colsLo[$x] |= $zigColBitLo[$p];
             }
             $bitIndex++;
         }
 
-        // === 4. Select best mask (all 8 masks, bitwise penalty rules) ===
-        $maskRows = $vc['maskRows'];
-        $maskCols = $vc['maskCols'];
-        $fmtRows = $fc['fmtRows'];
-        $fmtCols = $fc['fmtCols'];
+        // === 4. Select best mask (all 8 masks, bitwise penalty rules on int pairs) ===
+        $maskRowsHi = $vc['maskRowsHi'];
+        $maskRowsLo = $vc['maskRowsLo'];
+        $maskColsHi = $vc['maskColsHi'];
+        $maskColsLo = $vc['maskColsLo'];
+        $fmtRowsHi = $fc['fmtRowsHi'];
+        $fmtRowsLo = $fc['fmtRowsLo'];
+        $fmtColsHi = $fc['fmtColsHi'];
+        $fmtColsLo = $fc['fmtColsLo'];
 
-        $sizeMask = (1 << $size) - 1;
-        $sizeM1Mask = (1 << $sizeM1) - 1;
-        $runMask = $sizeM1Mask;
-        $sizeM10 = $size - 10;
-        $r3ValidMask = (1 << $sizeM10) - 1;
         $totalModules = $size * $size;
 
+        // Pre-compute masks for the hi part (bits above 63)
+        // For size <= 64, hiBits = 0 and all hi masks are 0
+        $hiBits = $size > 64 ? $size - 64 : 0;
+
         $bestMask = 0;
-        $bestScore = PHP_INT_MAX;
+        $bestScore = \PHP_INT_MAX;
 
         for ($mask = 0; $mask < 8; $mask++) {
-            $xorR = $maskRows[$mask];
-            $xorC = $maskCols[$mask];
-            $fmtR = $fmtRows[$mask];
-            $fmtC = $fmtCols[$mask];
+            $xrHi = $maskRowsHi[$mask]; $xrLo = $maskRowsLo[$mask];
+            $xcHi = $maskColsHi[$mask]; $xcLo = $maskColsLo[$mask];
+            $frHi = $fmtRowsHi[$mask]; $frLo = $fmtRowsLo[$mask];
+            $fcHi = $fmtColsHi[$mask]; $fcLo = $fmtColsLo[$mask];
 
-            // Apply mask XOR + format info delta
-            $mr = $rows;
-            $mc = $cols;
+            // Apply mask XOR + format info
+            $mrHi = []; $mrLo = []; $mcHi = []; $mcLo = [];
             for ($i = 0; $i < $size; $i++) {
-                $mr[$i] ^= $xorR[$i] ^ $fmtR[$i];
-                $mc[$i] ^= $xorC[$i] ^ $fmtC[$i];
+                $mrHi[$i] = $rowsHi[$i] ^ $xrHi[$i] ^ $frHi[$i];
+                $mrLo[$i] = $rowsLo[$i] ^ $xrLo[$i] ^ $frLo[$i];
+                $mcHi[$i] = $colsHi[$i] ^ $xcHi[$i] ^ $fcHi[$i];
+                $mcLo[$i] = $colsLo[$i] ^ $xcLo[$i] ^ $fcLo[$i];
             }
 
             $penalty = 0;
             $darkCount = 0;
 
-            // Rule 1 horizontal + dark count (bitwise cascade)
+            // Rule 1 horizontal + dark count
             for ($y = 0; $y < $size; $y++) {
-                $row = $mr[$y];
-                $darkCount += $pop[$row & 0xff] + $pop[($row >> 8) & 0xff]
-                    + $pop[($row >> 16) & 0xff] + $pop[($row >> 24) & 0xff]
-                    + $pop[($row >> 32) & 0xff] + $pop[($row >> 40) & 0xff]
-                    + $pop[($row >> 48) & 0xff] + $pop[($row >> 56) & 0xff];
-                $inv = (~($row ^ ($row >> 1))) & $runMask;
-                $r4 = $inv & ($inv >> 1) & ($inv >> 2) & ($inv >> 3);
-                if ($r4 !== 0) {
-                    $penalty += $pop[$r4 & 0xff] + $pop[($r4 >> 8) & 0xff]
-                        + $pop[($r4 >> 16) & 0xff] + $pop[($r4 >> 24) & 0xff]
-                        + $pop[($r4 >> 32) & 0xff] + $pop[($r4 >> 40) & 0xff]
-                        + $pop[($r4 >> 48) & 0xff] + $pop[($r4 >> 56) & 0xff];
-                    $starts = $r4 & ~($r4 << 1);
-                    $penalty += 2 * ($pop[$starts & 0xff] + $pop[($starts >> 8) & 0xff]
-                        + $pop[($starts >> 16) & 0xff] + $pop[($starts >> 24) & 0xff]
-                        + $pop[($starts >> 32) & 0xff] + $pop[($starts >> 40) & 0xff]
-                        + $pop[($starts >> 48) & 0xff] + $pop[($starts >> 56) & 0xff]);
+                $hi = $mrHi[$y];
+                $lo = $mrLo[$y];
+
+                // Popcount (dark count)
+                $darkCount += $pop[$lo & 0xff] + $pop[($lo >> 8) & 0xff]
+                    + $pop[($lo >> 16) & 0xff] + $pop[($lo >> 24) & 0xff]
+                    + $pop[($lo >> 32) & 0xff] + $pop[($lo >> 40) & 0xff]
+                    + $pop[($lo >> 48) & 0xff] + $pop[($lo >> 56) & 0xff]
+                    + $pop[$hi & 0xff] + $pop[($hi >> 8) & 0xff]
+                    + $pop[($hi >> 16) & 0xff] + $pop[($hi >> 24) & 0xff]
+                    + $pop[($hi >> 32) & 0xff] + $pop[($hi >> 40) & 0xff]
+                    + $pop[($hi >> 48) & 0xff] + $pop[($hi >> 56) & 0xff];
+
+                // row >> 1 (unsigned)
+                $s1Lo = (($lo >> 1) & \PHP_INT_MAX) | ($hi << 63);
+                $s1Hi = ($hi >> 1) & \PHP_INT_MAX;
+                // inv = ~(row ^ (row >> 1))  — bits where adjacent modules are same color
+                $invHi = ~($hi ^ $s1Hi);
+                $invLo = ~($lo ^ $s1Lo);
+                // inv >> 1..3
+                $i1Lo = (($invLo >> 1) & \PHP_INT_MAX) | ($invHi << 63);
+                $i1Hi = ($invHi >> 1) & \PHP_INT_MAX;
+                $i2Lo = (($invLo >> 2) & (\PHP_INT_MAX >> 1)) | ($invHi << 62);
+                $i2Hi = ($invHi >> 2) & (\PHP_INT_MAX >> 1);
+                $i3Lo = (($invLo >> 3) & (\PHP_INT_MAX >> 2)) | ($invHi << 61);
+                $i3Hi = ($invHi >> 3) & (\PHP_INT_MAX >> 2);
+                // r4 = inv & (inv>>1) & (inv>>2) & (inv>>3)
+                $r4Hi = $invHi & $i1Hi & $i2Hi & $i3Hi;
+                $r4Lo = $invLo & $i1Lo & $i2Lo & $i3Lo;
+
+                if ($r4Hi !== 0 || $r4Lo !== 0) {
+                    $cnt = $pop[$r4Lo & 0xff] + $pop[($r4Lo >> 8) & 0xff]
+                        + $pop[($r4Lo >> 16) & 0xff] + $pop[($r4Lo >> 24) & 0xff]
+                        + $pop[($r4Lo >> 32) & 0xff] + $pop[($r4Lo >> 40) & 0xff]
+                        + $pop[($r4Lo >> 48) & 0xff] + $pop[($r4Lo >> 56) & 0xff]
+                        + $pop[$r4Hi & 0xff] + $pop[($r4Hi >> 8) & 0xff]
+                        + $pop[($r4Hi >> 16) & 0xff] + $pop[($r4Hi >> 24) & 0xff]
+                        + $pop[($r4Hi >> 32) & 0xff] + $pop[($r4Hi >> 40) & 0xff]
+                        + $pop[($r4Hi >> 48) & 0xff] + $pop[($r4Hi >> 56) & 0xff];
+                    $penalty += $cnt;
+                    // starts = r4 & ~(r4 << 1)
+                    $sl1Hi = ($r4Hi << 1) | (($r4Lo >> 63) & 1);
+                    $sl1Lo = $r4Lo << 1;
+                    $stHi = $r4Hi & ~$sl1Hi;
+                    $stLo = $r4Lo & ~$sl1Lo;
+                    $penalty += 2 * ($pop[$stLo & 0xff] + $pop[($stLo >> 8) & 0xff]
+                        + $pop[($stLo >> 16) & 0xff] + $pop[($stLo >> 24) & 0xff]
+                        + $pop[($stLo >> 32) & 0xff] + $pop[($stLo >> 40) & 0xff]
+                        + $pop[($stLo >> 48) & 0xff] + $pop[($stLo >> 56) & 0xff]
+                        + $pop[$stHi & 0xff] + $pop[($stHi >> 8) & 0xff]
+                        + $pop[($stHi >> 16) & 0xff] + $pop[($stHi >> 24) & 0xff]
+                        + $pop[($stHi >> 32) & 0xff] + $pop[($stHi >> 40) & 0xff]
+                        + $pop[($stHi >> 48) & 0xff] + $pop[($stHi >> 56) & 0xff]);
                 }
             }
 
@@ -341,21 +380,45 @@ class FastEncoder implements EncoderInterface
                 continue;
             }
 
-            // Rule 1 vertical (bitwise cascade on columns)
+            // Rule 1 vertical
             for ($x = 0; $x < $size; $x++) {
-                $col = $mc[$x];
-                $inv = (~($col ^ ($col >> 1))) & $runMask;
-                $r4 = $inv & ($inv >> 1) & ($inv >> 2) & ($inv >> 3);
-                if ($r4 !== 0) {
-                    $penalty += $pop[$r4 & 0xff] + $pop[($r4 >> 8) & 0xff]
-                        + $pop[($r4 >> 16) & 0xff] + $pop[($r4 >> 24) & 0xff]
-                        + $pop[($r4 >> 32) & 0xff] + $pop[($r4 >> 40) & 0xff]
-                        + $pop[($r4 >> 48) & 0xff] + $pop[($r4 >> 56) & 0xff];
-                    $starts = $r4 & ~($r4 << 1);
-                    $penalty += 2 * ($pop[$starts & 0xff] + $pop[($starts >> 8) & 0xff]
-                        + $pop[($starts >> 16) & 0xff] + $pop[($starts >> 24) & 0xff]
-                        + $pop[($starts >> 32) & 0xff] + $pop[($starts >> 40) & 0xff]
-                        + $pop[($starts >> 48) & 0xff] + $pop[($starts >> 56) & 0xff]);
+                $hi = $mcHi[$x];
+                $lo = $mcLo[$x];
+                $s1Lo = (($lo >> 1) & \PHP_INT_MAX) | ($hi << 63);
+                $s1Hi = ($hi >> 1) & \PHP_INT_MAX;
+                $invHi = ~($hi ^ $s1Hi);
+                $invLo = ~($lo ^ $s1Lo);
+                $i1Lo = (($invLo >> 1) & \PHP_INT_MAX) | ($invHi << 63);
+                $i1Hi = ($invHi >> 1) & \PHP_INT_MAX;
+                $i2Lo = (($invLo >> 2) & (\PHP_INT_MAX >> 1)) | ($invHi << 62);
+                $i2Hi = ($invHi >> 2) & (\PHP_INT_MAX >> 1);
+                $i3Lo = (($invLo >> 3) & (\PHP_INT_MAX >> 2)) | ($invHi << 61);
+                $i3Hi = ($invHi >> 3) & (\PHP_INT_MAX >> 2);
+                $r4Hi = $invHi & $i1Hi & $i2Hi & $i3Hi;
+                $r4Lo = $invLo & $i1Lo & $i2Lo & $i3Lo;
+
+                if ($r4Hi !== 0 || $r4Lo !== 0) {
+                    $cnt = $pop[$r4Lo & 0xff] + $pop[($r4Lo >> 8) & 0xff]
+                        + $pop[($r4Lo >> 16) & 0xff] + $pop[($r4Lo >> 24) & 0xff]
+                        + $pop[($r4Lo >> 32) & 0xff] + $pop[($r4Lo >> 40) & 0xff]
+                        + $pop[($r4Lo >> 48) & 0xff] + $pop[($r4Lo >> 56) & 0xff]
+                        + $pop[$r4Hi & 0xff] + $pop[($r4Hi >> 8) & 0xff]
+                        + $pop[($r4Hi >> 16) & 0xff] + $pop[($r4Hi >> 24) & 0xff]
+                        + $pop[($r4Hi >> 32) & 0xff] + $pop[($r4Hi >> 40) & 0xff]
+                        + $pop[($r4Hi >> 48) & 0xff] + $pop[($r4Hi >> 56) & 0xff];
+                    $penalty += $cnt;
+                    $sl1Hi = ($r4Hi << 1) | (($r4Lo >> 63) & 1);
+                    $sl1Lo = $r4Lo << 1;
+                    $stHi = $r4Hi & ~$sl1Hi;
+                    $stLo = $r4Lo & ~$sl1Lo;
+                    $penalty += 2 * ($pop[$stLo & 0xff] + $pop[($stLo >> 8) & 0xff]
+                        + $pop[($stLo >> 16) & 0xff] + $pop[($stLo >> 24) & 0xff]
+                        + $pop[($stLo >> 32) & 0xff] + $pop[($stLo >> 40) & 0xff]
+                        + $pop[($stLo >> 48) & 0xff] + $pop[($stLo >> 56) & 0xff]
+                        + $pop[$stHi & 0xff] + $pop[($stHi >> 8) & 0xff]
+                        + $pop[($stHi >> 16) & 0xff] + $pop[($stHi >> 24) & 0xff]
+                        + $pop[($stHi >> 32) & 0xff] + $pop[($stHi >> 40) & 0xff]
+                        + $pop[($stHi >> 48) & 0xff] + $pop[($stHi >> 56) & 0xff]);
                 }
             }
 
@@ -363,16 +426,31 @@ class FastEncoder implements EncoderInterface
                 continue;
             }
 
-            // Rule 2: 2×2 blocks (LUT popcount)
+            // Rule 2: 2×2 blocks
             for ($y = 0; $y < $sizeM1; $y++) {
-                $same = ~($mr[$y] ^ $mr[$y + 1]) & $sizeMask;
-                $hSame = ~($mr[$y] ^ ($mr[$y] >> 1)) & $sizeM1Mask;
-                $blocks = ($same & ($same >> 1)) & $hSame & $sizeM1Mask;
-                if ($blocks !== 0) {
-                    $penalty += 3 * ($pop[$blocks & 0xff] + $pop[($blocks >> 8) & 0xff]
-                        + $pop[($blocks >> 16) & 0xff] + $pop[($blocks >> 24) & 0xff]
-                        + $pop[($blocks >> 32) & 0xff] + $pop[($blocks >> 40) & 0xff]
-                        + $pop[($blocks >> 48) & 0xff] + $pop[($blocks >> 56) & 0xff]);
+                // same = ~(row[y] ^ row[y+1])  — vertically same
+                $sameHi = ~($mrHi[$y] ^ $mrHi[$y + 1]);
+                $sameLo = ~($mrLo[$y] ^ $mrLo[$y + 1]);
+                // hSame = ~(row[y] ^ (row[y] >> 1))  — horizontally same
+                $rshi = ($mrHi[$y] >> 1) & \PHP_INT_MAX;
+                $rslo = (($mrLo[$y] >> 1) & \PHP_INT_MAX) | ($mrHi[$y] << 63);
+                $hSameHi = ~($mrHi[$y] ^ $rshi);
+                $hSameLo = ~($mrLo[$y] ^ $rslo);
+                // blocks = (same & (same >> 1)) & hSame
+                $ss1Hi = ($sameHi >> 1) & \PHP_INT_MAX;
+                $ss1Lo = (($sameLo >> 1) & \PHP_INT_MAX) | ($sameHi << 63);
+                $bHi = ($sameHi & $ss1Hi) & $hSameHi;
+                $bLo = ($sameLo & $ss1Lo) & $hSameLo;
+
+                if ($bHi !== 0 || $bLo !== 0) {
+                    $penalty += 3 * ($pop[$bLo & 0xff] + $pop[($bLo >> 8) & 0xff]
+                        + $pop[($bLo >> 16) & 0xff] + $pop[($bLo >> 24) & 0xff]
+                        + $pop[($bLo >> 32) & 0xff] + $pop[($bLo >> 40) & 0xff]
+                        + $pop[($bLo >> 48) & 0xff] + $pop[($bLo >> 56) & 0xff]
+                        + $pop[$bHi & 0xff] + $pop[($bHi >> 8) & 0xff]
+                        + $pop[($bHi >> 16) & 0xff] + $pop[($bHi >> 24) & 0xff]
+                        + $pop[($bHi >> 32) & 0xff] + $pop[($bHi >> 40) & 0xff]
+                        + $pop[($bHi >> 48) & 0xff] + $pop[($bHi >> 56) & 0xff]);
                 }
             }
 
@@ -380,20 +458,39 @@ class FastEncoder implements EncoderInterface
                 continue;
             }
 
-            // Rule 3 horizontal: bitwise parallel finder pattern matching
+            // Rule 3 horizontal: 11-bit finder pattern matching
             for ($y = 0; $y < $size; $y++) {
-                $row = $mr[$y];
-                $r1 = $row >> 1; $r2 = $row >> 2; $r3 = $row >> 3; $r4p = $row >> 4;
-                $r5 = $row >> 5; $r6 = $row >> 6; $r7 = $row >> 7; $r8 = $row >> 8;
-                $r9 = $row >> 9; $r10 = $row >> 10;
-                $m1 = $r10 & ~$r9 & $r8 & $r7 & $r6 & ~$r5 & $r4p & ~$r3 & ~$r2 & ~$r1 & ~$row;
-                $m2 = ~$r10 & ~$r9 & ~$r8 & ~$r7 & $r6 & ~$r5 & $r4p & $r3 & $r2 & ~$r1 & $row;
-                $matches = ($m1 | $m2) & $r3ValidMask;
-                if ($matches !== 0) {
-                    $penalty += 40 * ($pop[$matches & 0xff] + $pop[($matches >> 8) & 0xff]
-                        + $pop[($matches >> 16) & 0xff] + $pop[($matches >> 24) & 0xff]
-                        + $pop[($matches >> 32) & 0xff] + $pop[($matches >> 40) & 0xff]
-                        + $pop[($matches >> 48) & 0xff] + $pop[($matches >> 56) & 0xff]);
+                $hi = $mrHi[$y]; $lo = $mrLo[$y];
+                // Compute row >> 1 through row >> 10 as int pairs
+                $r1Lo = (($lo >> 1) & \PHP_INT_MAX) | ($hi << 63); $r1Hi = ($hi >> 1) & \PHP_INT_MAX;
+                $r2Lo = (($lo >> 2) & (\PHP_INT_MAX >> 1)) | ($hi << 62); $r2Hi = ($hi >> 2) & (\PHP_INT_MAX >> 1);
+                $r3Lo = (($lo >> 3) & (\PHP_INT_MAX >> 2)) | ($hi << 61); $r3Hi = ($hi >> 3) & (\PHP_INT_MAX >> 2);
+                $r4Lo = (($lo >> 4) & (\PHP_INT_MAX >> 3)) | ($hi << 60); $r4Hi = ($hi >> 4) & (\PHP_INT_MAX >> 3);
+                $r5Lo = (($lo >> 5) & (\PHP_INT_MAX >> 4)) | ($hi << 59); $r5Hi = ($hi >> 5) & (\PHP_INT_MAX >> 4);
+                $r6Lo = (($lo >> 6) & (\PHP_INT_MAX >> 5)) | ($hi << 58); $r6Hi = ($hi >> 6) & (\PHP_INT_MAX >> 5);
+                $r7Lo = (($lo >> 7) & (\PHP_INT_MAX >> 6)) | ($hi << 57); $r7Hi = ($hi >> 7) & (\PHP_INT_MAX >> 6);
+                $r8Lo = (($lo >> 8) & (\PHP_INT_MAX >> 7)) | ($hi << 56); $r8Hi = ($hi >> 8) & (\PHP_INT_MAX >> 7);
+                $r9Lo = (($lo >> 9) & (\PHP_INT_MAX >> 8)) | ($hi << 55); $r9Hi = ($hi >> 9) & (\PHP_INT_MAX >> 8);
+                $r10Lo = (($lo >> 10) & (\PHP_INT_MAX >> 9)) | ($hi << 54); $r10Hi = ($hi >> 10) & (\PHP_INT_MAX >> 9);
+
+                // Pattern 10111010000
+                $m1Hi = $r10Hi & ~$r9Hi & $r8Hi & $r7Hi & $r6Hi & ~$r5Hi & $r4Hi & ~$r3Hi & ~$r2Hi & ~$r1Hi & ~$hi;
+                $m1Lo = $r10Lo & ~$r9Lo & $r8Lo & $r7Lo & $r6Lo & ~$r5Lo & $r4Lo & ~$r3Lo & ~$r2Lo & ~$r1Lo & ~$lo;
+                // Pattern 00001011101
+                $m2Hi = ~$r10Hi & ~$r9Hi & ~$r8Hi & ~$r7Hi & $r6Hi & ~$r5Hi & $r4Hi & $r3Hi & $r2Hi & ~$r1Hi & $hi;
+                $m2Lo = ~$r10Lo & ~$r9Lo & ~$r8Lo & ~$r7Lo & $r6Lo & ~$r5Lo & $r4Lo & $r3Lo & $r2Lo & ~$r1Lo & $lo;
+
+                $mHi = $m1Hi | $m2Hi;
+                $mLo = $m1Lo | $m2Lo;
+                if ($mHi !== 0 || $mLo !== 0) {
+                    $penalty += 40 * ($pop[$mLo & 0xff] + $pop[($mLo >> 8) & 0xff]
+                        + $pop[($mLo >> 16) & 0xff] + $pop[($mLo >> 24) & 0xff]
+                        + $pop[($mLo >> 32) & 0xff] + $pop[($mLo >> 40) & 0xff]
+                        + $pop[($mLo >> 48) & 0xff] + $pop[($mLo >> 56) & 0xff]
+                        + $pop[$mHi & 0xff] + $pop[($mHi >> 8) & 0xff]
+                        + $pop[($mHi >> 16) & 0xff] + $pop[($mHi >> 24) & 0xff]
+                        + $pop[($mHi >> 32) & 0xff] + $pop[($mHi >> 40) & 0xff]
+                        + $pop[($mHi >> 48) & 0xff] + $pop[($mHi >> 56) & 0xff]);
                 }
             }
 
@@ -401,20 +498,36 @@ class FastEncoder implements EncoderInterface
                 continue;
             }
 
-            // Rule 3 vertical: bitwise parallel
+            // Rule 3 vertical
             for ($x = 0; $x < $size; $x++) {
-                $col = $mc[$x];
-                $r1 = $col >> 1; $r2 = $col >> 2; $r3 = $col >> 3; $r4p = $col >> 4;
-                $r5 = $col >> 5; $r6 = $col >> 6; $r7 = $col >> 7; $r8 = $col >> 8;
-                $r9 = $col >> 9; $r10 = $col >> 10;
-                $m1 = $r10 & ~$r9 & $r8 & $r7 & $r6 & ~$r5 & $r4p & ~$r3 & ~$r2 & ~$r1 & ~$col;
-                $m2 = ~$r10 & ~$r9 & ~$r8 & ~$r7 & $r6 & ~$r5 & $r4p & $r3 & $r2 & ~$r1 & $col;
-                $matches = ($m1 | $m2) & $r3ValidMask;
-                if ($matches !== 0) {
-                    $penalty += 40 * ($pop[$matches & 0xff] + $pop[($matches >> 8) & 0xff]
-                        + $pop[($matches >> 16) & 0xff] + $pop[($matches >> 24) & 0xff]
-                        + $pop[($matches >> 32) & 0xff] + $pop[($matches >> 40) & 0xff]
-                        + $pop[($matches >> 48) & 0xff] + $pop[($matches >> 56) & 0xff]);
+                $hi = $mcHi[$x]; $lo = $mcLo[$x];
+                $r1Lo = (($lo >> 1) & \PHP_INT_MAX) | ($hi << 63); $r1Hi = ($hi >> 1) & \PHP_INT_MAX;
+                $r2Lo = (($lo >> 2) & (\PHP_INT_MAX >> 1)) | ($hi << 62); $r2Hi = ($hi >> 2) & (\PHP_INT_MAX >> 1);
+                $r3Lo = (($lo >> 3) & (\PHP_INT_MAX >> 2)) | ($hi << 61); $r3Hi = ($hi >> 3) & (\PHP_INT_MAX >> 2);
+                $r4Lo = (($lo >> 4) & (\PHP_INT_MAX >> 3)) | ($hi << 60); $r4Hi = ($hi >> 4) & (\PHP_INT_MAX >> 3);
+                $r5Lo = (($lo >> 5) & (\PHP_INT_MAX >> 4)) | ($hi << 59); $r5Hi = ($hi >> 5) & (\PHP_INT_MAX >> 4);
+                $r6Lo = (($lo >> 6) & (\PHP_INT_MAX >> 5)) | ($hi << 58); $r6Hi = ($hi >> 6) & (\PHP_INT_MAX >> 5);
+                $r7Lo = (($lo >> 7) & (\PHP_INT_MAX >> 6)) | ($hi << 57); $r7Hi = ($hi >> 7) & (\PHP_INT_MAX >> 6);
+                $r8Lo = (($lo >> 8) & (\PHP_INT_MAX >> 7)) | ($hi << 56); $r8Hi = ($hi >> 8) & (\PHP_INT_MAX >> 7);
+                $r9Lo = (($lo >> 9) & (\PHP_INT_MAX >> 8)) | ($hi << 55); $r9Hi = ($hi >> 9) & (\PHP_INT_MAX >> 8);
+                $r10Lo = (($lo >> 10) & (\PHP_INT_MAX >> 9)) | ($hi << 54); $r10Hi = ($hi >> 10) & (\PHP_INT_MAX >> 9);
+
+                $m1Hi = $r10Hi & ~$r9Hi & $r8Hi & $r7Hi & $r6Hi & ~$r5Hi & $r4Hi & ~$r3Hi & ~$r2Hi & ~$r1Hi & ~$hi;
+                $m1Lo = $r10Lo & ~$r9Lo & $r8Lo & $r7Lo & $r6Lo & ~$r5Lo & $r4Lo & ~$r3Lo & ~$r2Lo & ~$r1Lo & ~$lo;
+                $m2Hi = ~$r10Hi & ~$r9Hi & ~$r8Hi & ~$r7Hi & $r6Hi & ~$r5Hi & $r4Hi & $r3Hi & $r2Hi & ~$r1Hi & $hi;
+                $m2Lo = ~$r10Lo & ~$r9Lo & ~$r8Lo & ~$r7Lo & $r6Lo & ~$r5Lo & $r4Lo & $r3Lo & $r2Lo & ~$r1Lo & $lo;
+
+                $mHi = $m1Hi | $m2Hi;
+                $mLo = $m1Lo | $m2Lo;
+                if ($mHi !== 0 || $mLo !== 0) {
+                    $penalty += 40 * ($pop[$mLo & 0xff] + $pop[($mLo >> 8) & 0xff]
+                        + $pop[($mLo >> 16) & 0xff] + $pop[($mLo >> 24) & 0xff]
+                        + $pop[($mLo >> 32) & 0xff] + $pop[($mLo >> 40) & 0xff]
+                        + $pop[($mLo >> 48) & 0xff] + $pop[($mLo >> 56) & 0xff]
+                        + $pop[$mHi & 0xff] + $pop[($mHi >> 8) & 0xff]
+                        + $pop[($mHi >> 16) & 0xff] + $pop[($mHi >> 24) & 0xff]
+                        + $pop[($mHi >> 32) & 0xff] + $pop[($mHi >> 40) & 0xff]
+                        + $pop[($mHi >> 48) & 0xff] + $pop[($mHi >> 56) & 0xff]);
                 }
             }
 
@@ -429,24 +542,37 @@ class FastEncoder implements EncoderInterface
             }
         }
 
-        // === 5. Apply best mask to get final int rows ===
-        $finalXorR = $maskRows[$bestMask];
-        $finalFmtR = $fmtRows[$bestMask];
+        // === 5. Apply best mask to get final rows ===
+        $fxrHi = $maskRowsHi[$bestMask]; $fxrLo = $maskRowsLo[$bestMask];
+        $ffrHi = $fmtRowsHi[$bestMask]; $ffrLo = $fmtRowsLo[$bestMask];
         for ($i = 0; $i < $size; $i++) {
-            $rows[$i] ^= $finalXorR[$i] ^ $finalFmtR[$i];
+            $rowsHi[$i] ^= $fxrHi[$i] ^ $ffrHi[$i];
+            $rowsLo[$i] ^= $fxrLo[$i] ^ $ffrLo[$i];
         }
 
-        // === 6. Convert int rows → flat bool[] → Matrix ===
+        // === 6. Convert int-pair rows → flat bool[] → Matrix ===
         $flat = array_fill(0, $totalModules, false);
         for ($y = 0; $y < $size; $y++) {
-            $row = $rows[$y];
-            if ($row === 0) {
+            $hi = $rowsHi[$y];
+            $lo = $rowsLo[$y];
+            if ($hi === 0 && $lo === 0) {
                 continue;
             }
             $rowOffset = $y * $size;
-            for ($x = 0; $x < $size; $x++) {
-                if (($row >> ($sizeM1 - $x)) & 1) {
-                    $flat[$rowOffset + $x] = true;
+            // Extract bits from hi part (bits [size-1 .. 64])
+            if ($hi !== 0) {
+                for ($x = 0; $x < $hiBits; $x++) {
+                    if (($hi >> ($hiBits - 1 - $x)) & 1) {
+                        $flat[$rowOffset + $x] = true;
+                    }
+                }
+            }
+            // Extract bits from lo part (bits [sizeM1-hiBits .. 0])
+            if ($lo !== 0) {
+                for ($x = 0; $x < 64 && ($hiBits + $x) < $size; $x++) {
+                    if (($lo >> ($sizeM1 - $hiBits - $x)) & 1) {
+                        $flat[$rowOffset + $hiBits + $x] = true;
+                    }
                 }
             }
         }
@@ -462,7 +588,6 @@ class FastEncoder implements EncoderInterface
 
     private static function initTables(): void
     {
-        // Galois field GF(256) with primitive polynomial 0x11d
         $x = 1;
         for ($i = 0; $i < 255; $i++) {
             self::$exp[$i] = $x;
@@ -477,7 +602,6 @@ class FastEncoder implements EncoderInterface
             self::$exp[$i] = self::$exp[$i - 255];
         }
 
-        // Popcount LUT
         for ($i = 0; $i < 256; $i++) {
             $c = 0;
             $v = $i;
@@ -490,20 +614,17 @@ class FastEncoder implements EncoderInterface
     }
 
     /**
-     * Build and cache all version-specific data:
-     * - Base matrix as int rows/cols (function patterns with mask=0 format info)
-     * - Zigzag traversal positions as flat arrays
-     * - Mask XOR patterns as int rows/cols
+     * Build and cache all version-specific data using int-pair representation.
      */
     private static function buildVersionCache(int $version, int $size): void
     {
         $sizeM1 = $size - 1;
         $totalModules = $size * $size;
+        $hiBits = $size > 64 ? $size - 64 : 0;
 
         // === Build reserved bitmap ===
         $reserved = array_fill(0, $totalModules, false);
 
-        // Finder patterns + separators (9×9 regions)
         for ($y = 0; $y < 9; $y++) {
             for ($x = 0; $x < 9; $x++) {
                 $reserved[$y * $size + $x] = true;
@@ -518,16 +639,13 @@ class FastEncoder implements EncoderInterface
             }
         }
 
-        // Timing patterns
         for ($i = 8; $i < $size - 8; $i++) {
             $reserved[6 * $size + $i] = true;
             $reserved[$i * $size + 6] = true;
         }
 
-        // Dark module
         $reserved[(4 * $version + 9) * $size + 8] = true;
 
-        // Format info
         for ($i = 0; $i < 9; $i++) {
             $reserved[8 * $size + $i] = true;
             $reserved[$i * $size + 8] = true;
@@ -537,7 +655,6 @@ class FastEncoder implements EncoderInterface
             $reserved[$i * $size + 8] = true;
         }
 
-        // Version info (v >= 7)
         if ($version >= 7) {
             for ($i = 0; $i < 6; $i++) {
                 for ($j = $size - 11; $j < $size - 8; $j++) {
@@ -547,7 +664,6 @@ class FastEncoder implements EncoderInterface
             }
         }
 
-        // Alignment patterns
         if ($version >= 2) {
             $positions = self::ALIGNMENT_POSITIONS[$version];
             $sizeM8 = $size - 8;
@@ -569,7 +685,6 @@ class FastEncoder implements EncoderInterface
         // === Build base matrix as flat bool[] ===
         $data = array_fill(0, $totalModules, false);
 
-        // Finder patterns (7×7)
         $fp = [0b1111111, 0b1000001, 0b1011101, 0b1011101, 0b1011101, 0b1000001, 0b1111111];
         for ($y = 0; $y < 7; $y++) {
             $bits = $fp[$y];
@@ -581,17 +696,14 @@ class FastEncoder implements EncoderInterface
             }
         }
 
-        // Timing patterns
         for ($i = 8; $i < $size - 8; $i++) {
             $val = ($i & 1) === 0;
             $data[6 * $size + $i] = $val;
             $data[$i * $size + 6] = $val;
         }
 
-        // Dark module
         $data[(4 * $version + 9) * $size + 8] = true;
 
-        // Alignment patterns (5×5)
         if ($version >= 2) {
             $ap = [0b11111, 0b10001, 0b10101, 0b10001, 0b11111];
             $positions = self::ALIGNMENT_POSITIONS[$version];
@@ -612,10 +724,6 @@ class FastEncoder implements EncoderInterface
             }
         }
 
-        // Format info is NOT placed in the base matrix — it's ECL-dependent.
-        // Full format info per mask is stored in the format cache instead.
-
-        // Version info (v >= 7)
         if ($version >= 7) {
             $versionBits = self::computeVersionBits($version);
             for ($i = 0; $i < 18; $i++) {
@@ -627,34 +735,45 @@ class FastEncoder implements EncoderInterface
             }
         }
 
-        // === Pack base matrix into int rows and cols ===
-        $baseRows = array_fill(0, $size, 0);
-        $baseCols = array_fill(0, $size, 0);
+        // === Pack base matrix into int-pair rows and cols ===
+        $baseRowsHi = array_fill(0, $size, 0);
+        $baseRowsLo = array_fill(0, $size, 0);
+        $baseColsHi = array_fill(0, $size, 0);
+        $baseColsLo = array_fill(0, $size, 0);
+
         for ($y = 0; $y < $size; $y++) {
-            $val = 0;
             $rowOffset = $y * $size;
             for ($x = 0; $x < $size; $x++) {
                 if ($data[$rowOffset + $x]) {
-                    $val |= (1 << ($sizeM1 - $x));
+                    $bitPos = $sizeM1 - $x;
+                    if ($bitPos >= 64) {
+                        $baseRowsHi[$y] |= (1 << ($bitPos - 64));
+                    } else {
+                        $baseRowsLo[$y] |= (1 << $bitPos);
+                    }
                 }
             }
-            $baseRows[$y] = $val;
         }
         for ($x = 0; $x < $size; $x++) {
-            $val = 0;
             for ($y = 0; $y < $size; $y++) {
                 if ($data[$y * $size + $x]) {
-                    $val |= (1 << ($sizeM1 - $y));
+                    $bitPos = $sizeM1 - $y;
+                    if ($bitPos >= 64) {
+                        $baseColsHi[$x] |= (1 << ($bitPos - 64));
+                    } else {
+                        $baseColsLo[$x] |= (1 << $bitPos);
+                    }
                 }
             }
-            $baseCols[$x] = $val;
         }
 
         // === Compute zigzag traversal positions ===
         $zigX = [];
         $zigY = [];
-        $zigRowBit = [];
-        $zigColBit = [];
+        $zigRowBitHi = [];
+        $zigRowBitLo = [];
+        $zigColBitHi = [];
+        $zigColBitLo = [];
 
         for ($col = $size - 1; $col > 0; $col -= 2) {
             if ($col === 6) {
@@ -667,22 +786,39 @@ class FastEncoder implements EncoderInterface
                     if (!$reserved[$row * $size + $x]) {
                         $zigX[] = $x;
                         $zigY[] = $row;
-                        $zigRowBit[] = 1 << ($sizeM1 - $x);
-                        $zigColBit[] = 1 << ($sizeM1 - $row);
+                        $bitPosR = $sizeM1 - $x;
+                        if ($bitPosR >= 64) {
+                            $zigRowBitHi[] = 1 << ($bitPosR - 64);
+                            $zigRowBitLo[] = 0;
+                        } else {
+                            $zigRowBitHi[] = 0;
+                            $zigRowBitLo[] = 1 << $bitPosR;
+                        }
+                        $bitPosC = $sizeM1 - $row;
+                        if ($bitPosC >= 64) {
+                            $zigColBitHi[] = 1 << ($bitPosC - 64);
+                            $zigColBitLo[] = 0;
+                        } else {
+                            $zigColBitHi[] = 0;
+                            $zigColBitLo[] = 1 << $bitPosC;
+                        }
                     }
                 }
             }
         }
 
         // === Compute mask XOR patterns ===
-        $allMaskRows = array_fill(0, 8, array_fill(0, $size, 0));
-        $allMaskCols = array_fill(0, 8, array_fill(0, $size, 0));
+        $allMaskRowsHi = array_fill(0, 8, array_fill(0, $size, 0));
+        $allMaskRowsLo = array_fill(0, 8, array_fill(0, $size, 0));
+        $allMaskColsHi = array_fill(0, 8, array_fill(0, $size, 0));
+        $allMaskColsLo = array_fill(0, 8, array_fill(0, $size, 0));
 
         for ($y = 0; $y < $size; $y++) {
             $rowOffset = $y * $size;
             $yEven = ($y & 1) === 0;
             $yHalf = $y >> 1;
-            $rowBit = 1 << ($sizeM1 - $y);
+            $bitPosRow = $sizeM1 - $y;
+            $rowBitIsHi = $bitPosRow >= 64;
 
             for ($x = 0; $x < $size; $x++) {
                 if ($reserved[$rowOffset + $x]) {
@@ -694,58 +830,50 @@ class FastEncoder implements EncoderInterface
                 $xyMod3 = $xy % 3;
                 $xyBit = $xy & 1;
                 $sumBit = $sum & 1;
-                $colBit = 1 << ($sizeM1 - $x);
+                $bitPosCol = $sizeM1 - $x;
+                $colBitIsHi = $bitPosCol >= 64;
 
-                if ($sumBit === 0) {
-                    $allMaskRows[0][$y] |= $colBit;
-                    $allMaskCols[0][$x] |= $rowBit;
-                }
-                if ($yEven) {
-                    $allMaskRows[1][$y] |= $colBit;
-                    $allMaskCols[1][$x] |= $rowBit;
-                }
-                if ($x % 3 === 0) {
-                    $allMaskRows[2][$y] |= $colBit;
-                    $allMaskCols[2][$x] |= $rowBit;
-                }
-                if ($sum % 3 === 0) {
-                    $allMaskRows[3][$y] |= $colBit;
-                    $allMaskCols[3][$x] |= $rowBit;
-                }
-                if ((($yHalf + (int)($x / 3)) & 1) === 0) {
-                    $allMaskRows[4][$y] |= $colBit;
-                    $allMaskCols[4][$x] |= $rowBit;
-                }
-                if ($xyBit + $xyMod3 === 0) {
-                    $allMaskRows[5][$y] |= $colBit;
-                    $allMaskCols[5][$x] |= $rowBit;
-                }
-                if ((($xyBit + $xyMod3) & 1) === 0) {
-                    $allMaskRows[6][$y] |= $colBit;
-                    $allMaskCols[6][$x] |= $rowBit;
-                }
-                if ((($sumBit + $xyMod3) & 1) === 0) {
-                    $allMaskRows[7][$y] |= $colBit;
-                    $allMaskCols[7][$x] |= $rowBit;
+                $conditions = [
+                    $sumBit === 0,
+                    $yEven,
+                    $x % 3 === 0,
+                    $sum % 3 === 0,
+                    (($yHalf + (int)($x / 3)) & 1) === 0,
+                    $xyBit + $xyMod3 === 0,
+                    (($xyBit + $xyMod3) & 1) === 0,
+                    (($sumBit + $xyMod3) & 1) === 0,
+                ];
+
+                for ($m = 0; $m < 8; $m++) {
+                    if ($conditions[$m]) {
+                        if ($colBitIsHi) {
+                            $allMaskRowsHi[$m][$y] |= (1 << ($bitPosCol - 64));
+                        } else {
+                            $allMaskRowsLo[$m][$y] |= (1 << $bitPosCol);
+                        }
+                        if ($rowBitIsHi) {
+                            $allMaskColsHi[$m][$x] |= (1 << ($bitPosRow - 64));
+                        } else {
+                            $allMaskColsLo[$m][$x] |= (1 << $bitPosRow);
+                        }
+                    }
                 }
             }
         }
 
         self::$versionCache[$version] = [
-            'baseRows' => $baseRows,
-            'baseCols' => $baseCols,
-            'zigX' => $zigX,
-            'zigY' => $zigY,
-            'zigRowBit' => $zigRowBit,
-            'zigColBit' => $zigColBit,
-            'maskRows' => $allMaskRows,
-            'maskCols' => $allMaskCols,
+            'baseRowsHi' => $baseRowsHi, 'baseRowsLo' => $baseRowsLo,
+            'baseColsHi' => $baseColsHi, 'baseColsLo' => $baseColsLo,
+            'zigX' => $zigX, 'zigY' => $zigY,
+            'zigRowBitHi' => $zigRowBitHi, 'zigRowBitLo' => $zigRowBitLo,
+            'zigColBitHi' => $zigColBitHi, 'zigColBitLo' => $zigColBitLo,
+            'maskRowsHi' => $allMaskRowsHi, 'maskRowsLo' => $allMaskRowsLo,
+            'maskColsHi' => $allMaskColsHi, 'maskColsLo' => $allMaskColsLo,
         ];
     }
 
     /**
-     * Build and cache full format info as int rows/cols for each mask.
-     * Base matrix has NO format info, so these contain the complete format pattern.
+     * Build and cache format info as int-pair rows/cols for each mask.
      */
     private static function buildFormatCache(int $version, ErrorCorrectionLevel $ecl, int $size): void
     {
@@ -760,7 +888,6 @@ class FastEncoder implements EncoderInterface
             ErrorCorrectionLevel::High => 0b10,
         };
 
-        // Format info positions: [x, y, bit_index]
         $positions = [
             [8, 0, 0], [8, 1, 1], [8, 2, 2], [8, 3, 3],
             [8, 4, 4], [8, 5, 5], [8, 7, 6], [8, 8, 7],
@@ -774,29 +901,39 @@ class FastEncoder implements EncoderInterface
             $positions[] = [8, $size - 15 + $i, $i];
         }
 
-        $allFmtRows = [];
-        $allFmtCols = [];
+        $allFmtRowsHi = []; $allFmtRowsLo = [];
+        $allFmtColsHi = []; $allFmtColsLo = [];
 
         for ($mask = 0; $mask < 8; $mask++) {
-            $fR = array_fill(0, $size, 0);
-            $fC = array_fill(0, $size, 0);
+            $fRHi = array_fill(0, $size, 0); $fRLo = array_fill(0, $size, 0);
+            $fCHi = array_fill(0, $size, 0); $fCLo = array_fill(0, $size, 0);
 
             $maskBits = self::computeFormatBitsFromEcc($eccBits, $mask);
 
             foreach ($positions as [$x, $y, $bit]) {
                 if (($maskBits >> $bit) & 1) {
-                    $fR[$y] |= (1 << ($sizeM1 - $x));
-                    $fC[$x] |= (1 << ($sizeM1 - $y));
+                    $bitPosR = $sizeM1 - $x;
+                    if ($bitPosR >= 64) {
+                        $fRHi[$y] |= (1 << ($bitPosR - 64));
+                    } else {
+                        $fRLo[$y] |= (1 << $bitPosR);
+                    }
+                    $bitPosC = $sizeM1 - $y;
+                    if ($bitPosC >= 64) {
+                        $fCHi[$x] |= (1 << ($bitPosC - 64));
+                    } else {
+                        $fCLo[$x] |= (1 << $bitPosC);
+                    }
                 }
             }
 
-            $allFmtRows[$mask] = $fR;
-            $allFmtCols[$mask] = $fC;
+            $allFmtRowsHi[$mask] = $fRHi; $allFmtRowsLo[$mask] = $fRLo;
+            $allFmtColsHi[$mask] = $fCHi; $allFmtColsLo[$mask] = $fCLo;
         }
 
         self::$formatCache[$fmtKey] = [
-            'fmtRows' => $allFmtRows,
-            'fmtCols' => $allFmtCols,
+            'fmtRowsHi' => $allFmtRowsHi, 'fmtRowsLo' => $allFmtRowsLo,
+            'fmtColsHi' => $allFmtColsHi, 'fmtColsLo' => $allFmtColsLo,
         ];
     }
 
@@ -808,12 +945,11 @@ class FastEncoder implements EncoderInterface
         $exp = self::$exp;
         $log = self::$log;
 
-        // Build generator polynomial
         $poly = [1];
         for ($i = 0; $i < $eccCount; $i++) {
             $polyLen = count($poly);
             $newPoly = array_fill(0, $polyLen + 1, 0);
-            $alphaI = $exp[$i];
+            $alphaI = $exp[$i % 255];
             for ($j = 0; $j < $polyLen; $j++) {
                 $newPoly[$j] ^= $poly[$j];
                 $p = $poly[$j];
@@ -824,19 +960,18 @@ class FastEncoder implements EncoderInterface
             $poly = $newPoly;
         }
 
-        // Pre-compute log of generator coefficients
         $genLog = [];
         for ($i = 0; $i < $eccCount; $i++) {
-            $genLog[$i] = $log[$poly[$i + 1]];
+            $coeff = $poly[$i + 1];
+            $genLog[$i] = $coeff !== 0 ? $log[$coeff] : -1;
         }
 
-        // Build transposed factor table: factorTable[factor][i]
         $factorTable = [];
         for ($f = 1; $f < 256; $f++) {
             $lf = $log[$f];
             $row = [];
             for ($i = 0; $i < $eccCount; $i++) {
-                $row[$i] = $exp[$genLog[$i] + $lf];
+                $row[$i] = $genLog[$i] !== -1 ? $exp[$genLog[$i] + $lf] : 0;
             }
             $factorTable[$f] = $row;
         }
@@ -845,20 +980,8 @@ class FastEncoder implements EncoderInterface
     }
 
     // =========================================================================
-    // Helper methods (used only during cache building, not in hot path)
+    // Helper methods (cache building only, not in hot path)
     // =========================================================================
-
-    private static function computeFormatBits(int $eclValue, int $maskPattern): int
-    {
-        $eccBits = match ($eclValue) {
-            0 => 0b01, // Low
-            1 => 0b00, // Medium
-            2 => 0b11, // Quartile
-            3 => 0b10, // High
-            default => 0b00,
-        };
-        return self::computeFormatBitsFromEcc($eccBits, $maskPattern);
-    }
 
     private static function computeFormatBitsFromEcc(int $eccBits, int $maskPattern): int
     {
@@ -882,31 +1005,5 @@ class FastEncoder implements EncoderInterface
             }
         }
         return ($data << 12) | $versionInfo;
-    }
-
-    private static function placeFormatBitsOnData(array &$data, int $formatBits, int $size): void
-    {
-        $data[0 * $size + 8] = (bool)(($formatBits >> 0) & 1);
-        $data[1 * $size + 8] = (bool)(($formatBits >> 1) & 1);
-        $data[2 * $size + 8] = (bool)(($formatBits >> 2) & 1);
-        $data[3 * $size + 8] = (bool)(($formatBits >> 3) & 1);
-        $data[4 * $size + 8] = (bool)(($formatBits >> 4) & 1);
-        $data[5 * $size + 8] = (bool)(($formatBits >> 5) & 1);
-        $data[7 * $size + 8] = (bool)(($formatBits >> 6) & 1);
-        $data[8 * $size + 8] = (bool)(($formatBits >> 7) & 1);
-        $data[8 * $size + 7] = (bool)(($formatBits >> 8) & 1);
-        $data[8 * $size + 5] = (bool)(($formatBits >> 9) & 1);
-        $data[8 * $size + 4] = (bool)(($formatBits >> 10) & 1);
-        $data[8 * $size + 3] = (bool)(($formatBits >> 11) & 1);
-        $data[8 * $size + 2] = (bool)(($formatBits >> 12) & 1);
-        $data[8 * $size + 1] = (bool)(($formatBits >> 13) & 1);
-        $data[8 * $size + 0] = (bool)(($formatBits >> 14) & 1);
-
-        for ($i = 0; $i < 8; $i++) {
-            $data[8 * $size + $size - 1 - $i] = (bool)(($formatBits >> $i) & 1);
-        }
-        for ($i = 8; $i < 15; $i++) {
-            $data[($size - 15 + $i) * $size + 8] = (bool)(($formatBits >> $i) & 1);
-        }
     }
 }
