@@ -171,7 +171,11 @@ inline constexpr std::array<int, 40> REMAINDER_BITS = {{
 }};
 
 // Alignment pattern positions per version (empty = none)
-inline constexpr std::array<std::array<int,7>, 40> ALIGN_POS = {{
+// NOTE: indexed by version directly (0-based), matching PHP's ALIGNMENT_POSITIONS[$version].
+// Index 0 = v1 (empty), index 1 = v2 (empty), index 2 = v3 [6,18], ..., index 40 = v41 [6,30,58,86,114,142,170]
+// This means place_alignment_patterns uses ALIGN_POS[version] not ALIGN_POS[version-1],
+// replicating PHP's off-by-one where v2 gets v3's positions, etc.
+inline constexpr std::array<std::array<int,7>, 41> ALIGN_POS = {{
     {{}},
     {{}},
     {{6,18,0,0,0,0,0}},
@@ -212,18 +216,27 @@ inline constexpr std::array<std::array<int,7>, 40> ALIGN_POS = {{
     {{6,28,54,80,106,132,158}},
     {{6,32,58,84,110,136,162}},
     {{6,26,54,82,110,138,166}},
+    {{6,30,58,86,114,142,170}},
 }};
 
-// Number of alignment positions per version
-inline constexpr std::array<int,40> ALIGN_COUNT = {{
-    0,0,1,1,1,1,1,2,2,2,2,2,2,2,3,3,3,3,3,3,3,4,4,4,4,4,4,4,5,5,5,5,5,5,5,6,6,6,6,6
+// Number of alignment positions per version (indexed by version directly, matching PHP off-by-one)
+// Index 0=v1(0), 1=v2(0), 2=v2-gets-[6,18](2), 3=v3-gets-[6,22](2), ..., 40=v40-gets-[6,30,58,86,114,142,170](7)
+inline constexpr std::array<int,41> ALIGN_COUNT = {{
+    0,0,2,2,2,2,2,3,3,3,3,3,3,3,4,4,4,4,4,4,4,5,5,5,5,5,5,5,6,6,6,6,6,6,6,7,7,7,7,7,7
 }};
 
-// Format info strings [ecl*8 + mask] — 15 bits, pre-XORed with mask pattern 101010000010010
+// Format info strings [ecl*8 + mask] — 15 bits
+// ECL encoding: L=01(0b01), M=00(0b00), Q=11(0b11), H=10(0b10)
+// Computed via BCH(15,5) with generator 0x537, XOR mask 0x5412
+// Matches PHP MatrixBuilder::getFormatBits() exactly
 inline constexpr std::array<uint16_t, 32> FORMAT_INFO = {{
+    // ECL=L (0, eccBits=0b01): mask 0-7
     0x77C4,0x72F3,0x7DAA,0x789D,0x662F,0x6318,0x6C41,0x6976,
+    // ECL=M (1, eccBits=0b00): mask 0-7
     0x5412,0x5125,0x5E7C,0x5B4B,0x45F9,0x40CE,0x4F97,0x4AA0,
+    // ECL=Q (2, eccBits=0b11): mask 0-7
     0x355F,0x3068,0x3F31,0x3A06,0x24B4,0x2183,0x2EDA,0x2BED,
+    // ECL=H (3, eccBits=0b10): mask 0-7
     0x1689,0x13BE,0x1CE7,0x19D0,0x0762,0x0255,0x0D0C,0x083B,
 }};
 

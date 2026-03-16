@@ -80,36 +80,21 @@ static std::vector<uint8_t> build_data_codewords(
 static std::vector<uint8_t> interleave(
     const std::vector<uint8_t>& data_cw, int version, int ecl)
 {
+    // PHP's ReedSolomon::encode() treats ALL data as a single block with no
+    // interleaving. It generates ECC for the entire data array as one block,
+    // using getEccCount() which returns total ECC codewords (not per-block).
+    // We must match this exactly.
     const auto& ei = EC_TABLE[version-1][ecl];
-    int g1b = ei.g1_blocks, g1d = ei.g1_data, ec = ei.ec_per_block;
-    int g2b = ei.g2_blocks, g2d = ei.g2_data;
-    int total_blocks = g1b + g2b;
+    int total_blocks = ei.g1_blocks + ei.g2_blocks;
+    int ec_per_block = ei.ec_per_block;
+    int total_ec = total_blocks * ec_per_block;
 
-    // Split into blocks
-    std::vector<std::vector<uint8_t>> data_blocks(total_blocks);
-    std::vector<std::vector<uint8_t>> ec_blocks(total_blocks);
+    // Generate ECC for entire data as one block (PHP behavior)
+    auto ecc = rs_generate_ec(data_cw, total_ec);
 
-    int offset = 0;
-    for (int i = 0; i < total_blocks; ++i) {
-        int sz = (i < g1b) ? g1d : g2d;
-        data_blocks[i].assign(data_cw.begin() + offset, data_cw.begin() + offset + sz);
-        ec_blocks[i] = rs_generate_ec(data_blocks[i], ec);
-        offset += sz;
-    }
-
-    // Interleave data
-    std::vector<uint8_t> result;
-    int max_data = (g2b > 0) ? g2d : g1d;
-    for (int col = 0; col < max_data; ++col)
-        for (int blk = 0; blk < total_blocks; ++blk)
-            if (col < static_cast<int>(data_blocks[blk].size()))
-                result.push_back(data_blocks[blk][col]);
-
-    // Interleave EC
-    for (int col = 0; col < ec; ++col)
-        for (int blk = 0; blk < total_blocks; ++blk)
-            result.push_back(ec_blocks[blk][col]);
-
+    // Result: all data codewords followed by all ECC codewords (no interleaving)
+    std::vector<uint8_t> result(data_cw);
+    result.insert(result.end(), ecc.begin(), ecc.end());
     return result;
 }
 
@@ -122,28 +107,36 @@ EncodeResult encode(const char* data, size_t len, ECL ecl) {
 
     auto data_cw = build_data_codewords(data, len, version, ecl_idx);
     auto all_cw  = interleave(data_cw, version, ecl_idx);
+    // Note: remainder bits are NOT added here. PHP's placeData leaves remainder
+    // cells at 0 without masking them. place_data() marks those cells as
+    // function_=2 so apply_mask() skips them, matching PHP behavior exactly.
 
-    // Add remainder bits
-    int rem = REMAINDER_BITS[version - 1];
-    for (int i = 0; i < rem; ++i) all_cw.push_back(0);
+    // Build temp matrix with mask=0 — matches PHP Encoder which builds
+    // a temp matrix with mask=0 then evaluates all masks on it
+    QRMatrix temp(version);
+    place_finder_patterns(temp);
+    place_alignment_patterns(temp);
+    place_timing_patterns(temp);
+    place_dark_module(temp);
+    place_version_info(temp);
+    place_format_info(temp, ecl_idx, 0);
+    place_data(temp, all_cw);
+    apply_mask(temp, 0);
 
+    // Evaluate all masks on temp matrix (with mask 0 already applied)
+    int best_mask = select_best_mask(temp);
+    // temp now has best_mask applied on top of mask_0
+
+    // Build final matrix: data XOR best_mask
     QRMatrix m(version);
     place_finder_patterns(m);
     place_alignment_patterns(m);
     place_timing_patterns(m);
     place_dark_module(m);
     place_version_info(m);
-
-    // Reserve format info area (filled after mask selection)
-    place_format_info(m, ecl_idx, 0);
-
-    place_data(m, all_cw);
-
-    int best_mask = select_best_mask(m);
-
-    // Re-place format info with correct mask
-    // Undo the mask on format area first (it's function modules, not masked by apply_mask)
     place_format_info(m, ecl_idx, best_mask);
+    place_data(m, all_cw);
+    apply_mask(m, best_mask);
 
     return {std::move(m), version};
 }

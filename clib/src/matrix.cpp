@@ -34,8 +34,10 @@ void place_finder_patterns(QRMatrix& m) {
 
 void place_alignment_patterns(QRMatrix& m) {
     if (m.version < 2) return;
-    int count = ALIGN_COUNT[m.version - 1];
-    const auto& pos = ALIGN_POS[m.version - 1];
+    // PHP uses ALIGNMENT_POSITIONS[$version] (direct index, 0-based array),
+    // so version 2 gets index 2 = [6,18] (v3's positions). Match this off-by-one.
+    int count = ALIGN_COUNT[m.version];
+    const auto& pos = ALIGN_POS[m.version];
     for (int i = 0; i < count; ++i) {
         for (int j = 0; j < count; ++j) {
             int cx = pos[j], cy = pos[i];
@@ -67,16 +69,33 @@ void place_dark_module(QRMatrix& m) {
 
 void place_format_info(QRMatrix& m, int ecl, int mask) {
     uint16_t fmt = FORMAT_INFO[ecl * 8 + mask];
-    // Around top-left finder
-    for (int i = 0; i <= 5; ++i) m.set_function(8, i, (fmt >> i) & 1);
+    int n = m.size;
+
+    // Top-left: column x=8, rows 0-5,7,8 then row y=8, cols 7,5,4,3,2,1,0
+    // Matches PHP MatrixBuilder::addFormatInfo exactly
+    m.set_function(8, 0, (fmt >> 0) & 1);
+    m.set_function(8, 1, (fmt >> 1) & 1);
+    m.set_function(8, 2, (fmt >> 2) & 1);
+    m.set_function(8, 3, (fmt >> 3) & 1);
+    m.set_function(8, 4, (fmt >> 4) & 1);
+    m.set_function(8, 5, (fmt >> 5) & 1);
     m.set_function(8, 7, (fmt >> 6) & 1);
     m.set_function(8, 8, (fmt >> 7) & 1);
     m.set_function(7, 8, (fmt >> 8) & 1);
-    for (int i = 9; i <= 14; ++i) m.set_function(14 - i, 8, (fmt >> i) & 1);
-    // Top-right finder
-    for (int i = 0; i <= 7; ++i) m.set_function(m.size - 1 - i, 8, (fmt >> i) & 1);
-    // Bottom-left finder
-    for (int i = 8; i <= 14; ++i) m.set_function(8, m.size - 15 + i, (fmt >> i) & 1);
+    m.set_function(5, 8, (fmt >> 9) & 1);
+    m.set_function(4, 8, (fmt >> 10) & 1);
+    m.set_function(3, 8, (fmt >> 11) & 1);
+    m.set_function(2, 8, (fmt >> 12) & 1);
+    m.set_function(1, 8, (fmt >> 13) & 1);
+    m.set_function(0, 8, (fmt >> 14) & 1);
+
+    // Top-right: row y=8, cols n-1 down to n-8
+    for (int i = 0; i < 8; ++i)
+        m.set_function(n - 1 - i, 8, (fmt >> i) & 1);
+
+    // Bottom-left: col x=8, rows n-7 up to n-1
+    for (int i = 8; i < 15; ++i)
+        m.set_function(8, n - 15 + i, (fmt >> i) & 1);
 }
 
 void place_version_info(QRMatrix& m) {
@@ -91,23 +110,35 @@ void place_version_info(QRMatrix& m) {
 }
 
 void place_data(QRMatrix& m, const std::vector<uint8_t>& data) {
-    int idx = 0;
+    int bit_idx = 0;
     int total_bits = static_cast<int>(data.size()) * 8;
-    // Zigzag from bottom-right, skip column 6 (timing)
-    for (int right = m.size - 1; right >= 1; right -= 2) {
-        if (right == 6) right = 5;
-        for (int vert = m.size - 1; vert >= 0; --vert) {
-            for (int j = 0; j < 2; ++j) {
-                int x = right - j;
-                // Direction alternates per column pair
-                int y = ((right + 1) / 2 % 2 == 0) ? vert : (m.size - 1 - vert);
+    int n = m.size;
+
+    // Zigzag placement — matches PHP MatrixBuilder::placeData exactly.
+    // PHP only writes cells where byteIndex < count(codewords); cells beyond
+    // that (remainder bit positions) are left at 0 and NOT masked.
+    // We mark remainder cells as function so apply_mask skips them.
+    for (int col = n - 1; col > 0; col -= 2) {
+        if (col == 6) col--;  // skip timing column
+
+        // PHP: $up = (int)(($size - 1 - $col) / 2) % 2 === 0
+        bool up = ((n - 1 - col) / 2) % 2 == 0;
+
+        for (int row_step = 0; row_step < n; ++row_step) {
+            int row = up ? (n - 1 - row_step) : row_step;
+            for (int c = 0; c < 2; ++c) {
+                int x = col - c;
+                int y = row;
                 if (m.is_function(x, y)) continue;
-                uint8_t bit = 0;
-                if (idx < total_bits) {
-                    bit = (data[idx / 8] >> (7 - idx % 8)) & 1;
-                    ++idx;
+                if (bit_idx < total_bits) {
+                    uint8_t bit = (data[bit_idx / 8] >> (7 - bit_idx % 8)) & 1;
+                    m.set(x, y, bit);
+                    ++bit_idx;
+                } else {
+                    // Remainder cell: leave at 0 and mark as function so mask is not applied
+                    m.set(x, y, 0);
+                    m.function_[y * n + x] = 2;  // 2 = remainder (skip masking)
                 }
-                m.set(x, y, bit);
             }
         }
     }

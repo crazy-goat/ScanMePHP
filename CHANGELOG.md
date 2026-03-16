@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `SvgRenderer` now accepts optional `$moduleSize` constructor parameter (default: 10)
 - `InvalidConfigurationException` for configuration validation errors
+- Native C++ QR encoder library (`clib/`) with SIMD acceleration (SSE2, SSE4.2, AVX2, AVX-512, NEON, scalar fallback)
+- `EncoderInterface` extracted from `Encoder` for dependency injection
+- `FfiEncoder` — PHP FFI bridge to the native C++ library, producing byte-for-byte identical output to `Encoder`
+- `QRCode::createDefaultEncoder()` — auto-selects `FfiEncoder` when available, falls back to `Encoder`
+- `QRCode` constructor now accepts optional `EncoderInterface $encoder` parameter
 
 ### Changed
 

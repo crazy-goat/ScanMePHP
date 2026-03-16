@@ -16,12 +16,21 @@ class QRCode
     private ?Matrix $matrix = null;
     private EncoderInterface $encoder;
 
-    public function __construct(string $url, ?QRCodeConfig $config = null)
+    public function __construct(string $url, ?QRCodeConfig $config = null, ?EncoderInterface $encoder = null)
     {
         $this->validateUrl($url);
         $this->url = $url;
         $this->config = $config ?? new QRCodeConfig();
-        $this->encoder = new Encoder();
+        $this->encoder = $encoder ?? self::createDefaultEncoder();
+    }
+
+    public static function createDefaultEncoder(): EncoderInterface
+    {
+        $libraryPath = dirname(__DIR__) . '/clib/build/libscanme_qr.so';
+        if (FfiEncoder::isAvailable($libraryPath)) {
+            return new FfiEncoder($libraryPath);
+        }
+        return new Encoder();
     }
 
     private function validateUrl(string $url): void
