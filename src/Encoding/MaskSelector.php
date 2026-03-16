@@ -88,6 +88,7 @@ class MaskSelector
         $sizeM11 = $size - 11;
         $sizeMask = (1 << $size) - 1;
         $sizeM1Mask = (1 << $sizeM1) - 1;
+        $runMask = (1 << $sizeM1) - 1; // mask for transition bits (size-1 bits)
         $totalModules = $size * $size;
 
         for ($mask = 0; $mask < 8; $mask++) {
@@ -108,28 +109,34 @@ class MaskSelector
             $darkCount = 0;
 
             // === Rule 1 horizontal + dark count ===
+            // Run-length penalty via bitwise cascade (no bit-by-bit loop):
+            // transitions = row XOR (row >> 1) — bit set where adjacent bits differ
+            // inv = ~transitions — bit set where adjacent bits are same
+            // r4 = inv & (inv>>1) & (inv>>2) & (inv>>3) — marks positions in runs of 5+ same bits
+            // For a run of N same bits: contributes (N-4) bits to r4
+            // Penalty = (N-2) = (N-4) + 2, summed over all runs >= 5
+            // = popcount(r4) + 2 * (number of distinct runs in r4)
+            // Distinct runs = popcount(r4 & ~(r4 << 1)) — leading edges
             for ($y = 0; $y < $size; $y++) {
                 $row = $maskedRows[$y];
-                // Popcount via byte LUT (3-4× faster than Kernighan in PHP)
+                // Popcount via byte LUT
                 $darkCount += $popLut[$row & 0xff] + $popLut[($row >> 8) & 0xff]
                     + $popLut[($row >> 16) & 0xff] + $popLut[($row >> 24) & 0xff]
                     + $popLut[($row >> 32) & 0xff] + $popLut[($row >> 40) & 0xff]
                     + $popLut[($row >> 48) & 0xff] + $popLut[($row >> 56) & 0xff];
-                // Run-length via transition detection
-                $transitions = $row ^ ($row >> 1);
-                $count = 1;
-                for ($x = $sizeM1 - 1; $x >= 0; $x--) {
-                    if (($transitions >> $x) & 1) {
-                        if ($count >= 5) {
-                            $penalty += $count - 2;
-                        }
-                        $count = 1;
-                    } else {
-                        $count++;
-                    }
-                }
-                if ($count >= 5) {
-                    $penalty += $count - 2;
+                // Run-length via bitwise cascade (3-6× faster than bit-by-bit)
+                $inv = (~($row ^ ($row >> 1))) & $runMask;
+                $r4 = $inv & ($inv >> 1) & ($inv >> 2) & ($inv >> 3);
+                if ($r4 !== 0) {
+                    $penalty += $popLut[$r4 & 0xff] + $popLut[($r4 >> 8) & 0xff]
+                        + $popLut[($r4 >> 16) & 0xff] + $popLut[($r4 >> 24) & 0xff]
+                        + $popLut[($r4 >> 32) & 0xff] + $popLut[($r4 >> 40) & 0xff]
+                        + $popLut[($r4 >> 48) & 0xff] + $popLut[($r4 >> 56) & 0xff];
+                    $starts = $r4 & ~($r4 << 1);
+                    $penalty += 2 * ($popLut[$starts & 0xff] + $popLut[($starts >> 8) & 0xff]
+                        + $popLut[($starts >> 16) & 0xff] + $popLut[($starts >> 24) & 0xff]
+                        + $popLut[($starts >> 32) & 0xff] + $popLut[($starts >> 40) & 0xff]
+                        + $popLut[($starts >> 48) & 0xff] + $popLut[($starts >> 56) & 0xff]);
                 }
             }
 
@@ -137,23 +144,21 @@ class MaskSelector
                 continue;
             }
 
-            // === Rule 1 vertical ===
+            // === Rule 1 vertical (same bitwise cascade on columns) ===
             for ($x = 0; $x < $size; $x++) {
                 $col = $maskedCols[$x];
-                $transitions = $col ^ ($col >> 1);
-                $count = 1;
-                for ($y = $sizeM1 - 1; $y >= 0; $y--) {
-                    if (($transitions >> $y) & 1) {
-                        if ($count >= 5) {
-                            $penalty += $count - 2;
-                        }
-                        $count = 1;
-                    } else {
-                        $count++;
-                    }
-                }
-                if ($count >= 5) {
-                    $penalty += $count - 2;
+                $inv = (~($col ^ ($col >> 1))) & $runMask;
+                $r4 = $inv & ($inv >> 1) & ($inv >> 2) & ($inv >> 3);
+                if ($r4 !== 0) {
+                    $penalty += $popLut[$r4 & 0xff] + $popLut[($r4 >> 8) & 0xff]
+                        + $popLut[($r4 >> 16) & 0xff] + $popLut[($r4 >> 24) & 0xff]
+                        + $popLut[($r4 >> 32) & 0xff] + $popLut[($r4 >> 40) & 0xff]
+                        + $popLut[($r4 >> 48) & 0xff] + $popLut[($r4 >> 56) & 0xff];
+                    $starts = $r4 & ~($r4 << 1);
+                    $penalty += 2 * ($popLut[$starts & 0xff] + $popLut[($starts >> 8) & 0xff]
+                        + $popLut[($starts >> 16) & 0xff] + $popLut[($starts >> 24) & 0xff]
+                        + $popLut[($starts >> 32) & 0xff] + $popLut[($starts >> 40) & 0xff]
+                        + $popLut[($starts >> 48) & 0xff] + $popLut[($starts >> 56) & 0xff]);
                 }
             }
 
@@ -257,52 +262,52 @@ class MaskSelector
         $sizeM11 = $size - 11;
         $sizeMask = (1 << $size) - 1;
         $sizeM1Mask = (1 << $sizeM1) - 1;
+        $runMask = $sizeM1Mask; // mask for transition bits (size-1 bits)
         $pattern1 = 0b10111010000;
         $pattern2 = 0b00001011101;
         $mask11 = (1 << 11) - 1;
 
+        // === Rule 1 horizontal + dark count (bitwise cascade) ===
         for ($y = 0; $y < $size; $y++) {
             $row = $rows[$y];
             $darkCount += $popLut[$row & 0xff] + $popLut[($row >> 8) & 0xff]
                 + $popLut[($row >> 16) & 0xff] + $popLut[($row >> 24) & 0xff]
                 + $popLut[($row >> 32) & 0xff] + $popLut[($row >> 40) & 0xff]
                 + $popLut[($row >> 48) & 0xff] + $popLut[($row >> 56) & 0xff];
-            $transitions = $row ^ ($row >> 1);
-            $count = 1;
-            for ($x = $sizeM1 - 1; $x >= 0; $x--) {
-                if (($transitions >> $x) & 1) {
-                    if ($count >= 5) {
-                        $penalty += $count - 2;
-                    }
-                    $count = 1;
-                } else {
-                    $count++;
-                }
-            }
-            if ($count >= 5) {
-                $penalty += $count - 2;
+            $inv = (~($row ^ ($row >> 1))) & $runMask;
+            $r4 = $inv & ($inv >> 1) & ($inv >> 2) & ($inv >> 3);
+            if ($r4 !== 0) {
+                $penalty += $popLut[$r4 & 0xff] + $popLut[($r4 >> 8) & 0xff]
+                    + $popLut[($r4 >> 16) & 0xff] + $popLut[($r4 >> 24) & 0xff]
+                    + $popLut[($r4 >> 32) & 0xff] + $popLut[($r4 >> 40) & 0xff]
+                    + $popLut[($r4 >> 48) & 0xff] + $popLut[($r4 >> 56) & 0xff];
+                $starts = $r4 & ~($r4 << 1);
+                $penalty += 2 * ($popLut[$starts & 0xff] + $popLut[($starts >> 8) & 0xff]
+                    + $popLut[($starts >> 16) & 0xff] + $popLut[($starts >> 24) & 0xff]
+                    + $popLut[($starts >> 32) & 0xff] + $popLut[($starts >> 40) & 0xff]
+                    + $popLut[($starts >> 48) & 0xff] + $popLut[($starts >> 56) & 0xff]);
             }
         }
 
+        // === Rule 1 vertical (bitwise cascade on columns) ===
         for ($x = 0; $x < $size; $x++) {
             $col = $cols[$x];
-            $transitions = $col ^ ($col >> 1);
-            $count = 1;
-            for ($y = $sizeM1 - 1; $y >= 0; $y--) {
-                if (($transitions >> $y) & 1) {
-                    if ($count >= 5) {
-                        $penalty += $count - 2;
-                    }
-                    $count = 1;
-                } else {
-                    $count++;
-                }
-            }
-            if ($count >= 5) {
-                $penalty += $count - 2;
+            $inv = (~($col ^ ($col >> 1))) & $runMask;
+            $r4 = $inv & ($inv >> 1) & ($inv >> 2) & ($inv >> 3);
+            if ($r4 !== 0) {
+                $penalty += $popLut[$r4 & 0xff] + $popLut[($r4 >> 8) & 0xff]
+                    + $popLut[($r4 >> 16) & 0xff] + $popLut[($r4 >> 24) & 0xff]
+                    + $popLut[($r4 >> 32) & 0xff] + $popLut[($r4 >> 40) & 0xff]
+                    + $popLut[($r4 >> 48) & 0xff] + $popLut[($r4 >> 56) & 0xff];
+                $starts = $r4 & ~($r4 << 1);
+                $penalty += 2 * ($popLut[$starts & 0xff] + $popLut[($starts >> 8) & 0xff]
+                    + $popLut[($starts >> 16) & 0xff] + $popLut[($starts >> 24) & 0xff]
+                    + $popLut[($starts >> 32) & 0xff] + $popLut[($starts >> 40) & 0xff]
+                    + $popLut[($starts >> 48) & 0xff] + $popLut[($starts >> 56) & 0xff]);
             }
         }
 
+        // === Rule 2: 2×2 blocks (bitwise) ===
         for ($y = 0; $y < $sizeM1; $y++) {
             $same = ~($rows[$y] ^ $rows[$y + 1]) & $sizeMask;
             $hSame = ~($rows[$y] ^ ($rows[$y] >> 1)) & $sizeM1Mask;
@@ -313,6 +318,7 @@ class MaskSelector
             }
         }
 
+        // === Rule 3 horizontal: finder-like patterns ===
         for ($y = 0; $y < $size; $y++) {
             $row = $rows[$y];
             for ($x = 0; $x < $sizeM10; $x++) {
@@ -323,6 +329,7 @@ class MaskSelector
             }
         }
 
+        // === Rule 3 vertical: finder-like patterns ===
         for ($x = 0; $x < $size; $x++) {
             $col = $cols[$x];
             for ($y = 0; $y < $sizeM10; $y++) {
@@ -333,6 +340,7 @@ class MaskSelector
             }
         }
 
+        // === Rule 4: Dark/light balance ===
         $totalModules = $size * $size;
         $percentage = ($darkCount * 100) / $totalModules;
         $deviation = abs($percentage - 50);
