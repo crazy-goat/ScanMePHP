@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-03-16
+
 ### Added
 
 - `PngRenderer` - native 1-bit monochrome PNG renderer (pure PHP, no GD, no Imagick, no external libraries)
@@ -59,6 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive test suite with PHPUnit
 - Full documentation and usage examples
 
-[Unreleased]: https://github.com/crazy-goat/ScanMePHP/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/crazy-goat/ScanMePHP/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/crazy-goat/ScanMePHP/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/crazy-goat/ScanMePHP/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/crazy-goat/ScanMePHP/releases/tag/v0.1.0
