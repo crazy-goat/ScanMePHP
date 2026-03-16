@@ -2,16 +2,23 @@
 
 declare(strict_types=1);
 
-namespace ScanMePHP\Renderer;
+namespace CrazyGoat\ScanMePHP\Renderer;
 
-use ScanMePHP\Matrix;
-use ScanMePHP\ModuleStyle;
-use ScanMePHP\RenderOptions;
-use ScanMePHP\RendererInterface;
+use CrazyGoat\ScanMePHP\Exception\InvalidConfigurationException;
+use CrazyGoat\ScanMePHP\Matrix;
+use CrazyGoat\ScanMePHP\ModuleStyle;
+use CrazyGoat\ScanMePHP\RenderOptions;
+use CrazyGoat\ScanMePHP\RendererInterface;
 
 class SvgRenderer implements RendererInterface
 {
-    private int $moduleSize = 10;
+    public function __construct(
+        private readonly int $moduleSize = 10,
+    ) {
+        if ($this->moduleSize <= 0) {
+            throw InvalidConfigurationException::invalidModuleSize($this->moduleSize);
+        }
+    }
 
     public function getContentType(): string
     {
@@ -68,7 +75,7 @@ class SvgRenderer implements RendererInterface
 
         for ($y = 0; $y < $size; $y++) {
             for ($x = 0; $x < $size; $x++) {
-                if ($matrix->fastGet($x, $y)) {
+                if ($matrix->get($x, $y)) {
                     $result .= $this->generateModule(
                         $x + $margin,
                         $y + $margin,

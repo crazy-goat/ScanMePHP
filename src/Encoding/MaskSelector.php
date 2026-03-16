@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ScanMePHP\Encoding;
+namespace CrazyGoat\ScanMePHP\Encoding;
 
-use ScanMePHP\Matrix;
+use CrazyGoat\ScanMePHP\Matrix;
 
 class MaskSelector
 {

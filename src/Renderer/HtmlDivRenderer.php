@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace ScanMePHP\Renderer;
+namespace CrazyGoat\ScanMePHP\Renderer;
 
-use ScanMePHP\Matrix;
-use ScanMePHP\RenderOptions;
-use ScanMePHP\RendererInterface;
+use CrazyGoat\ScanMePHP\Matrix;
+use CrazyGoat\ScanMePHP\RenderOptions;
+use CrazyGoat\ScanMePHP\RendererInterface;
 
 class HtmlDivRenderer implements RendererInterface
 {

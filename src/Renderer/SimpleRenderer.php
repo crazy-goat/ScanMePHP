@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace ScanMePHP\Renderer;
+namespace CrazyGoat\ScanMePHP\Renderer;
 
-use ScanMePHP\Matrix;
-use ScanMePHP\RenderOptions;
+use CrazyGoat\ScanMePHP\Matrix;
+use CrazyGoat\ScanMePHP\RenderOptions;
 
 class SimpleRenderer extends AbstractAsciiRenderer
 {
@@ -26,7 +26,7 @@ class SimpleRenderer extends AbstractAsciiRenderer
         for ($y = 0; $y < $size; $y++) {
             $line = str_repeat($bgChar, $sideMargin);
             for ($x = 0; $x < $size; $x++) {
-                $isDark = $matrix->fastGet($x, $y);
+                $isDark = $matrix->get($x, $y);
                 $line .= ($invert ? !$isDark : $isDark) ? $darkChar : $bgChar;
             }
             $line .= str_repeat($bgChar, $sideMargin);

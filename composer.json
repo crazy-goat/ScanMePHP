@@ -20,12 +20,12 @@
     },
     "autoload": {
         "psr-4": {
-            "ScanMePHP\\": "src/"
+            "CrazyGoat\\ScanMePHP\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "ScanMePHP\\Tests\\": "tests/"
+            "CrazyGoat\\ScanMePHP\\Tests\\": "tests/"
         }
     },
     "scripts": {

@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace ScanMePHP\Renderer;
+namespace CrazyGoat\ScanMePHP\Renderer;
 
-use ScanMePHP\Exception\RenderException;
-use ScanMePHP\Matrix;
-use ScanMePHP\RenderOptions;
-use ScanMePHP\RendererInterface;
+use CrazyGoat\ScanMePHP\Exception\RenderException;
+use CrazyGoat\ScanMePHP\Matrix;
+use CrazyGoat\ScanMePHP\RenderOptions;
+use CrazyGoat\ScanMePHP\RendererInterface;
 
 class PngRenderer implements RendererInterface
 {
@@ -36,46 +36,41 @@ class PngRenderer implements RendererInterface
         $margin = $options->margin;
         $totalModules = $size + (2 * $margin);
         $totalPixels = $totalModules * $this->moduleSize;
+
+        return $this->encoder->encodeStreaming(
+            function (int $y) use ($matrix, $size, $margin, $totalModules): array {
+                return $this->buildScanline($matrix, $size, $margin, $totalModules, $y);
+            },
+            $totalPixels,
+            $totalPixels
+        );
+    }
+
+    /**
+     * Build a single scanline (row of pixels) for the given Y coordinate.
+     * Uses streaming approach to avoid storing full bitmap in memory.
+     *
+     * @return bool[] Array of boolean pixel values for this row
+     */
+    private function buildScanline(Matrix $matrix, int $size, int $margin, int $totalModules, int $pixelY): array
+    {
         $mod = $this->moduleSize;
-        $bytesPerScanline = (int) ceil($totalPixels / 8);
+        $moduleY = (int) ($pixelY / $mod);
+        $dataY = $moduleY - $margin;
+        $scanline = [];
 
-        // Pack each unique module row into a binary scanline string ONCE,
-        // then repeat it moduleSize times. Avoids redundant bit-packing
-        // for the moduleSize identical pixel rows within each module row.
-        $packedRows = [];
-        for ($moduleY = 0; $moduleY < $totalModules; $moduleY++) {
-            $dataY = $moduleY - $margin;
-            $inDataY = $dataY >= 0 && $dataY < $size;
+        for ($moduleX = 0; $moduleX < $totalModules; $moduleX++) {
+            $dataX = $moduleX - $margin;
+            $isDark = ($dataX >= 0 && $dataX < $size && $dataY >= 0 && $dataY < $size)
+                ? $matrix->get($dataX, $dataY)
+                : false;
 
-            $scanline = "\x00"; // PNG filter byte: None
-            for ($byteIndex = 0; $byteIndex < $bytesPerScanline; $byteIndex++) {
-                $byte = 0;
-                for ($bit = 0; $bit < 8; $bit++) {
-                    $pixelX = $byteIndex * 8 + $bit;
-                    if ($pixelX < $totalPixels) {
-                        $moduleX = (int) ($pixelX / $mod);
-                        $dataX = $moduleX - $margin;
-                        $isDark = ($inDataY && $dataX >= 0 && $dataX < $size)
-                            ? $matrix->fastGet($dataX, $dataY)
-                            : false;
-                        if (!$isDark) {
-                            $byte |= (0x80 >> $bit);
-                        }
-                    } else {
-                        $byte |= (0x80 >> $bit);
-                    }
-                }
-                $scanline .= chr($byte);
+            // Expand this module to moduleSize pixels
+            for ($px = 0; $px < $mod; $px++) {
+                $scanline[] = $isDark;
             }
-            $packedRows[$moduleY] = $scanline;
         }
 
-        // Build raw IDAT data: repeat each packed row moduleSize times
-        $rawData = '';
-        for ($moduleY = 0; $moduleY < $totalModules; $moduleY++) {
-            $rawData .= str_repeat($packedRows[$moduleY], $mod);
-        }
-
-        return $this->encoder->encodeFromRaw($rawData, $totalPixels, $totalPixels);
+        return $scanline;
     }
 }

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ScanMePHP\Encoding;
+namespace CrazyGoat\ScanMePHP\Encoding;
 
-use ScanMePHP\Exception\InvalidDataException;
+use CrazyGoat\ScanMePHP\Exception\InvalidDataException;
 
 class DataEncoder
 {

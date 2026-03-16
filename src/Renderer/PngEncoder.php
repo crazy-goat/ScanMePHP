@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ScanMePHP\Renderer;
+namespace CrazyGoat\ScanMePHP\Renderer;
 
 /**
  * Minimal PNG encoder for 1-bit monochrome images.
@@ -35,23 +35,6 @@ final class PngEncoder
     }
 
     /**
-     * Encode using streaming approach - callback provides scanlines one at a time.
-     * This reduces memory usage significantly for large images.
-     *
-     * @param callable(int $y): bool[] $scanlineCallback Function that returns scanline array for given Y
-     * @param int $width Image width in pixels
-     * @param int $height Image height in pixels
-     * @return string Raw PNG binary data
-     */
-    public function encodeStreaming(callable $scanlineCallback, int $width, int $height): string
-    {
-        return self::PNG_SIGNATURE
-            . $this->buildIhdrChunk($width, $height)
-            . $this->buildIdatChunkStreaming($scanlineCallback, $width, $height)
-            . $this->buildIendChunk();
-    }
-
-    /**
      * IHDR chunk: 13 bytes of image metadata.
      *
      * Layout: width(4B) + height(4B) + bitDepth(1B) + colorType(1B)
@@ -67,6 +50,23 @@ final class PngEncoder
             . "\x00";  // interlace method: 0 (no interlace)
 
         return $this->buildChunk('IHDR', $data);
+    }
+
+    /**
+     * Encode using streaming approach - callback provides scanlines one at a time.
+     * This reduces memory usage significantly for large images.
+     *
+     * @param callable(int $y): bool[] $scanlineCallback Function that returns scanline array for given Y
+     * @param int $width Image width in pixels
+     * @param int $height Image height in pixels
+     * @return string Raw PNG binary data
+     */
+    public function encodeStreaming(callable $scanlineCallback, int $width, int $height): string
+    {
+        return self::PNG_SIGNATURE
+            . $this->buildIhdrChunk($width, $height)
+            . $this->buildIdatChunkStreaming($scanlineCallback, $width, $height)
+            . $this->buildIendChunk();
     }
 
     /**
@@ -86,10 +86,13 @@ final class PngEncoder
                 for ($bit = 0; $bit < 8; $bit++) {
                     $x = $byteIndex * 8 + $bit;
                     if ($x < $width) {
+                        // true = dark = black = bit value 0
+                        // false = light = white = bit value 1
                         if (!$row[$x]) {
                             $byte |= (0x80 >> $bit);
                         }
                     } else {
+                        // Padding bits: set to 1 (white) for clean background
                         $byte |= (0x80 >> $bit);
                     }
                 }
@@ -135,25 +138,6 @@ final class PngEncoder
         $compressed = gzcompress(implode('', $rawData));
 
         return $this->buildChunk('IDAT', $compressed);
-    }
-
-    /**
-     * Encode from pre-packed raw IDAT data (already bit-packed scanlines with filter bytes).
-     * The caller is responsible for correct scanline format.
-     *
-     * @param string $rawData Pre-packed scanline data (filter byte + packed bits per row)
-     * @param int $width Image width in pixels
-     * @param int $height Image height in pixels
-     * @return string Raw PNG binary data
-     */
-    public function encodeFromRaw(string $rawData, int $width, int $height): string
-    {
-        $compressed = gzcompress($rawData);
-
-        return self::PNG_SIGNATURE
-            . $this->buildIhdrChunk($width, $height)
-            . $this->buildChunk('IDAT', $compressed)
-            . $this->buildIendChunk();
     }
 
     /**

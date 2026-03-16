@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ScanMePHP;
+namespace CrazyGoat\ScanMePHP;
 
 enum ModuleStyle: string
 {

@@ -3,16 +3,17 @@
 declare(strict_types=1);
 
 use PHPUnit\Framework\TestCase;
-use ScanMePHP\QRCode;
-use ScanMePHP\QRCodeConfig;
-use ScanMePHP\Renderer\FullBlocksRenderer;
-use ScanMePHP\Renderer\HalfBlocksRenderer;
-use ScanMePHP\Renderer\SimpleRenderer;
-use ScanMePHP\Renderer\SvgRenderer;
-use ScanMePHP\Renderer\HtmlDivRenderer;
-use ScanMePHP\Renderer\HtmlTableRenderer;
-use ScanMePHP\ErrorCorrectionLevel;
-use ScanMePHP\ModuleStyle;
+use CrazyGoat\ScanMePHP\QRCode;
+use CrazyGoat\ScanMePHP\QRCodeConfig;
+use CrazyGoat\ScanMePHP\Renderer\FullBlocksRenderer;
+use CrazyGoat\ScanMePHP\Renderer\HalfBlocksRenderer;
+use CrazyGoat\ScanMePHP\Renderer\SimpleRenderer;
+use CrazyGoat\ScanMePHP\Renderer\SvgRenderer;
+use CrazyGoat\ScanMePHP\Renderer\HtmlDivRenderer;
+use CrazyGoat\ScanMePHP\Renderer\HtmlTableRenderer;
+use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
+use CrazyGoat\ScanMePHP\Exception\InvalidConfigurationException;
+use CrazyGoat\ScanMePHP\ModuleStyle;
 
 class QRCodeTest extends TestCase
 {
@@ -254,5 +255,44 @@ class QRCodeTest extends TestCase
         $output = $qr->render();
 
         $this->assertStringContainsString('Test Label', $output);
+    }
+
+    public function testSvgRendererCustomModuleSize(): void
+    {
+        $config = new QRCodeConfig(engine: new SvgRenderer(moduleSize: 20));
+        $qr = new QRCode('https://example.com', $config);
+        $output = $qr->render();
+
+        $this->assertIsString($output);
+        $this->assertStringContainsString('width="', $output);
+        // With moduleSize=20 and default margin=4, total size should be larger
+        $this->assertStringContainsString('viewBox="0 0 ', $output);
+    }
+
+    public function testSvgRendererDefaultModuleSize(): void
+    {
+        // Default moduleSize is 10
+        $config = new QRCodeConfig(engine: new SvgRenderer());
+        $qr = new QRCode('https://example.com', $config);
+        $output = $qr->render();
+
+        $this->assertIsString($output);
+        $this->assertStringContainsString('<?xml', $output);
+    }
+
+    public function testSvgRendererInvalidModuleSize(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessage('Module size must be greater than 0');
+
+        new SvgRenderer(moduleSize: 0);
+    }
+
+    public function testSvgRendererNegativeModuleSize(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessage('Module size must be greater than 0');
+
+        new SvgRenderer(moduleSize: -5);
     }
 }

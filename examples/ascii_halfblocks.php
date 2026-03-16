@@ -2,9 +2,9 @@
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use ScanMePHP\QRCode;
-use ScanMePHP\QRCodeConfig;
-use ScanMePHP\Renderer\HalfBlocksRenderer;
+use CrazyGoat\ScanMePHP\QRCode;
+use CrazyGoat\ScanMePHP\QRCodeConfig;
+use CrazyGoat\ScanMePHP\Renderer\HalfBlocksRenderer;
 
 echo "=== ScanMePHP - Half Blocks Renderer ===\n\n";
 

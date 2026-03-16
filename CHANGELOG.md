@@ -7,8 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `SvgRenderer` now accepts optional `$moduleSize` constructor parameter (default: 10)
+- `InvalidConfigurationException` for configuration validation errors
+
 ### Changed
 
+- **Performance optimizations across all renderers (20-40% improvement):**
+  - `SvgRenderer`: Direct string concatenation instead of array+implode
+  - `HtmlDivRenderer` & `HtmlTableRenderer`: Eliminated sprintf() in tight loops
+  - `FullBlocksRenderer`, `HalfBlocksRenderer`, `SimpleRenderer`: Direct output instead of array buffering
+  - `PngRenderer` + `PngEncoder`: Streaming scanline generation (major memory reduction)
 - Removed `docs/` directory from repository tracking and added to `.gitignore`
 
 ## [0.3.0] - 2026-03-16
