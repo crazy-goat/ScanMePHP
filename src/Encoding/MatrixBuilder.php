@@ -64,6 +64,91 @@ class MatrixBuilder
         return $matrix;
     }
 
+    /**
+     * Place data codewords WITHOUT applying any mask.
+     * Returns a matrix with raw (unmasked) data for correct mask evaluation.
+     */
+    public function placeDataUnmasked(Matrix $baseMatrix, array $allCodewords, ErrorCorrectionLevel $ecl): Matrix
+    {
+        $matrix = $baseMatrix->clone();
+
+        // Format info with mask=0 as placeholder (will be overwritten by applyMaskOnly)
+        $this->addFormatInfo($matrix, $ecl, 0);
+
+        $size = $matrix->getSize();
+        $reserved = $matrix->getReservedBitmap();
+        $codewordCount = count($allCodewords);
+        $bitIndex = 0;
+
+        for ($col = $size - 1; $col > 0; $col -= 2) {
+            if ($col === 6) {
+                $col--;
+            }
+
+            $up = (int)(($size - 1 - $col) / 2) % 2 === 0;
+
+            for ($row = $up ? $size - 1 : 0; $up ? $row >= 0 : $row < $size; $up ? $row-- : $row++) {
+                for ($c = 0; $c < 2; $c++) {
+                    $x = $col - $c;
+                    $y = $row;
+                    $idx = $y * $size + $x;
+
+                    if (!$reserved[$idx]) {
+                        $byteIndex = $bitIndex >> 3;
+                        $bitOffset = 7 - ($bitIndex & 7);
+
+                        if ($byteIndex < $codewordCount) {
+                            $matrix->fastSet($x, $y, (($allCodewords[$byteIndex] >> $bitOffset) & 1) === 1);
+                        }
+
+                        $bitIndex++;
+                    }
+                }
+            }
+        }
+
+        return $matrix;
+    }
+
+    /**
+     * Apply mask + correct format info to an unmasked matrix.
+     * Used after selectBestMask determines the optimal mask.
+     */
+    public function applyMaskOnly(Matrix $unmaskedMatrix, int $maskPattern, ErrorCorrectionLevel $ecl): Matrix
+    {
+        $matrix = $unmaskedMatrix->clone();
+        $size = $matrix->getSize();
+        $reserved = $matrix->getReservedBitmap();
+
+        // Apply correct format info for this mask
+        $this->addFormatInfo($matrix, $ecl, $maskPattern);
+
+        // Apply mask XOR to data modules only
+        $maskFn = match ($maskPattern) {
+            0 => static fn(int $x, int $y): bool => (($x + $y) & 1) === 0,
+            1 => static fn(int $x, int $y): bool => ($y & 1) === 0,
+            2 => static fn(int $x, int $y): bool => ($x % 3) === 0,
+            3 => static fn(int $x, int $y): bool => (($x + $y) % 3) === 0,
+            4 => static fn(int $x, int $y): bool => ((($y >> 1) + (int)($x / 3)) & 1) === 0,
+            5 => static fn(int $x, int $y): bool => ($x * $y) % 2 + ($x * $y) % 3 === 0,
+            6 => static fn(int $x, int $y): bool => ((($x * $y) % 2 + ($x * $y) % 3) & 1) === 0,
+            7 => static fn(int $x, int $y): bool => (((($x + $y) & 1) + ($x * $y) % 3) & 1) === 0,
+            default => static fn(int $x, int $y): bool => false,
+        };
+
+        for ($y = 0; $y < $size; $y++) {
+            $rowOffset = $y * $size;
+            for ($x = 0; $x < $size; $x++) {
+                $idx = $rowOffset + $x;
+                if (!$reserved[$idx] && $maskFn($x, $y)) {
+                    $matrix->fastSet($x, $y, !$matrix->fastGet($x, $y));
+                }
+            }
+        }
+
+        return $matrix;
+    }
+
     private function addFinderPatterns(Matrix $matrix): void
     {
         $size = $matrix->getSize();
@@ -336,9 +421,11 @@ class MatrixBuilder
 
                         if ($byteIndex < $codewordCount) {
                             $bit = (($codewords[$byteIndex] >> $bitOffset) & 1) === 1;
-                            $bit = $maskFn($x, $y) ? !$bit : $bit;
-                            $matrix->fastSet($x, $y, $bit);
+                        } else {
+                            $bit = false; // Remainder bits are 0
                         }
+                        $bit = $maskFn($x, $y) ? !$bit : $bit;
+                        $matrix->fastSet($x, $y, $bit);
 
                         $bitIndex++;
                     }

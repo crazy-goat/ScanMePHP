@@ -92,18 +92,17 @@ class Encoder
 
         $allCodewords = array_merge($encodedData, $ecc);
 
-        // Build base matrix ONCE (function patterns only, mask=0 placeholder for format info)
+        // Build base matrix with function patterns (format info uses mask=0 placeholder)
         $baseMatrix = $this->matrixBuilder->buildBase($version, $errorCorrectionLevel, 0);
 
-        // Place data with mask=0 for mask selection evaluation
-        $evalMatrix = $this->matrixBuilder->applyDataAndMask($baseMatrix, $allCodewords, 0, $errorCorrectionLevel);
+        // Place data WITHOUT mask — raw data for correct mask evaluation
+        $unmaskedMatrix = $this->matrixBuilder->placeDataUnmasked($baseMatrix, $allCodewords, $errorCorrectionLevel);
 
-        // Select best mask pattern (evaluates all 8 masks internally)
-        $maskPattern = $this->maskSelector->selectBestMask($evalMatrix);
+        // Select best mask (evaluates all 8 masks with correct format info per mask)
+        $maskPattern = $this->maskSelector->selectBestMask($unmaskedMatrix, $errorCorrectionLevel);
 
-        // Build final matrix with the chosen mask
-        // Re-use base, apply data with correct mask and format info
-        return $this->matrixBuilder->applyDataAndMask($baseMatrix, $allCodewords, $maskPattern, $errorCorrectionLevel);
+        // Apply chosen mask + correct format info to produce final matrix
+        return $this->matrixBuilder->applyMaskOnly($unmaskedMatrix, $maskPattern, $errorCorrectionLevel);
     }
 
     public function getMinimumVersion(
