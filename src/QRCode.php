@@ -14,7 +14,7 @@ class QRCode
     private string $url;
     private QRCodeConfig $config;
     private ?Matrix $matrix = null;
-    private Encoder $encoder;
+    private EncoderInterface $encoder;
 
     public function __construct(string $url, ?QRCodeConfig $config = null)
     {

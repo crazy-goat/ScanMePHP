@@ -13,7 +13,7 @@ use CrazyGoat\ScanMePHP\Encoding\ReedSolomon;
 use CrazyGoat\ScanMePHP\Exception\DataTooLargeException;
 use CrazyGoat\ScanMePHP\Exception\InvalidDataException;
 
-class Encoder
+class Encoder implements EncoderInterface
 {
     private DataAnalyzer $analyzer;
     private DataEncoder $dataEncoder;
