@@ -66,13 +66,22 @@ class MatrixBuilder
 
     /**
      * Place data codewords WITHOUT applying any mask.
-     * Returns a matrix with raw (unmasked) data for correct mask evaluation.
+     * Returns a NEW matrix with raw (unmasked) data for correct mask evaluation.
      */
     public function placeDataUnmasked(Matrix $baseMatrix, array $allCodewords, ErrorCorrectionLevel $ecl): Matrix
     {
         $matrix = $baseMatrix->clone();
+        $this->placeDataUnmaskedInPlace($matrix, $allCodewords, $ecl);
+        return $matrix;
+    }
 
-        // Format info with mask=0 as placeholder (will be overwritten by applyMaskOnly)
+    /**
+     * Place data codewords WITHOUT applying any mask, modifying the matrix IN-PLACE.
+     * Eliminates clone overhead when the base matrix is not reused.
+     */
+    public function placeDataUnmaskedInPlace(Matrix $matrix, array $allCodewords, ErrorCorrectionLevel $ecl): void
+    {
+        // Format info with mask=0 as placeholder (will be overwritten by applyMaskInPlace)
         $this->addFormatInfo($matrix, $ecl, 0);
 
         $size = $matrix->getSize();
@@ -85,7 +94,7 @@ class MatrixBuilder
                 $col--;
             }
 
-            $up = (int)(($size - 1 - $col) / 2) % 2 === 0;
+            $up = ((($size - 1 - $col) >> 1) & 1) === 0;
 
             for ($row = $up ? $size - 1 : 0; $up ? $row >= 0 : $row < $size; $up ? $row-- : $row++) {
                 for ($c = 0; $c < 2; $c++) {
@@ -106,47 +115,51 @@ class MatrixBuilder
                 }
             }
         }
-
-        return $matrix;
     }
 
     /**
-     * Apply mask + correct format info to an unmasked matrix.
-     * Used after selectBestMask determines the optimal mask.
+     * Apply mask + correct format info to a matrix IN-PLACE.
+     * Uses int-packed XOR rows from MaskSelector cache for bulk application.
+     * The matrix is modified directly — no clone overhead.
+     *
+     * @param int[]|null $maskXorRows Pre-computed XOR rows from MaskSelector cache.
+     *                                If null, falls back to per-module closure (slower).
      */
-    public function applyMaskOnly(Matrix $unmaskedMatrix, int $maskPattern, ErrorCorrectionLevel $ecl): Matrix
+    public function applyMaskInPlace(Matrix $matrix, int $maskPattern, ErrorCorrectionLevel $ecl, ?array $maskXorRows = null): void
     {
-        $matrix = $unmaskedMatrix->clone();
         $size = $matrix->getSize();
-        $reserved = $matrix->getReservedBitmap();
 
         // Apply correct format info for this mask
         $this->addFormatInfo($matrix, $ecl, $maskPattern);
 
-        // Apply mask XOR to data modules only
-        $maskFn = match ($maskPattern) {
-            0 => static fn(int $x, int $y): bool => (($x + $y) & 1) === 0,
-            1 => static fn(int $x, int $y): bool => ($y & 1) === 0,
-            2 => static fn(int $x, int $y): bool => ($x % 3) === 0,
-            3 => static fn(int $x, int $y): bool => (($x + $y) % 3) === 0,
-            4 => static fn(int $x, int $y): bool => ((($y >> 1) + (int)($x / 3)) & 1) === 0,
-            5 => static fn(int $x, int $y): bool => ($x * $y) % 2 + ($x * $y) % 3 === 0,
-            6 => static fn(int $x, int $y): bool => ((($x * $y) % 2 + ($x * $y) % 3) & 1) === 0,
-            7 => static fn(int $x, int $y): bool => (((($x + $y) & 1) + ($x * $y) % 3) & 1) === 0,
-            default => static fn(int $x, int $y): bool => false,
-        };
+        if ($maskXorRows !== null) {
+            // Fast path: apply int-packed XOR directly to Matrix internals — zero COW copy
+            $matrix->applyXorMask($maskXorRows);
+        } else {
+            // Slow fallback: per-module closure
+            $reserved = $matrix->getReservedBitmap();
+            $maskFn = match ($maskPattern) {
+                0 => static fn(int $x, int $y): bool => (($x + $y) & 1) === 0,
+                1 => static fn(int $x, int $y): bool => ($y & 1) === 0,
+                2 => static fn(int $x, int $y): bool => ($x % 3) === 0,
+                3 => static fn(int $x, int $y): bool => (($x + $y) % 3) === 0,
+                4 => static fn(int $x, int $y): bool => ((($y >> 1) + (int)($x / 3)) & 1) === 0,
+                5 => static function (int $x, int $y): bool { $xy = $x * $y; return ($xy & 1) + $xy % 3 === 0; },
+                6 => static function (int $x, int $y): bool { $xy = $x * $y; return ((($xy & 1) + $xy % 3) & 1) === 0; },
+                7 => static function (int $x, int $y): bool { return (((($x + $y) & 1) + ($x * $y) % 3) & 1) === 0; },
+                default => static fn(int $x, int $y): bool => false,
+            };
 
-        for ($y = 0; $y < $size; $y++) {
-            $rowOffset = $y * $size;
-            for ($x = 0; $x < $size; $x++) {
-                $idx = $rowOffset + $x;
-                if (!$reserved[$idx] && $maskFn($x, $y)) {
-                    $matrix->fastSet($x, $y, !$matrix->fastGet($x, $y));
+            for ($y = 0; $y < $size; $y++) {
+                $rowOffset = $y * $size;
+                for ($x = 0; $x < $size; $x++) {
+                    $idx = $rowOffset + $x;
+                    if (!$reserved[$idx] && $maskFn($x, $y)) {
+                        $matrix->fastSet($x, $y, !$matrix->fastGet($x, $y));
+                    }
                 }
             }
         }
-
-        return $matrix;
     }
 
     private function addFinderPatterns(Matrix $matrix): void
@@ -396,9 +409,9 @@ class MatrixBuilder
             2 => static fn(int $x, int $y): bool => ($x % 3) === 0,
             3 => static fn(int $x, int $y): bool => (($x + $y) % 3) === 0,
             4 => static fn(int $x, int $y): bool => ((($y >> 1) + (int)($x / 3)) & 1) === 0,
-            5 => static fn(int $x, int $y): bool => ($x * $y) % 2 + ($x * $y) % 3 === 0,
-            6 => static fn(int $x, int $y): bool => ((($x * $y) % 2 + ($x * $y) % 3) & 1) === 0,
-            7 => static fn(int $x, int $y): bool => (((($x + $y) & 1) + ($x * $y) % 3) & 1) === 0,
+            5 => static function (int $x, int $y): bool { $xy = $x * $y; return ($xy & 1) + $xy % 3 === 0; },
+            6 => static function (int $x, int $y): bool { $xy = $x * $y; return ((($xy & 1) + $xy % 3) & 1) === 0; },
+            7 => static function (int $x, int $y): bool { return (((($x + $y) & 1) + ($x * $y) % 3) & 1) === 0; },
             default => static fn(int $x, int $y): bool => false,
         };
 
@@ -407,7 +420,7 @@ class MatrixBuilder
                 $col--;
             }
 
-            $up = (int)(($size - 1 - $col) / 2) % 2 === 0;
+            $up = ((($size - 1 - $col) >> 1) & 1) === 0;
 
             for ($row = $up ? $size - 1 : 0; $up ? $row >= 0 : $row < $size; $up ? $row-- : $row++) {
                 for ($c = 0; $c < 2; $c++) {

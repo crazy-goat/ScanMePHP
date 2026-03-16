@@ -79,6 +79,75 @@ class Matrix
     }
 
     /**
+     * Pack internal data into int[] rows (one int per row, MSB = leftmost column).
+     * Operates directly on internal $data — no COW copy.
+     * @return int[]
+     */
+    public function getPackedRows(): array
+    {
+        $size = $this->size;
+        $data = $this->data;
+        $rows = [];
+        for ($y = 0; $y < $size; $y++) {
+            $val = 0;
+            $rowOffset = $y * $size;
+            for ($x = 0; $x < $size; $x++) {
+                if ($data[$rowOffset + $x]) {
+                    $val |= (1 << ($size - 1 - $x));
+                }
+            }
+            $rows[$y] = $val;
+        }
+        return $rows;
+    }
+
+    /**
+     * Pack internal data into int[] columns (one int per column, MSB = topmost row).
+     * Operates directly on internal $data — no COW copy.
+     * @return int[]
+     */
+    public function getPackedCols(): array
+    {
+        $size = $this->size;
+        $data = $this->data;
+        $cols = [];
+        for ($x = 0; $x < $size; $x++) {
+            $val = 0;
+            for ($y = 0; $y < $size; $y++) {
+                if ($data[$y * $size + $x]) {
+                    $val |= (1 << ($size - 1 - $y));
+                }
+            }
+            $cols[$x] = $val;
+        }
+        return $cols;
+    }
+
+    /**
+     * Apply int-packed XOR mask rows directly to internal data — zero COW copy.
+     * Each int in $xorRows has bits set where data modules should be flipped.
+     * @param int[] $xorRows One int per row, MSB = leftmost column
+     */
+    public function applyXorMask(array $xorRows): void
+    {
+        $size = $this->size;
+        $sizeM1 = $size - 1;
+
+        for ($y = 0; $y < $size; $y++) {
+            $xorBits = $xorRows[$y];
+            if ($xorBits === 0) {
+                continue;
+            }
+            $rowOffset = $y * $size;
+            for ($x = 0; $x < $size; $x++) {
+                if (($xorBits >> ($sizeM1 - $x)) & 1) {
+                    $this->data[$rowOffset + $x] = !$this->data[$rowOffset + $x];
+                }
+            }
+        }
+    }
+
+    /**
      * Backward-compatible getData() — returns nested bool[][].
      * @return bool[][]
      */

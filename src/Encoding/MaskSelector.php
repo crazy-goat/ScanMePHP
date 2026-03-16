@@ -40,7 +40,6 @@ class MaskSelector
 
         $size = $matrix->getSize();
         $version = $matrix->getVersion();
-        $rawData = $matrix->getRawData();
         $reserved = $matrix->getReservedBitmap();
 
         // Get or compute cached mask patterns as int rows/cols
@@ -48,9 +47,9 @@ class MaskSelector
         $maskRows = self::$maskRowCache[$version];
         $maskCols = self::$maskColCache[$version];
 
-        // Pack unmasked data into int rows and int cols
-        $dataRows = self::packRows($rawData, $size);
-        $dataCols = self::packCols($rawData, $size);
+        // Pack unmasked data directly from Matrix internals (no COW copy)
+        $dataRows = $matrix->getPackedRows();
+        $dataCols = $matrix->getPackedCols();
 
         // Get format info XOR deltas for each mask
         $fmtDeltaRows = $this->getFormatInfoDeltaRows($version, $ecl, $size);
@@ -62,6 +61,7 @@ class MaskSelector
         $mask11 = (1 << 11) - 1;
         $sizeM1 = $size - 1;
         $sizeM10 = $size - 10;
+        $sizeM11 = $size - 11; // $sizeM1 - 10, used in Rule 3 shift
         $sizeMask = (1 << $size) - 1;
         $sizeM1Mask = (1 << $sizeM1) - 1;
         $totalModules = $size * $size;
@@ -157,7 +157,7 @@ class MaskSelector
             for ($y = 0; $y < $size; $y++) {
                 $row = $maskedRows[$y];
                 for ($x = 0; $x < $sizeM10; $x++) {
-                    $window = ($row >> ($sizeM1 - 10 - $x)) & $mask11;
+                    $window = ($row >> ($sizeM11 - $x)) & $mask11;
                     if ($window === $pattern1 || $window === $pattern2) {
                         $penalty += 40;
                     }
@@ -172,7 +172,7 @@ class MaskSelector
             for ($x = 0; $x < $size; $x++) {
                 $col = $maskedCols[$x];
                 for ($y = 0; $y < $sizeM10; $y++) {
-                    $window = ($col >> ($sizeM1 - 10 - $y)) & $mask11;
+                    $window = ($col >> ($sizeM11 - $y)) & $mask11;
                     if ($window === $pattern1 || $window === $pattern2) {
                         $penalty += 40;
                     }
@@ -201,13 +201,12 @@ class MaskSelector
     {
         $size = $matrix->getSize();
         $version = $matrix->getVersion();
-        $rawData = $matrix->getRawData();
         $reserved = $matrix->getReservedBitmap();
 
         $this->ensureMaskCache($version, $reserved, $size);
 
-        $dataRows = self::packRows($rawData, $size);
-        $dataCols = self::packCols($rawData, $size);
+        $dataRows = $matrix->getPackedRows();
+        $dataCols = $matrix->getPackedCols();
         $fmtDeltaRows = $this->getFormatInfoDeltaRows($version, $ecl, $size);
         $fmtDeltaCols = $this->getFormatInfoDeltaCols($version, $ecl, $size);
 
@@ -230,6 +229,7 @@ class MaskSelector
         $darkCount = 0;
         $sizeM1 = $size - 1;
         $sizeM10 = $size - 10;
+        $sizeM11 = $size - 11;
         $sizeMask = (1 << $size) - 1;
         $sizeM1Mask = (1 << $sizeM1) - 1;
         $pattern1 = 0b10111010000;
@@ -292,7 +292,7 @@ class MaskSelector
         for ($y = 0; $y < $size; $y++) {
             $row = $rows[$y];
             for ($x = 0; $x < $sizeM10; $x++) {
-                $window = ($row >> ($sizeM1 - 10 - $x)) & $mask11;
+                $window = ($row >> ($sizeM11 - $x)) & $mask11;
                 if ($window === $pattern1 || $window === $pattern2) {
                     $penalty += 40;
                 }
@@ -302,7 +302,7 @@ class MaskSelector
         for ($x = 0; $x < $size; $x++) {
             $col = $cols[$x];
             for ($y = 0; $y < $sizeM10; $y++) {
-                $window = ($col >> ($sizeM1 - 10 - $y)) & $mask11;
+                $window = ($col >> ($sizeM11 - $y)) & $mask11;
                 if ($window === $pattern1 || $window === $pattern2) {
                     $penalty += 40;
                 }
@@ -318,46 +318,30 @@ class MaskSelector
     }
 
     /**
-     * Pack flat bool[] into int[] rows (one int per row, MSB = leftmost column).
-     * @return int[]
+     * Get cached mask XOR rows for a given version and mask pattern.
+     * Must be called after selectBestMask() or evaluateMask() which populate the cache.
+     *
+     * @return int[] One int per row, bits set where mask flips data modules
      */
-    private static function packRows(array $data, int $size): array
+    public function getMaskXorRows(int $version, int $maskPattern): array
     {
-        $rows = [];
-        for ($y = 0; $y < $size; $y++) {
-            $val = 0;
-            $rowOffset = $y * $size;
-            for ($x = 0; $x < $size; $x++) {
-                if ($data[$rowOffset + $x]) {
-                    $val |= (1 << ($size - 1 - $x));
-                }
-            }
-            $rows[$y] = $val;
-        }
-        return $rows;
+        return self::$maskRowCache[$version][$maskPattern];
     }
 
     /**
-     * Pack flat bool[] into int[] columns (one int per column, MSB = topmost row).
-     * @return int[]
+     * Check if mask cache is populated for a given version.
      */
-    private static function packCols(array $data, int $size): array
+    public function hasMaskCache(int $version): bool
     {
-        $cols = [];
-        for ($x = 0; $x < $size; $x++) {
-            $val = 0;
-            for ($y = 0; $y < $size; $y++) {
-                if ($data[$y * $size + $x]) {
-                    $val |= (1 << ($size - 1 - $y));
-                }
-            }
-            $cols[$x] = $val;
-        }
-        return $cols;
+        return isset(self::$maskRowCache[$version]);
     }
 
     /**
      * Ensure mask int arrays are cached for this version.
+     *
+     * Loop order: y → x → all 8 masks. This computes shared values ($xy, $xyMod3,
+     * $sumMod3, etc.) once per (x,y) and evaluates all 8 mask conditions together,
+     * eliminating redundant multiplications and modulo operations.
      */
     private function ensureMaskCache(int $version, array $reserved, int $size): void
     {
@@ -365,43 +349,72 @@ class MaskSelector
             return;
         }
 
-        $allRows = [];
-        $allCols = [];
+        // Initialize all 8 masks' row and col arrays
+        $allRows = array_fill(0, 8, array_fill(0, $size, 0));
+        $allCols = array_fill(0, 8, array_fill(0, $size, 0));
+        $sizeM1 = $size - 1;
 
-        for ($mask = 0; $mask < 8; $mask++) {
-            $rows = array_fill(0, $size, 0);
-            $cols = array_fill(0, $size, 0);
+        for ($y = 0; $y < $size; $y++) {
+            $rowOffset = $y * $size;
+            $yEven = ($y & 1) === 0;
+            $yHalf = $y >> 1;
+            $rowBit = 1 << ($sizeM1 - $y);
 
-            for ($y = 0; $y < $size; $y++) {
-                $rowOffset = $y * $size;
-                $yEven = ($y & 1) === 0;
-                $yHalf = $y >> 1;
+            for ($x = 0; $x < $size; $x++) {
+                if ($reserved[$rowOffset + $x]) {
+                    continue;
+                }
 
-                for ($x = 0; $x < $size; $x++) {
-                    if ($reserved[$rowOffset + $x]) {
-                        continue;
-                    }
+                // Shared computations — each calculated once per (x, y)
+                $xy = $x * $y;
+                $sum = $x + $y;
+                $xyMod3 = $xy % 3;
+                $xyBit = $xy & 1;
+                $sumBit = $sum & 1;
+                $colBit = 1 << ($sizeM1 - $x);
 
-                    $cond = match ($mask) {
-                        0 => (($x + $y) & 1) === 0,
-                        1 => $yEven,
-                        2 => $x % 3 === 0,
-                        3 => ($x + $y) % 3 === 0,
-                        4 => (($yHalf + (int)($x / 3)) & 1) === 0,
-                        5 => ($x * $y) % 2 + ($x * $y) % 3 === 0,
-                        6 => ((($x * $y) % 2 + ($x * $y) % 3) & 1) === 0,
-                        7 => (((($x + $y) & 1) + ($x * $y) % 3) & 1) === 0,
-                    };
-
-                    if ($cond) {
-                        $rows[$y] |= (1 << ($size - 1 - $x));
-                        $cols[$x] |= (1 << ($size - 1 - $y));
-                    }
+                // Evaluate all 8 masks using pre-computed values
+                // Mask 0: (x + y) % 2 == 0
+                if ($sumBit === 0) {
+                    $allRows[0][$y] |= $colBit;
+                    $allCols[0][$x] |= $rowBit;
+                }
+                // Mask 1: y % 2 == 0
+                if ($yEven) {
+                    $allRows[1][$y] |= $colBit;
+                    $allCols[1][$x] |= $rowBit;
+                }
+                // Mask 2: x % 3 == 0
+                if ($x % 3 === 0) {
+                    $allRows[2][$y] |= $colBit;
+                    $allCols[2][$x] |= $rowBit;
+                }
+                // Mask 3: (x + y) % 3 == 0
+                if ($sum % 3 === 0) {
+                    $allRows[3][$y] |= $colBit;
+                    $allCols[3][$x] |= $rowBit;
+                }
+                // Mask 4: (y/2 + x/3) % 2 == 0
+                if ((($yHalf + (int)($x / 3)) & 1) === 0) {
+                    $allRows[4][$y] |= $colBit;
+                    $allCols[4][$x] |= $rowBit;
+                }
+                // Mask 5: (x*y)%2 + (x*y)%3 == 0
+                if ($xyBit + $xyMod3 === 0) {
+                    $allRows[5][$y] |= $colBit;
+                    $allCols[5][$x] |= $rowBit;
+                }
+                // Mask 6: ((x*y)%2 + (x*y)%3) % 2 == 0
+                if ((($xyBit + $xyMod3) & 1) === 0) {
+                    $allRows[6][$y] |= $colBit;
+                    $allCols[6][$x] |= $rowBit;
+                }
+                // Mask 7: ((x+y)%2 + (x*y)%3) % 2 == 0
+                if ((($sumBit + $xyMod3) & 1) === 0) {
+                    $allRows[7][$y] |= $colBit;
+                    $allCols[7][$x] |= $rowBit;
                 }
             }
-
-            $allRows[$mask] = $rows;
-            $allCols[$mask] = $cols;
         }
 
         self::$maskRowCache[$version] = $allRows;
