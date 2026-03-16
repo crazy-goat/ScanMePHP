@@ -86,6 +86,66 @@ class FastEncoder implements EncoderInterface
         [ 360,  700, 1020, 1200], // v27
     ];
 
+    private const NUM_BLOCKS = [
+        [ 1,  1,  1,  1], // v1
+        [ 1,  1,  1,  1], // v2
+        [ 1,  1,  2,  2], // v3
+        [ 1,  2,  2,  4], // v4
+        [ 1,  2,  4,  4], // v5
+        [ 2,  4,  4,  4], // v6
+        [ 2,  4,  6,  5], // v7
+        [ 2,  4,  6,  6], // v8
+        [ 2,  5,  8,  8], // v9
+        [ 4,  5,  8,  8], // v10
+        [ 4,  5,  8, 11], // v11
+        [ 4,  8, 10, 11], // v12
+        [ 4,  9, 12, 16], // v13
+        [ 4,  9, 16, 16], // v14
+        [ 6, 10, 12, 18], // v15
+        [ 6, 10, 17, 16], // v16
+        [ 6, 11, 16, 19], // v17
+        [ 6, 13, 18, 21], // v18
+        [ 7, 14, 21, 25], // v19
+        [ 8, 16, 20, 25], // v20
+        [ 8, 17, 23, 25], // v21
+        [ 9, 17, 23, 34], // v22
+        [ 9, 18, 25, 30], // v23
+        [10, 20, 27, 32], // v24
+        [12, 21, 29, 35], // v25
+        [12, 23, 34, 37], // v26
+        [12, 25, 34, 40], // v27
+    ];
+
+    private const ECC_PER_BLOCK = [
+        [ 7, 10, 13, 17], // v1
+        [10, 16, 22, 28], // v2
+        [15, 26, 18, 22], // v3
+        [20, 18, 26, 16], // v4
+        [26, 24, 18, 22], // v5
+        [18, 16, 24, 28], // v6
+        [20, 18, 18, 26], // v7
+        [24, 22, 22, 26], // v8
+        [30, 22, 20, 24], // v9
+        [18, 26, 24, 28], // v10
+        [20, 30, 28, 24], // v11
+        [24, 22, 26, 28], // v12
+        [26, 22, 24, 22], // v13
+        [30, 24, 20, 24], // v14
+        [22, 24, 30, 24], // v15
+        [24, 28, 24, 30], // v16
+        [28, 28, 28, 28], // v17
+        [30, 26, 28, 28], // v18
+        [28, 26, 26, 26], // v19
+        [28, 26, 30, 28], // v20
+        [28, 26, 28, 30], // v21
+        [28, 28, 30, 24], // v22
+        [30, 28, 30, 30], // v23
+        [30, 28, 30, 30], // v24
+        [26, 28, 30, 30], // v25
+        [28, 28, 28, 30], // v26
+        [30, 28, 30, 30], // v27
+    ];
+
     private const TOTAL_CODEWORDS = [
         0,
         26, 44, 70, 100, 134, 172, 196, 242, 292, 346,
@@ -188,11 +248,14 @@ class FastEncoder implements EncoderInterface
         }
         $fc = self::$formatCache[$fmtKey];
 
+        $numBlocks = self::NUM_BLOCKS[$version - 1][$eclVal];
+        $blockEccLen = self::ECC_PER_BLOCK[$version - 1][$eclVal];
+
         // === Ensure RS factor table cache ===
-        if (!isset(self::$rsCache[$eccCount])) {
-            self::buildRsCache($eccCount);
+        if (!isset(self::$rsCache[$blockEccLen])) {
+            self::buildRsCache($blockEccLen);
         }
-        $factorTable = self::$rsCache[$eccCount];
+        $factorTable = self::$rsCache[$blockEccLen];
 
         // =====================================================================
         // HOT PATH — everything below is inlined, zero method calls
@@ -227,23 +290,54 @@ class FastEncoder implements EncoderInterface
             $usedCodewords = $dataLen + 3;
         }
 
-        // Pad to dataCodewords
         $padByte = 0xEC;
         for ($i = $usedCodewords; $i < $dataCodewords; $i++) {
             $codewords[$i] = $padByte;
             $padByte = $padByte === 0xEC ? 0x11 : 0xEC;
         }
 
-        // === 2. Reed-Solomon ECC ===
-        $ecc = array_fill(0, $eccCount, 0);
-        for ($i = 0; $i < $dataCodewords; $i++) {
-            $factor = $codewords[$i] ^ array_shift($ecc);
-            $ecc[] = 0;
-            if ($factor !== 0) {
-                $ft = $factorTable[$factor];
-                for ($j = 0; $j < $eccCount; $j++) {
-                    $ecc[$j] ^= $ft[$j];
+        // === 2. Reed-Solomon ECC with multi-block interleaving ===
+        $numShortBlocks = $numBlocks - $totalCodewords % $numBlocks;
+        $shortBlockLen = intdiv($totalCodewords, $numBlocks);
+        $shortDataLen = $shortBlockLen - $blockEccLen;
+
+        $blockData = [];
+        $blockEcc = [];
+        $k = 0;
+        for ($b = 0; $b < $numBlocks; $b++) {
+            $dLen = $b < $numShortBlocks ? $shortDataLen : $shortDataLen + 1;
+            $blockData[$b] = array_slice($codewords, $k, $dLen);
+            $k += $dLen;
+
+            $ecc = array_fill(0, $blockEccLen, 0);
+            for ($i = 0; $i < $dLen; $i++) {
+                $factor = $blockData[$b][$i] ^ array_shift($ecc);
+                $ecc[] = 0;
+                if ($factor !== 0) {
+                    $ft = $factorTable[$factor];
+                    for ($j = 0; $j < $blockEccLen; $j++) {
+                        $ecc[$j] ^= $ft[$j];
+                    }
                 }
+            }
+            $blockEcc[$b] = $ecc;
+        }
+
+        $longDataLen = $shortDataLen + 1;
+        $allCount = $totalCodewords;
+        $codewords = [];
+        $idx = 0;
+        for ($col = 0; $col < $longDataLen; $col++) {
+            for ($b = 0; $b < $numBlocks; $b++) {
+                $dLen = $b < $numShortBlocks ? $shortDataLen : $longDataLen;
+                if ($col < $dLen) {
+                    $codewords[$idx++] = $blockData[$b][$col];
+                }
+            }
+        }
+        for ($col = 0; $col < $blockEccLen; $col++) {
+            for ($b = 0; $b < $numBlocks; $b++) {
+                $codewords[$idx++] = $blockEcc[$b][$col];
             }
         }
 
@@ -252,11 +346,6 @@ class FastEncoder implements EncoderInterface
         $rowsLo = $vc['baseRowsLo'];
         $colsHi = $vc['baseColsHi'];
         $colsLo = $vc['baseColsLo'];
-
-        $allCount = $dataCodewords + $eccCount;
-        for ($i = 0; $i < $eccCount; $i++) {
-            $codewords[$dataCodewords + $i] = $ecc[$i];
-        }
 
         // Place data bits using pre-computed zigzag positions
         $zigX = $vc['zigX'];
@@ -318,12 +407,45 @@ class FastEncoder implements EncoderInterface
             $penalty = 0;
             $darkCount = 0;
 
-            // Rule 1 horizontal + dark count
-            for ($y = 0; $y < $size; $y++) {
-                $hi = $mrHi[$y];
-                $lo = $mrLo[$y];
+            $getModule = static function (int $x, int $y) use (&$mrHi, &$mrLo): bool {
+                return $x < 64
+                    ? (bool)(($mrLo[$y] >> $x) & 1)
+                    : (bool)(($mrHi[$y] >> ($x - 64)) & 1);
+            };
 
-                // Popcount (dark count)
+            $addHistory = static function (int $runLen, array &$hist) use ($size): void {
+                if ($hist[0] === 0) {
+                    $runLen += $size;
+                }
+                for ($i = 6; $i >= 1; $i--) {
+                    $hist[$i] = $hist[$i - 1];
+                }
+                $hist[0] = $runLen;
+            };
+
+            $countPatterns = static function (array &$hist): int {
+                $n = $hist[1];
+                if ($n <= 0) {
+                    return 0;
+                }
+                $core = $hist[2] === $n && $hist[3] === $n * 3 && $hist[4] === $n && $hist[5] === $n;
+                return ($core && $hist[0] >= $n * 4 && $hist[6] >= $n ? 1 : 0)
+                     + ($core && $hist[6] >= $n * 4 && $hist[0] >= $n ? 1 : 0);
+            };
+
+            $terminateAndCount = static function (bool $curColor, int $curLen, array &$hist) use ($size, $addHistory, $countPatterns): int {
+                if ($curColor) {
+                    $addHistory($curLen, $hist);
+                    $curLen = 0;
+                }
+                $curLen += $size;
+                $addHistory($curLen, $hist);
+                return $countPatterns($hist);
+            };
+
+            for ($y = 0; $y < $size; $y++) {
+                $lo = $mrLo[$y];
+                $hi = $mrHi[$y];
                 $darkCount += $pop[$lo & 0xff] + $pop[($lo >> 8) & 0xff]
                     + $pop[($lo >> 16) & 0xff] + $pop[($lo >> 24) & 0xff]
                     + $pop[($lo >> 32) & 0xff] + $pop[($lo >> 40) & 0xff]
@@ -333,213 +455,76 @@ class FastEncoder implements EncoderInterface
                     + $pop[($hi >> 32) & 0xff] + $pop[($hi >> 40) & 0xff]
                     + $pop[($hi >> 48) & 0xff] + $pop[($hi >> 56) & 0xff];
 
-                // row >> 1 (unsigned)
-                $s1Lo = (($lo >> 1) & \PHP_INT_MAX) | ($hi << 63);
-                $s1Hi = ($hi >> 1) & \PHP_INT_MAX;
-                // inv = ~(row ^ (row >> 1))  — bits where adjacent modules are same color
-                $invHi = ~($hi ^ $s1Hi);
-                $invLo = ~($lo ^ $s1Lo);
-                // inv >> 1..3
-                $i1Lo = (($invLo >> 1) & \PHP_INT_MAX) | ($invHi << 63);
-                $i1Hi = ($invHi >> 1) & \PHP_INT_MAX;
-                $i2Lo = (($invLo >> 2) & (\PHP_INT_MAX >> 1)) | ($invHi << 62);
-                $i2Hi = ($invHi >> 2) & (\PHP_INT_MAX >> 1);
-                $i3Lo = (($invLo >> 3) & (\PHP_INT_MAX >> 2)) | ($invHi << 61);
-                $i3Hi = ($invHi >> 3) & (\PHP_INT_MAX >> 2);
-                // r4 = inv & (inv>>1) & (inv>>2) & (inv>>3)
-                $r4Hi = $invHi & $i1Hi & $i2Hi & $i3Hi;
-                $r4Lo = $invLo & $i1Lo & $i2Lo & $i3Lo;
-
-                if ($r4Hi !== 0 || $r4Lo !== 0) {
-                    $cnt = $pop[$r4Lo & 0xff] + $pop[($r4Lo >> 8) & 0xff]
-                        + $pop[($r4Lo >> 16) & 0xff] + $pop[($r4Lo >> 24) & 0xff]
-                        + $pop[($r4Lo >> 32) & 0xff] + $pop[($r4Lo >> 40) & 0xff]
-                        + $pop[($r4Lo >> 48) & 0xff] + $pop[($r4Lo >> 56) & 0xff]
-                        + $pop[$r4Hi & 0xff] + $pop[($r4Hi >> 8) & 0xff]
-                        + $pop[($r4Hi >> 16) & 0xff] + $pop[($r4Hi >> 24) & 0xff]
-                        + $pop[($r4Hi >> 32) & 0xff] + $pop[($r4Hi >> 40) & 0xff]
-                        + $pop[($r4Hi >> 48) & 0xff] + $pop[($r4Hi >> 56) & 0xff];
-                    $penalty += $cnt;
-                    // starts = r4 & ~(r4 << 1)
-                    $sl1Hi = ($r4Hi << 1) | (($r4Lo >> 63) & 1);
-                    $sl1Lo = $r4Lo << 1;
-                    $stHi = $r4Hi & ~$sl1Hi;
-                    $stLo = $r4Lo & ~$sl1Lo;
-                    $penalty += 2 * ($pop[$stLo & 0xff] + $pop[($stLo >> 8) & 0xff]
-                        + $pop[($stLo >> 16) & 0xff] + $pop[($stLo >> 24) & 0xff]
-                        + $pop[($stLo >> 32) & 0xff] + $pop[($stLo >> 40) & 0xff]
-                        + $pop[($stLo >> 48) & 0xff] + $pop[($stLo >> 56) & 0xff]
-                        + $pop[$stHi & 0xff] + $pop[($stHi >> 8) & 0xff]
-                        + $pop[($stHi >> 16) & 0xff] + $pop[($stHi >> 24) & 0xff]
-                        + $pop[($stHi >> 32) & 0xff] + $pop[($stHi >> 40) & 0xff]
-                        + $pop[($stHi >> 48) & 0xff] + $pop[($stHi >> 56) & 0xff]);
+                $runColor = false;
+                $runX = 0;
+                $runHistory = [0, 0, 0, 0, 0, 0, 0];
+                for ($x = 0; $x < $size; $x++) {
+                    if ($getModule($x, $y) === $runColor) {
+                        $runX++;
+                        if ($runX === 5) {
+                            $penalty += 3;
+                        } elseif ($runX > 5) {
+                            $penalty++;
+                        }
+                    } else {
+                        $addHistory($runX, $runHistory);
+                        if (!$runColor) {
+                            $penalty += $countPatterns($runHistory) * 40;
+                        }
+                        $runColor = $getModule($x, $y);
+                        $runX = 1;
+                    }
                 }
+                $penalty += $terminateAndCount($runColor, $runX, $runHistory) * 40;
             }
 
-            if ($penalty >= $bestScore) {
-                continue;
-            }
-
-            // Rule 1 vertical
             for ($x = 0; $x < $size; $x++) {
-                $hi = $mcHi[$x];
-                $lo = $mcLo[$x];
-                $s1Lo = (($lo >> 1) & \PHP_INT_MAX) | ($hi << 63);
-                $s1Hi = ($hi >> 1) & \PHP_INT_MAX;
-                $invHi = ~($hi ^ $s1Hi);
-                $invLo = ~($lo ^ $s1Lo);
-                $i1Lo = (($invLo >> 1) & \PHP_INT_MAX) | ($invHi << 63);
-                $i1Hi = ($invHi >> 1) & \PHP_INT_MAX;
-                $i2Lo = (($invLo >> 2) & (\PHP_INT_MAX >> 1)) | ($invHi << 62);
-                $i2Hi = ($invHi >> 2) & (\PHP_INT_MAX >> 1);
-                $i3Lo = (($invLo >> 3) & (\PHP_INT_MAX >> 2)) | ($invHi << 61);
-                $i3Hi = ($invHi >> 3) & (\PHP_INT_MAX >> 2);
-                $r4Hi = $invHi & $i1Hi & $i2Hi & $i3Hi;
-                $r4Lo = $invLo & $i1Lo & $i2Lo & $i3Lo;
-
-                if ($r4Hi !== 0 || $r4Lo !== 0) {
-                    $cnt = $pop[$r4Lo & 0xff] + $pop[($r4Lo >> 8) & 0xff]
-                        + $pop[($r4Lo >> 16) & 0xff] + $pop[($r4Lo >> 24) & 0xff]
-                        + $pop[($r4Lo >> 32) & 0xff] + $pop[($r4Lo >> 40) & 0xff]
-                        + $pop[($r4Lo >> 48) & 0xff] + $pop[($r4Lo >> 56) & 0xff]
-                        + $pop[$r4Hi & 0xff] + $pop[($r4Hi >> 8) & 0xff]
-                        + $pop[($r4Hi >> 16) & 0xff] + $pop[($r4Hi >> 24) & 0xff]
-                        + $pop[($r4Hi >> 32) & 0xff] + $pop[($r4Hi >> 40) & 0xff]
-                        + $pop[($r4Hi >> 48) & 0xff] + $pop[($r4Hi >> 56) & 0xff];
-                    $penalty += $cnt;
-                    $sl1Hi = ($r4Hi << 1) | (($r4Lo >> 63) & 1);
-                    $sl1Lo = $r4Lo << 1;
-                    $stHi = $r4Hi & ~$sl1Hi;
-                    $stLo = $r4Lo & ~$sl1Lo;
-                    $penalty += 2 * ($pop[$stLo & 0xff] + $pop[($stLo >> 8) & 0xff]
-                        + $pop[($stLo >> 16) & 0xff] + $pop[($stLo >> 24) & 0xff]
-                        + $pop[($stLo >> 32) & 0xff] + $pop[($stLo >> 40) & 0xff]
-                        + $pop[($stLo >> 48) & 0xff] + $pop[($stLo >> 56) & 0xff]
-                        + $pop[$stHi & 0xff] + $pop[($stHi >> 8) & 0xff]
-                        + $pop[($stHi >> 16) & 0xff] + $pop[($stHi >> 24) & 0xff]
-                        + $pop[($stHi >> 32) & 0xff] + $pop[($stHi >> 40) & 0xff]
-                        + $pop[($stHi >> 48) & 0xff] + $pop[($stHi >> 56) & 0xff]);
+                $runColor = false;
+                $runY = 0;
+                $runHistory = [0, 0, 0, 0, 0, 0, 0];
+                for ($y = 0; $y < $size; $y++) {
+                    if ($getModule($x, $y) === $runColor) {
+                        $runY++;
+                        if ($runY === 5) {
+                            $penalty += 3;
+                        } elseif ($runY > 5) {
+                            $penalty++;
+                        }
+                    } else {
+                        $addHistory($runY, $runHistory);
+                        if (!$runColor) {
+                            $penalty += $countPatterns($runHistory) * 40;
+                        }
+                        $runColor = $getModule($x, $y);
+                        $runY = 1;
+                    }
                 }
+                $penalty += $terminateAndCount($runColor, $runY, $runHistory) * 40;
             }
 
-            if ($penalty >= $bestScore) {
-                continue;
-            }
-
-            // Rule 2: 2×2 blocks
             for ($y = 0; $y < $sizeM1; $y++) {
-                // same = ~(row[y] ^ row[y+1])  — vertically same
-                $sameHi = ~($mrHi[$y] ^ $mrHi[$y + 1]);
-                $sameLo = ~($mrLo[$y] ^ $mrLo[$y + 1]);
-                // hSame = ~(row[y] ^ (row[y] >> 1))  — horizontally same
-                $rshi = ($mrHi[$y] >> 1) & \PHP_INT_MAX;
-                $rslo = (($mrLo[$y] >> 1) & \PHP_INT_MAX) | ($mrHi[$y] << 63);
-                $hSameHi = ~($mrHi[$y] ^ $rshi);
-                $hSameLo = ~($mrLo[$y] ^ $rslo);
-                // blocks = (same & (same >> 1)) & hSame
-                $ss1Hi = ($sameHi >> 1) & \PHP_INT_MAX;
-                $ss1Lo = (($sameLo >> 1) & \PHP_INT_MAX) | ($sameHi << 63);
-                $bHi = ($sameHi & $ss1Hi) & $hSameHi;
-                $bLo = ($sameLo & $ss1Lo) & $hSameLo;
-
-                if ($bHi !== 0 || $bLo !== 0) {
-                    $penalty += 3 * ($pop[$bLo & 0xff] + $pop[($bLo >> 8) & 0xff]
-                        + $pop[($bLo >> 16) & 0xff] + $pop[($bLo >> 24) & 0xff]
-                        + $pop[($bLo >> 32) & 0xff] + $pop[($bLo >> 40) & 0xff]
-                        + $pop[($bLo >> 48) & 0xff] + $pop[($bLo >> 56) & 0xff]
-                        + $pop[$bHi & 0xff] + $pop[($bHi >> 8) & 0xff]
-                        + $pop[($bHi >> 16) & 0xff] + $pop[($bHi >> 24) & 0xff]
-                        + $pop[($bHi >> 32) & 0xff] + $pop[($bHi >> 40) & 0xff]
-                        + $pop[($bHi >> 48) & 0xff] + $pop[($bHi >> 56) & 0xff]);
+                for ($x = 0; $x < $sizeM1; $x++) {
+                    $color = $getModule($x, $y);
+                    if ($color === $getModule($x + 1, $y)
+                        && $color === $getModule($x, $y + 1)
+                        && $color === $getModule($x + 1, $y + 1)) {
+                        $penalty += 3;
+                    }
                 }
             }
 
-            if ($penalty >= $bestScore) {
-                continue;
-            }
-
-            // Rule 3 horizontal: 11-bit finder pattern matching
-            for ($y = 0; $y < $size; $y++) {
-                $hi = $mrHi[$y]; $lo = $mrLo[$y];
-                // Compute row >> 1 through row >> 10 as int pairs
-                $r1Lo = (($lo >> 1) & \PHP_INT_MAX) | ($hi << 63); $r1Hi = ($hi >> 1) & \PHP_INT_MAX;
-                $r2Lo = (($lo >> 2) & (\PHP_INT_MAX >> 1)) | ($hi << 62); $r2Hi = ($hi >> 2) & (\PHP_INT_MAX >> 1);
-                $r3Lo = (($lo >> 3) & (\PHP_INT_MAX >> 2)) | ($hi << 61); $r3Hi = ($hi >> 3) & (\PHP_INT_MAX >> 2);
-                $r4Lo = (($lo >> 4) & (\PHP_INT_MAX >> 3)) | ($hi << 60); $r4Hi = ($hi >> 4) & (\PHP_INT_MAX >> 3);
-                $r5Lo = (($lo >> 5) & (\PHP_INT_MAX >> 4)) | ($hi << 59); $r5Hi = ($hi >> 5) & (\PHP_INT_MAX >> 4);
-                $r6Lo = (($lo >> 6) & (\PHP_INT_MAX >> 5)) | ($hi << 58); $r6Hi = ($hi >> 6) & (\PHP_INT_MAX >> 5);
-                $r7Lo = (($lo >> 7) & (\PHP_INT_MAX >> 6)) | ($hi << 57); $r7Hi = ($hi >> 7) & (\PHP_INT_MAX >> 6);
-                $r8Lo = (($lo >> 8) & (\PHP_INT_MAX >> 7)) | ($hi << 56); $r8Hi = ($hi >> 8) & (\PHP_INT_MAX >> 7);
-                $r9Lo = (($lo >> 9) & (\PHP_INT_MAX >> 8)) | ($hi << 55); $r9Hi = ($hi >> 9) & (\PHP_INT_MAX >> 8);
-                $r10Lo = (($lo >> 10) & (\PHP_INT_MAX >> 9)) | ($hi << 54); $r10Hi = ($hi >> 10) & (\PHP_INT_MAX >> 9);
-
-                // Pattern 10111010000
-                $m1Hi = $r10Hi & ~$r9Hi & $r8Hi & $r7Hi & $r6Hi & ~$r5Hi & $r4Hi & ~$r3Hi & ~$r2Hi & ~$r1Hi & ~$hi;
-                $m1Lo = $r10Lo & ~$r9Lo & $r8Lo & $r7Lo & $r6Lo & ~$r5Lo & $r4Lo & ~$r3Lo & ~$r2Lo & ~$r1Lo & ~$lo;
-                // Pattern 00001011101
-                $m2Hi = ~$r10Hi & ~$r9Hi & ~$r8Hi & ~$r7Hi & $r6Hi & ~$r5Hi & $r4Hi & $r3Hi & $r2Hi & ~$r1Hi & $hi;
-                $m2Lo = ~$r10Lo & ~$r9Lo & ~$r8Lo & ~$r7Lo & $r6Lo & ~$r5Lo & $r4Lo & $r3Lo & $r2Lo & ~$r1Lo & $lo;
-
-                $mHi = $m1Hi | $m2Hi;
-                $mLo = $m1Lo | $m2Lo;
-                if ($mHi !== 0 || $mLo !== 0) {
-                    $penalty += 40 * ($pop[$mLo & 0xff] + $pop[($mLo >> 8) & 0xff]
-                        + $pop[($mLo >> 16) & 0xff] + $pop[($mLo >> 24) & 0xff]
-                        + $pop[($mLo >> 32) & 0xff] + $pop[($mLo >> 40) & 0xff]
-                        + $pop[($mLo >> 48) & 0xff] + $pop[($mLo >> 56) & 0xff]
-                        + $pop[$mHi & 0xff] + $pop[($mHi >> 8) & 0xff]
-                        + $pop[($mHi >> 16) & 0xff] + $pop[($mHi >> 24) & 0xff]
-                        + $pop[($mHi >> 32) & 0xff] + $pop[($mHi >> 40) & 0xff]
-                        + $pop[($mHi >> 48) & 0xff] + $pop[($mHi >> 56) & 0xff]);
-                }
-            }
-
-            if ($penalty >= $bestScore) {
-                continue;
-            }
-
-            // Rule 3 vertical
-            for ($x = 0; $x < $size; $x++) {
-                $hi = $mcHi[$x]; $lo = $mcLo[$x];
-                $r1Lo = (($lo >> 1) & \PHP_INT_MAX) | ($hi << 63); $r1Hi = ($hi >> 1) & \PHP_INT_MAX;
-                $r2Lo = (($lo >> 2) & (\PHP_INT_MAX >> 1)) | ($hi << 62); $r2Hi = ($hi >> 2) & (\PHP_INT_MAX >> 1);
-                $r3Lo = (($lo >> 3) & (\PHP_INT_MAX >> 2)) | ($hi << 61); $r3Hi = ($hi >> 3) & (\PHP_INT_MAX >> 2);
-                $r4Lo = (($lo >> 4) & (\PHP_INT_MAX >> 3)) | ($hi << 60); $r4Hi = ($hi >> 4) & (\PHP_INT_MAX >> 3);
-                $r5Lo = (($lo >> 5) & (\PHP_INT_MAX >> 4)) | ($hi << 59); $r5Hi = ($hi >> 5) & (\PHP_INT_MAX >> 4);
-                $r6Lo = (($lo >> 6) & (\PHP_INT_MAX >> 5)) | ($hi << 58); $r6Hi = ($hi >> 6) & (\PHP_INT_MAX >> 5);
-                $r7Lo = (($lo >> 7) & (\PHP_INT_MAX >> 6)) | ($hi << 57); $r7Hi = ($hi >> 7) & (\PHP_INT_MAX >> 6);
-                $r8Lo = (($lo >> 8) & (\PHP_INT_MAX >> 7)) | ($hi << 56); $r8Hi = ($hi >> 8) & (\PHP_INT_MAX >> 7);
-                $r9Lo = (($lo >> 9) & (\PHP_INT_MAX >> 8)) | ($hi << 55); $r9Hi = ($hi >> 9) & (\PHP_INT_MAX >> 8);
-                $r10Lo = (($lo >> 10) & (\PHP_INT_MAX >> 9)) | ($hi << 54); $r10Hi = ($hi >> 10) & (\PHP_INT_MAX >> 9);
-
-                $m1Hi = $r10Hi & ~$r9Hi & $r8Hi & $r7Hi & $r6Hi & ~$r5Hi & $r4Hi & ~$r3Hi & ~$r2Hi & ~$r1Hi & ~$hi;
-                $m1Lo = $r10Lo & ~$r9Lo & $r8Lo & $r7Lo & $r6Lo & ~$r5Lo & $r4Lo & ~$r3Lo & ~$r2Lo & ~$r1Lo & ~$lo;
-                $m2Hi = ~$r10Hi & ~$r9Hi & ~$r8Hi & ~$r7Hi & $r6Hi & ~$r5Hi & $r4Hi & $r3Hi & $r2Hi & ~$r1Hi & $hi;
-                $m2Lo = ~$r10Lo & ~$r9Lo & ~$r8Lo & ~$r7Lo & $r6Lo & ~$r5Lo & $r4Lo & $r3Lo & $r2Lo & ~$r1Lo & $lo;
-
-                $mHi = $m1Hi | $m2Hi;
-                $mLo = $m1Lo | $m2Lo;
-                if ($mHi !== 0 || $mLo !== 0) {
-                    $penalty += 40 * ($pop[$mLo & 0xff] + $pop[($mLo >> 8) & 0xff]
-                        + $pop[($mLo >> 16) & 0xff] + $pop[($mLo >> 24) & 0xff]
-                        + $pop[($mLo >> 32) & 0xff] + $pop[($mLo >> 40) & 0xff]
-                        + $pop[($mLo >> 48) & 0xff] + $pop[($mLo >> 56) & 0xff]
-                        + $pop[$mHi & 0xff] + $pop[($mHi >> 8) & 0xff]
-                        + $pop[($mHi >> 16) & 0xff] + $pop[($mHi >> 24) & 0xff]
-                        + $pop[($mHi >> 32) & 0xff] + $pop[($mHi >> 40) & 0xff]
-                        + $pop[($mHi >> 48) & 0xff] + $pop[($mHi >> 56) & 0xff]);
-                }
-            }
-
-            // Rule 4: Dark/light balance
-            $percentage = ($darkCount * 100) / $totalModules;
-            $deviation = abs($percentage - 50);
-            $penalty += ((int)($deviation / 5)) * 50;
+            $total = $size * $size;
+            $k = (int)((\abs($darkCount * 20 - $total * 10) + $total - 1) / $total) - 1;
+            $penalty += $k * 10;
 
             if ($penalty < $bestScore) {
                 $bestScore = $penalty;
                 $bestMask = $mask;
             }
+        }
+
+        if (getenv('SCANME_DEBUG_PENALTIES')) {
+            fwrite(STDERR, "PHP best mask: $bestMask (penalty=$bestScore)\n");
         }
 
         // === 5. Apply best mask to get final rows ===

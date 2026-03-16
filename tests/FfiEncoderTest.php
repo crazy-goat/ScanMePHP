@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP\Tests;
 
-use CrazyGoat\ScanMePHP\Encoder;
 use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
 use CrazyGoat\ScanMePHP\FfiEncoder;
 use CrazyGoat\ScanMePHP\Matrix;
@@ -61,29 +60,32 @@ class FfiEncoderTest extends TestCase
         }
     }
 
-    public function testEncodeMatchesPhpEncoder(): void
+    public function testEncodeMatchesFastEncoder(): void
     {
-        $phpEncoder = new Encoder();
+        $fastEncoder = new \CrazyGoat\ScanMePHP\FastEncoder();
         $ffiEncoder = new FfiEncoder(self::$libraryPath);
 
         $testCases = [
             ['https://example.com', ErrorCorrectionLevel::Medium],
             ['https://example.com', ErrorCorrectionLevel::Low],
             ['https://example.com', ErrorCorrectionLevel::High],
+            ['https://example.com', ErrorCorrectionLevel::Quartile],
             ['https://scanmephp.example.com/very/long/url/path?query=value&other=123', ErrorCorrectionLevel::Medium],
+            ['A', ErrorCorrectionLevel::Low],
+            [str_repeat('X', 100), ErrorCorrectionLevel::Medium],
         ];
 
         foreach ($testCases as [$data, $ecl]) {
-            $phpMatrix = $phpEncoder->encode($data, $ecl);
+            $fastMatrix = $fastEncoder->encode($data, $ecl);
             $ffiMatrix = $ffiEncoder->encode($data, $ecl);
 
             $this->assertSame(
-                $phpMatrix->getSize(),
+                $fastMatrix->getSize(),
                 $ffiMatrix->getSize(),
                 "Size mismatch for '$data' ECL={$ecl->name}"
             );
             $this->assertSame(
-                $phpMatrix->getData(),
+                $fastMatrix->getData(),
                 $ffiMatrix->getData(),
                 "Matrix data mismatch for '$data' ECL={$ecl->name}"
             );

@@ -35,6 +35,13 @@ SCANME_QR_API void scanme_qr_result_free(scanme_qr_result_t* out);
 
 SCANME_QR_API const char* scanme_qr_version(void);
 
+SCANME_QR_API int scanme_qr_debug_penalties(
+    const char* data,
+    size_t      len,
+    int         ecl,
+    int         penalties_out[8]
+);
+
 #ifdef __cplusplus
 }
 #endif

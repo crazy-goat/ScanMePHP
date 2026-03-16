@@ -6,3 +6,4 @@ composer.lock
 /.worktrees/
 /clib/build/
 /clib/build-*/
+*.so

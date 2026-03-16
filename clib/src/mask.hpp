@@ -4,8 +4,7 @@
 namespace scanme {
 
 void apply_mask(QRMatrix& m, int mask_id);
-int calculate_penalty(const QRMatrix& m, int mask_id);
-int select_best_mask(QRMatrix& m);
+int select_best_mask(QRMatrix& m, int ecl, int* penalties_out = nullptr);
 
 inline bool mask_condition(int mask_id, int x, int y) noexcept {
     switch (mask_id) {
@@ -21,12 +20,8 @@ inline bool mask_condition(int mask_id, int x, int y) noexcept {
     }
 }
 
-inline uint8_t get_masked(const QRMatrix& m, int x, int y, int mask_id) noexcept {
-    uint8_t v = m.get(x, y);
-    // function_==1: function module (mask applied to all cells in PHP)
-    // function_==2: remainder cell (value is 0, mask applied during evaluation)
-    // function_==0: data cell (mask applied)
-    return mask_condition(mask_id, x, y) ? (v ^ 1) : v;
-}
+Row3 build_mask_row(int mask_id, int y, int size, const Row3& func_row);
+
+int calculate_penalty_scalar(const Row3* masked_rows, const Row3* masked_cols, int size, int* rule_out = nullptr);
 
 } // namespace scanme

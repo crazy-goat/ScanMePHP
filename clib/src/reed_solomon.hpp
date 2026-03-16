@@ -1,12 +1,12 @@
 #pragma once
 #include <cstdint>
-#include <vector>
+#include <span>
 
 namespace scanme {
 
-std::vector<uint8_t> rs_generate_ec(
-    const std::vector<uint8_t>& data,
-    int ec_count
+void rs_generate_ec(
+    std::span<const uint8_t> data,
+    std::span<uint8_t> ecc
 );
 
 } // namespace scanme

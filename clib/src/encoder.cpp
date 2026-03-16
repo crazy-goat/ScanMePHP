@@ -6,7 +6,6 @@
 #include "../include/scanme_qr.h"
 #include <cstring>
 #include <stdexcept>
-#include <vector>
 #include <algorithm>
 
 namespace scanme {
@@ -27,75 +26,119 @@ static int total_data_codewords(int version, int ecl) {
     return g1 + g2;
 }
 
-static void push_bits(std::vector<uint8_t>& bits, uint32_t val, int count) {
-    for (int i = count - 1; i >= 0; --i)
-        bits.push_back(static_cast<uint8_t>((val >> i) & 1));
-}
-
-static std::vector<uint8_t> build_data_codewords(
-    const char* data, size_t len, int version, int ecl)
+// Direct byte packing — eliminates intermediate bit array.
+// Packs mode indicator, character count, data bytes, terminator, and padding
+// directly into codeword bytes.
+static int build_data_codewords(
+    const char* data, size_t len, int version, int /*ecl*/,
+    uint8_t* codewords, int capacity)
 {
-    int capacity = total_data_codewords(version, ecl);
-    int max_bits = capacity * 8;
-    std::vector<uint8_t> bits;
-    bits.reserve(static_cast<size_t>(max_bits + 32));
-
-    // Mode indicator: byte mode = 0100
-    push_bits(bits, 0b0100, 4);
-
-    // Character count indicator
     int cc_bits = (version <= 9) ? 8 : 16;
-    push_bits(bits, static_cast<uint32_t>(len), cc_bits);
 
-    // Data bytes
-    for (size_t i = 0; i < len; ++i)
-        push_bits(bits, static_cast<uint8_t>(data[i]), 8);
+    if (cc_bits == 8) {
+        // Mode 0100 (4 bits) + 8-bit count + data bytes
+        // First byte: 0100 xxxx where xxxx = high 4 bits of len
+        // But len fits in 8 bits, so: 0100 LLLL where LLLL = len >> 4... wait
+        // Mode = 0100 (4 bits), count = len (8 bits) = 12 bits total header
+        // Byte 0: 0100 HHHH where HHHH = high 4 bits of count
+        // Byte 1 high nibble: LLLL (low 4 bits of count), then data starts
+        //
+        // 0100 cccc cccc dddd dddd dddd ...
+        // byte[0] = 0100 cccc = 0x40 | (len >> 4)
+        // byte[1] = cccc dddd = ((len & 0x0F) << 4) | (data[0] >> 4)
+        // byte[i+2] = dddd dddd = ((data[i] & 0x0F) << 4) | (data[i+1] >> 4)  for i < len-1
+        // byte[len+1] = dddd 0000 = (data[len-1] & 0x0F) << 4  (+ terminator zeros)
 
-    // Terminator (up to 4 zeros)
-    int term = std::min(4, max_bits - static_cast<int>(bits.size()));
-    for (int i = 0; i < term; ++i) bits.push_back(0);
+        int idx = 0;
+        codewords[idx++] = static_cast<uint8_t>(0x40 | (len >> 4));
 
-    // Pad to byte boundary
-    while (bits.size() % 8 != 0) bits.push_back(0);
+        uint8_t prev4 = static_cast<uint8_t>((len & 0x0F) << 4);
+        for (size_t i = 0; i < len; ++i) {
+            uint8_t b = static_cast<uint8_t>(data[i]);
+            codewords[idx++] = static_cast<uint8_t>(prev4 | (b >> 4));
+            prev4 = static_cast<uint8_t>((b & 0x0F) << 4);
+        }
+        // The remaining 4 bits of prev4 + terminator (up to 4 zero bits) + padding to byte boundary
+        // Since we're at a 4-bit offset, the terminator zeros fill the rest of this byte
+        codewords[idx++] = prev4; // low nibble is 0 (terminator + padding)
 
-    // Pad codewords
-    static const uint8_t PAD[] = {0xEC, 0x11};
-    int pad_idx = 0;
-    while (static_cast<int>(bits.size()) < max_bits) {
-        push_bits(bits, PAD[pad_idx++ % 2], 8);
+        // Pad with 0xEC, 0x11 alternating
+        int pad_idx = 0;
+        while (idx < capacity) {
+            codewords[idx++] = (pad_idx++ % 2 == 0) ? 0xEC : 0x11;
+        }
+        return capacity;
+    } else {
+        // cc_bits == 16: mode (4 bits) + count (16 bits) = 20 bits header
+        // 0100 cccc cccc cccc cccc dddd dddd ...
+        // byte[0] = 0100 HHHH = 0x40 | (len >> 12)
+        // byte[1] = next 8 bits of count = (len >> 4) & 0xFF
+        // byte[2] = LLLL dddd = ((len & 0x0F) << 4) | (data[0] >> 4)
+        // byte[i+3] = dddd dddd = ((data[i] & 0x0F) << 4) | (data[i+1] >> 4)
+        // ...
+
+        int idx = 0;
+        codewords[idx++] = static_cast<uint8_t>(0x40 | (len >> 12));
+        codewords[idx++] = static_cast<uint8_t>((len >> 4) & 0xFF);
+
+        uint8_t prev4 = static_cast<uint8_t>((len & 0x0F) << 4);
+        for (size_t i = 0; i < len; ++i) {
+            uint8_t b = static_cast<uint8_t>(data[i]);
+            codewords[idx++] = static_cast<uint8_t>(prev4 | (b >> 4));
+            prev4 = static_cast<uint8_t>((b & 0x0F) << 4);
+        }
+        codewords[idx++] = prev4;
+
+        int pad_idx = 0;
+        while (idx < capacity) {
+            codewords[idx++] = (pad_idx++ % 2 == 0) ? 0xEC : 0x11;
+        }
+        return capacity;
     }
-
-    // Pack bits to bytes
-    std::vector<uint8_t> codewords;
-    codewords.reserve(static_cast<size_t>(capacity));
-    for (int i = 0; i < capacity; ++i) {
-        uint8_t byte = 0;
-        for (int b = 0; b < 8; ++b)
-            byte = static_cast<uint8_t>((byte << 1) | bits[static_cast<size_t>(i*8+b)]);
-        codewords.push_back(byte);
-    }
-    return codewords;
 }
 
-static std::vector<uint8_t> interleave(
-    const std::vector<uint8_t>& data_cw, int version, int ecl)
+static int interleave(
+    const uint8_t* data_cw, int data_len, int version, int ecl,
+    uint8_t* output)
 {
-    // PHP's ReedSolomon::encode() treats ALL data as a single block with no
-    // interleaving. It generates ECC for the entire data array as one block,
-    // using getEccCount() which returns total ECC codewords (not per-block).
-    // We must match this exactly.
+    (void)data_len;
     const auto& ei = EC_TABLE[version-1][ecl];
-    int total_blocks = ei.g1_blocks + ei.g2_blocks;
-    int ec_per_block = ei.ec_per_block;
-    int total_ec = total_blocks * ec_per_block;
+    int num_short = ei.g1_blocks;
+    int num_long  = ei.g2_blocks;
+    int num_blocks = num_short + num_long;
+    int ec_len = ei.ec_per_block;
+    int short_data = ei.g1_data;
+    int long_data  = (num_long > 0) ? ei.g2_data : short_data;
 
-    // Generate ECC for entire data as one block (PHP behavior)
-    auto ecc = rs_generate_ec(data_cw, total_ec);
+    uint8_t block_data[255][256];
+    uint8_t block_ecc[255][256];
 
-    // Result: all data codewords followed by all ECC codewords (no interleaving)
-    std::vector<uint8_t> result(data_cw);
-    result.insert(result.end(), ecc.begin(), ecc.end());
-    return result;
+    int k = 0;
+    for (int i = 0; i < num_blocks; ++i) {
+        int dlen = (i < num_short) ? short_data : long_data;
+        std::memcpy(block_data[i], data_cw + k, static_cast<size_t>(dlen));
+        k += dlen;
+
+        std::span<const uint8_t> d(block_data[i], static_cast<size_t>(dlen));
+        std::span<uint8_t> e(block_ecc[i], static_cast<size_t>(ec_len));
+        rs_generate_ec(d, e);
+    }
+
+    int idx = 0;
+    for (int col = 0; col < long_data; ++col) {
+        for (int b = 0; b < num_blocks; ++b) {
+            int dlen = (b < num_short) ? short_data : long_data;
+            if (col < dlen)
+                output[idx++] = block_data[b][col];
+        }
+    }
+    for (int col = 0; col < ec_len; ++col) {
+        for (int b = 0; b < num_blocks; ++b) {
+            output[idx++] = block_ecc[b][col];
+        }
+    }
+
+    return idx;
 }
 
 EncodeResult encode(const char* data, size_t len, ECL ecl) {
@@ -105,37 +148,85 @@ EncodeResult encode(const char* data, size_t len, ECL ecl) {
     int version = find_version(len, ecl_idx);
     if (version < 0) throw std::invalid_argument("data too large");
 
-    auto data_cw = build_data_codewords(data, len, version, ecl_idx);
-    auto all_cw  = interleave(data_cw, version, ecl_idx);
-    // Note: remainder bits are NOT added here. PHP's placeData leaves remainder
-    // cells at 0 without masking them. place_data() marks those cells as
-    // function_=2 so apply_mask() skips them, matching PHP behavior exactly.
+    int capacity = total_data_codewords(version, ecl_idx);
 
-    // Build temp matrix with mask=0 — matches PHP Encoder which builds
-    // a temp matrix with mask=0 then evaluates all masks on it
-    QRMatrix temp(version);
-    place_finder_patterns(temp);
-    place_alignment_patterns(temp);
-    place_timing_patterns(temp);
-    place_dark_module(temp);
-    place_version_info(temp);
-    place_format_info(temp, ecl_idx, 0);
-    place_data(temp, all_cw);
-    apply_mask(temp, 0);
+    // Stack buffers — max v40 data ~3000 bytes + ~1200 ECC = ~4200 bytes
+    uint8_t data_cw[4096];
+    uint8_t all_cw[8192];
 
-    // Evaluate all masks on temp matrix (with mask 0 already applied)
-    int best_mask = select_best_mask(temp);
-    // temp now has best_mask applied on top of mask_0
+    build_data_codewords(data, len, version, ecl_idx, data_cw, capacity);
+    int total_len = interleave(data_cw, capacity, version, ecl_idx, all_cw);
 
-    // Build final matrix: data XOR best_mask
+    // Build matrix ONCE: place all function patterns and data, then select best mask
     QRMatrix m(version);
     place_finder_patterns(m);
     place_alignment_patterns(m);
     place_timing_patterns(m);
     place_dark_module(m);
     place_version_info(m);
+    reserve_format_info(m);
+    place_data(m, all_cw, total_len);
+
+    int best_mask = select_best_mask(m, ecl_idx);
+
     place_format_info(m, ecl_idx, best_mask);
-    place_data(m, all_cw);
+    apply_mask(m, best_mask);
+
+    return {std::move(m), version};
+}
+
+EncodeResult encode_forced_mask(const char* data, size_t len, ECL ecl, int forced_mask) {
+    if (len == 0) throw std::invalid_argument("empty data");
+    int ecl_idx = static_cast<int>(ecl);
+    int version = find_version(len, ecl_idx);
+    if (version < 0) throw std::invalid_argument("data too large");
+
+    int capacity = total_data_codewords(version, ecl_idx);
+    uint8_t data_cw[4096];
+    uint8_t all_cw[8192];
+
+    build_data_codewords(data, len, version, ecl_idx, data_cw, capacity);
+    int total_len = interleave(data_cw, capacity, version, ecl_idx, all_cw);
+
+    QRMatrix m(version);
+    place_finder_patterns(m);
+    place_alignment_patterns(m);
+    place_timing_patterns(m);
+    place_dark_module(m);
+    place_version_info(m);
+    reserve_format_info(m);
+    place_data(m, all_cw, total_len);
+
+    place_format_info(m, ecl_idx, forced_mask);
+    apply_mask(m, forced_mask);
+
+    return {std::move(m), version};
+}
+
+EncodeResult encode_for_debug(const char* data, size_t len, ECL ecl, int penalties_out[8]) {
+    int ecl_idx = static_cast<int>(ecl);
+    int version = find_version(len, ecl_idx);
+    if (version < 0) throw std::runtime_error("data too large");
+
+    int capacity = total_data_codewords(version, ecl_idx);
+    uint8_t data_cw[4096];
+    uint8_t all_cw[8192];
+
+    build_data_codewords(data, len, version, ecl_idx, data_cw, capacity);
+    int total_len = interleave(data_cw, capacity, version, ecl_idx, all_cw);
+
+    QRMatrix m(version);
+    place_finder_patterns(m);
+    place_alignment_patterns(m);
+    place_timing_patterns(m);
+    place_dark_module(m);
+    place_version_info(m);
+    reserve_format_info(m);
+    place_data(m, all_cw, total_len);
+
+    int best_mask = select_best_mask(m, ecl_idx, penalties_out);
+
+    place_format_info(m, ecl_idx, best_mask);
     apply_mask(m, best_mask);
 
     return {std::move(m), version};
@@ -160,7 +251,16 @@ int scanme_qr_encode(
         auto result   = scanme::encode(data, len, ecl_enum);
         int sz        = result.matrix.size;
         uint8_t* buf  = new uint8_t[static_cast<size_t>(sz * sz)];
-        std::memcpy(buf, result.matrix.modules.data(), static_cast<size_t>(sz * sz));
+
+        // Extract bits from Row3 rows to flat uint8_t array
+        for (int y = 0; y < sz; ++y) {
+            const auto& row = result.matrix.rows[y];
+            uint8_t* dst = buf + y * sz;
+            for (int x = 0; x < sz; ++x) {
+                dst[x] = static_cast<uint8_t>((row.w[x >> 6] >> (x & 63)) & 1);
+            }
+        }
+
         out->modules = buf;
         out->size    = sz;
         out->version = result.version;
@@ -179,6 +279,21 @@ void scanme_qr_result_free(scanme_qr_result_t* out) {
 
 const char* scanme_qr_version(void) {
     return "1.0.0";
+}
+
+int scanme_qr_debug_penalties(
+    const char* data,
+    size_t      len,
+    int         ecl,
+    int         penalties_out[8]
+) {
+    try {
+        auto ecl_enum = static_cast<scanme::ECL>(ecl);
+        auto result   = scanme::encode_for_debug(data, len, ecl_enum, penalties_out);
+        return result.version;
+    } catch (...) {
+        return -1;
+    }
 }
 
 } // extern "C"
