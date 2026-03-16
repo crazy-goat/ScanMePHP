@@ -117,6 +117,14 @@ Requires write permissions to run CI.
 
 ## GitHub Workflow
 
+### Task/Issue Management
+- List open issues: `gh issue list`
+- View specific issue: `gh issue view <number>`
+- List open PRs: `gh pr list`
+- View specific PR: `gh pr view <number>`
+- Create new issue: `gh issue create --title "..." --body "..."`
+- Close issue: `gh issue close <number>`
+
 ### Branches & PRs
 - Always work on a feature branch: `git checkout -b feature/<name>`
 - Push branch and create PR: `gh pr create`
