@@ -62,52 +62,54 @@ class SvgRenderer implements RendererInterface
     private function generateModules(Matrix $matrix, int $margin, string $color, ModuleStyle $style): string
     {
         $size = $matrix->getSize();
-        $elements = [];
+        $escapedColor = $this->escapeColor($color);
+        $mod = $this->moduleSize;
+        $result = '';
 
         for ($y = 0; $y < $size; $y++) {
             for ($x = 0; $x < $size; $x++) {
-                if ($matrix->get($x, $y)) {
-                    $elements[] = $this->generateModule(
+                if ($matrix->fastGet($x, $y)) {
+                    $result .= $this->generateModule(
                         $x + $margin,
                         $y + $margin,
-                        $color,
+                        $escapedColor,
                         $style,
-                        $this->isFinderPattern($matrix, $x, $y)
-                    );
+                        $this->isFinderPattern($matrix, $x, $y),
+                        $mod
+                    ) . "\n";
                 }
             }
         }
 
-        return implode("\n", $elements) . "\n";
+        return $result;
     }
 
-    private function generateModule(int $x, int $y, string $color, ModuleStyle $style, bool $isFinder): string
+    private function generateModule(int $x, int $y, string $color, ModuleStyle $style, bool $isFinder, int $size): string
     {
-        $px = $x * $this->moduleSize;
-        $py = $y * $this->moduleSize;
-        $size = $this->moduleSize;
+        $px = $x * $size;
+        $py = $y * $size;
 
         // Finder patterns always use rounded corners for better visual
         if ($isFinder) {
             $radius = $size * 0.15;
             return sprintf(
                 '  <rect x="%d" y="%d" width="%d" height="%d" fill="%s" rx="%.1f" ry="%.1f"/>',
-                $px, $py, $size, $size, $this->escapeColor($color), $radius, $radius
+                $px, $py, $size, $size, $color, $radius, $radius
             );
         }
 
         return match ($style) {
             ModuleStyle::Square => sprintf(
                 '  <rect x="%d" y="%d" width="%d" height="%d" fill="%s"/>',
-                $px, $py, $size, $size, $this->escapeColor($color)
+                $px, $py, $size, $size, $color
             ),
             ModuleStyle::Rounded => sprintf(
                 '  <rect x="%d" y="%d" width="%d" height="%d" fill="%s" rx="%.1f" ry="%.1f"/>',
-                $px, $py, $size, $size, $this->escapeColor($color), $size * 0.3, $size * 0.3
+                $px, $py, $size, $size, $color, $size * 0.3, $size * 0.3
             ),
             ModuleStyle::Dot => sprintf(
                 '  <circle cx="%d" cy="%d" r="%.1f" fill="%s"/>',
-                $px + $size / 2, $py + $size / 2, $size * 0.4, $this->escapeColor($color)
+                $px + $size / 2, $py + $size / 2, $size * 0.4, $color
             ),
         };
     }

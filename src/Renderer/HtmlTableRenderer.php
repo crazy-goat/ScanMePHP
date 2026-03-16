@@ -29,25 +29,21 @@ class HtmlTableRenderer implements RendererInterface
         $bgColor = $options->getEffectiveBackgroundColor();
         $mod = $this->moduleSize;
         $totalModules = $size + (2 * $margin);
+        $escBg = $this->esc($bgColor);
+        $escFg = $this->esc($fgColor);
 
-        $html = sprintf(
-            '<table style="border-collapse:collapse;border-spacing:0;background:%s">',
-            $this->esc($bgColor)
-        );
+        $html = '<table style="border-collapse:collapse;border-spacing:0;background:' . $escBg . '">';
 
         for ($y = 0; $y < $totalModules; $y++) {
+            $dataY = $y - $margin;
             $html .= '<tr>';
             for ($x = 0; $x < $totalModules; $x++) {
                 $dataX = $x - $margin;
-                $dataY = $y - $margin;
                 $isDark = ($dataX >= 0 && $dataX < $size && $dataY >= 0 && $dataY < $size)
-                    ? $matrix->get($dataX, $dataY)
+                    ? $matrix->fastGet($dataX, $dataY)
                     : false;
-                $color = $isDark ? $fgColor : $bgColor;
-                $html .= sprintf(
-                    '<td style="width:%dpx;height:%dpx;padding:0;border:0;background:%s"></td>',
-                    $mod, $mod, $this->esc($color)
-                );
+                $color = $isDark ? $escFg : $escBg;
+                $html .= '<td style="width:' . $mod . 'px;height:' . $mod . 'px;padding:0;border:0;background:' . $color . '"></td>';
             }
             $html .= '</tr>';
         }
@@ -57,11 +53,7 @@ class HtmlTableRenderer implements RendererInterface
         if ($options->label !== null && $options->label !== '') {
             $totalPx = $totalModules * $mod;
             $fontSize = (int) ($mod * 1.5);
-            $html .= sprintf(
-                '<div style="width:%dpx;text-align:center;font-family:Arial,sans-serif;font-size:%dpx;padding:%dpx 0;background:%s;color:%s">%s</div>',
-                $totalPx, $fontSize, (int) ($mod * 0.5), $this->esc($bgColor), $this->esc($fgColor),
-                htmlspecialchars($options->label, ENT_QUOTES | ENT_HTML5, 'UTF-8')
-            );
+            $html .= '<div style="width:' . $totalPx . 'px;text-align:center;font-family:Arial,sans-serif;font-size:' . $fontSize . 'px;padding:' . (int) ($mod * 0.5) . 'px 0;background:' . $escBg . ';color:' . $escFg . '">' . htmlspecialchars($options->label, ENT_QUOTES | ENT_HTML5, 'UTF-8') . '</div>';
         }
 
         if ($this->fullHtml) {

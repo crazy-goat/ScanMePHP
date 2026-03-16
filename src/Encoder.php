@@ -69,7 +69,7 @@ class Encoder
 
         // Determine encoding mode
         $mode = $forcedMode ?? $this->analyzer->analyze($data);
-        
+
         if ($forcedMode !== null && !$this->isDataCompatible($data, $forcedMode)) {
             throw InvalidDataException::incompatibleMode($forcedMode->name, $data);
         }
@@ -79,10 +79,10 @@ class Encoder
 
         // Encode data
         $encodedData = $this->dataEncoder->encode($data, $mode, $version);
-        
+
         // Calculate total capacity
         $totalCapacity = $this->getTotalDataCodewords($version, $errorCorrectionLevel);
-        
+
         // Add terminator and padding
         $encodedData = $this->dataEncoder->addTerminatorAndPadding($encodedData, $totalCapacity);
 
@@ -90,24 +90,20 @@ class Encoder
         $eccCount = $this->reedSolomon->getEccCount($version, $errorCorrectionLevel->value);
         $ecc = $this->reedSolomon->encode($encodedData, $eccCount);
 
-        // Select best mask pattern
-        $tempMatrix = $this->matrixBuilder->build(
-            $version,
-            $encodedData,
-            $ecc,
-            $errorCorrectionLevel,
-            0
-        );
-        $maskPattern = $this->maskSelector->selectBestMask($tempMatrix);
+        $allCodewords = array_merge($encodedData, $ecc);
 
-        // Build final matrix
-        return $this->matrixBuilder->build(
-            $version,
-            $encodedData,
-            $ecc,
-            $errorCorrectionLevel,
-            $maskPattern
-        );
+        // Build base matrix ONCE (function patterns only, mask=0 placeholder for format info)
+        $baseMatrix = $this->matrixBuilder->buildBase($version, $errorCorrectionLevel, 0);
+
+        // Place data with mask=0 for mask selection evaluation
+        $evalMatrix = $this->matrixBuilder->applyDataAndMask($baseMatrix, $allCodewords, 0, $errorCorrectionLevel);
+
+        // Select best mask pattern (evaluates all 8 masks internally)
+        $maskPattern = $this->maskSelector->selectBestMask($evalMatrix);
+
+        // Build final matrix with the chosen mask
+        // Re-use base, apply data with correct mask and format info
+        return $this->matrixBuilder->applyDataAndMask($baseMatrix, $allCodewords, $maskPattern, $errorCorrectionLevel);
     }
 
     public function getMinimumVersion(
@@ -130,10 +126,9 @@ class Encoder
             if ($version <= 10) {
                 $capacity = $this->capacityTable[$version - 1][$eccIndex][$modeIndex];
             } else {
-                // For versions > 10, use estimation
                 $capacity = $this->estimateCapacity($version, $eccIndex, $modeIndex);
             }
-            
+
             if ($dataLength <= $capacity) {
                 return $version;
             }
@@ -168,7 +163,6 @@ class Encoder
         $minimumVersion = $this->getMinimumVersion($data, $errorCorrectionLevel, $mode);
 
         if ($requestedVersion === 0) {
-            // Auto-detect version
             return $minimumVersion;
         }
 
@@ -190,7 +184,7 @@ class Encoder
             Mode::Numeric => $this->analyzer->isNumeric($data),
             Mode::Alphanumeric => $this->analyzer->isAlphanumeric($data),
             Mode::Kanji => $this->analyzer->isKanji($data),
-            Mode::Byte => true, // Byte mode accepts any data
+            Mode::Byte => true,
         };
     }
 
@@ -211,7 +205,6 @@ class Encoder
 
     private function estimateCapacity(int $version, int $eccIndex, int $modeIndex): int
     {
-        // Rough estimation for versions > 10
         $baseCapacity = $this->capacityTable[9][$eccIndex][$modeIndex];
         $growthFactor = 1 + ($version - 10) * 0.15;
         return (int) ($baseCapacity * $growthFactor);

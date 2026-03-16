@@ -6,15 +6,19 @@ namespace ScanMePHP;
 
 class Matrix
 {
+    /** @var bool[] Flat array of size*size, indexed as [y * size + x] */
     private array $data;
     private int $version;
     private int $size;
+
+    /** @var bool[]|null Lazily computed reserved bitmap (flat) */
+    private ?array $reserved = null;
 
     public function __construct(int $version)
     {
         $this->version = $version;
         $this->size = 17 + ($version * 4);
-        $this->data = array_fill(0, $this->size, array_fill(0, $this->size, false));
+        $this->data = array_fill(0, $this->size * $this->size, false);
     }
 
     public function getSize(): int
@@ -32,24 +36,80 @@ class Matrix
         if ($x < 0 || $x >= $this->size || $y < 0 || $y >= $this->size) {
             return false;
         }
-        return $this->data[$y][$x];
+        return $this->data[$y * $this->size + $x];
     }
 
     public function set(int $x, int $y, bool $value): void
     {
         if ($x >= 0 && $x < $this->size && $y >= 0 && $y < $this->size) {
-            $this->data[$y][$x] = $value;
+            $this->data[$y * $this->size + $x] = $value;
         }
     }
 
-    public function getData(): array
+    /**
+     * Fast inline get — no bounds check. Caller must guarantee valid coords.
+     */
+    public function fastGet(int $x, int $y): bool
+    {
+        return $this->data[$y * $this->size + $x];
+    }
+
+    /**
+     * Fast inline set — no bounds check. Caller must guarantee valid coords.
+     */
+    public function fastSet(int $x, int $y, bool $value): void
+    {
+        $this->data[$y * $this->size + $x] = $value;
+    }
+
+    /**
+     * Get the raw flat data array. For high-performance iteration.
+     */
+    public function getRawData(): array
     {
         return $this->data;
     }
 
-    public function setData(array $data): void
+    /**
+     * Set the raw flat data array. For high-performance bulk operations.
+     */
+    public function setRawData(array $data): void
     {
         $this->data = $data;
+    }
+
+    /**
+     * Backward-compatible getData() — returns nested bool[][].
+     * @return bool[][]
+     */
+    public function getData(): array
+    {
+        $result = [];
+        $size = $this->size;
+        for ($y = 0; $y < $size; $y++) {
+            $offset = $y * $size;
+            $row = [];
+            for ($x = 0; $x < $size; $x++) {
+                $row[] = $this->data[$offset + $x];
+            }
+            $result[] = $row;
+        }
+        return $result;
+    }
+
+    /**
+     * Backward-compatible setData() — accepts nested bool[][].
+     */
+    public function setData(array $data): void
+    {
+        $size = $this->size;
+        $flat = [];
+        for ($y = 0; $y < $size; $y++) {
+            for ($x = 0; $x < $size; $x++) {
+                $flat[] = $data[$y][$x];
+            }
+        }
+        $this->data = $flat;
     }
 
     private const ALIGNMENT_POSITIONS = [
@@ -96,63 +156,111 @@ class Matrix
         [6, 30, 58, 86, 114, 142, 170],
     ];
 
-    public function isReserved(int $x, int $y): bool
+    /**
+     * Get pre-computed reserved bitmap. Computed once, cached.
+     * @return bool[] Flat array — true means module is reserved (function pattern)
+     */
+    public function getReservedBitmap(): array
     {
-        if ($x < 9 && $y < 9) {
-            return true;
+        if ($this->reserved === null) {
+            $this->reserved = $this->computeReservedBitmap();
         }
-        
-        if ($x >= $this->size - 8 && $y < 9) {
-            return true;
-        }
-        
-        if ($x < 9 && $y >= $this->size - 8) {
-            return true;
-        }
-        
-        if ($x === 6 || $y === 6) {
-            return true;
-        }
-        
-        if ($x === 8 && $y === 4 * $this->version + 9) {
-            return true;
-        }
-        
-        if (($x < 9 && $y === 8) || ($x === 8 && $y < 9)) {
-            return true;
-        }
-        if (($x >= $this->size - 8 && $y === 8) || ($x === 8 && $y >= $this->size - 8)) {
-            return true;
-        }
-        
-        if ($this->version >= 7) {
-            if (($x < 6 && $y >= $this->size - 11 && $y < $this->size - 8) ||
-                ($x >= $this->size - 11 && $x < $this->size - 8 && $y < 6)) {
-                return true;
+        return $this->reserved;
+    }
+
+    private function computeReservedBitmap(): array
+    {
+        $size = $this->size;
+        $version = $this->version;
+        $reserved = array_fill(0, $size * $size, false);
+
+        // Finder patterns + separators (top-left, top-right, bottom-left) — 9×9 regions
+        for ($y = 0; $y < 9; $y++) {
+            for ($x = 0; $x < 9; $x++) {
+                $reserved[$y * $size + $x] = true; // top-left
+            }
+            for ($x = $size - 8; $x < $size; $x++) {
+                $reserved[$y * $size + $x] = true; // top-right
             }
         }
-        
-        if ($this->version >= 2) {
-            $positions = self::ALIGNMENT_POSITIONS[$this->version];
+        for ($y = $size - 8; $y < $size; $y++) {
+            for ($x = 0; $x < 9; $x++) {
+                $reserved[$y * $size + $x] = true; // bottom-left
+            }
+        }
+
+        // Timing patterns (row 6 and column 6)
+        for ($i = 8; $i < $size - 8; $i++) {
+            $reserved[6 * $size + $i] = true; // horizontal
+            $reserved[$i * $size + 6] = true; // vertical
+        }
+
+        // Dark module
+        $reserved[(4 * $version + 9) * $size + 8] = true;
+
+        // Format info areas
+        // Already covered by the 9×9 finder regions above, but let's be explicit
+        // for the edge cases that might not be covered:
+        for ($i = 0; $i < 9; $i++) {
+            $reserved[8 * $size + $i] = true;       // row 8, cols 0-8
+            $reserved[$i * $size + 8] = true;        // col 8, rows 0-8
+        }
+        for ($i = $size - 8; $i < $size; $i++) {
+            $reserved[8 * $size + $i] = true;        // row 8, right side
+            $reserved[$i * $size + 8] = true;         // col 8, bottom side
+        }
+
+        // Version info (versions >= 7)
+        if ($version >= 7) {
+            for ($i = 0; $i < 6; $i++) {
+                for ($j = $size - 11; $j < $size - 8; $j++) {
+                    $reserved[$j * $size + $i] = true;  // bottom-left block
+                    $reserved[$i * $size + $j] = true;   // top-right block
+                }
+            }
+        }
+
+        // Alignment patterns
+        if ($version >= 2) {
+            $positions = self::ALIGNMENT_POSITIONS[$version];
+            $sizeM8 = $size - 8;
             foreach ($positions as $cy) {
                 foreach ($positions as $cx) {
+                    // Skip if overlaps finder pattern
                     if ($cx <= 8 && $cy <= 8) continue;
-                    if ($cx >= $this->size - 8 && $cy <= 8) continue;
-                    if ($cx <= 8 && $cy >= $this->size - 8) continue;
-                    if (abs($x - $cx) <= 2 && abs($y - $cy) <= 2) {
-                        return true;
+                    if ($cx >= $sizeM8 && $cy <= 8) continue;
+                    if ($cx <= 8 && $cy >= $sizeM8) continue;
+
+                    for ($dy = -2; $dy <= 2; $dy++) {
+                        $rowOffset = ($cy + $dy) * $size;
+                        for ($dx = -2; $dx <= 2; $dx++) {
+                            $reserved[$rowOffset + $cx + $dx] = true;
+                        }
                     }
                 }
             }
         }
-        
-        return false;
+
+        return $reserved;
+    }
+
+    /**
+     * Legacy isReserved — delegates to pre-computed bitmap.
+     */
+    public function isReserved(int $x, int $y): bool
+    {
+        $bitmap = $this->getReservedBitmap();
+        if ($x < 0 || $x >= $this->size || $y < 0 || $y >= $this->size) {
+            return false;
+        }
+        return $bitmap[$y * $this->size + $x];
     }
 
     public function clone(): self
     {
         $clone = new self($this->version);
         $clone->data = $this->data;
+        $clone->reserved = $this->reserved;
         return $clone;
     }
 }

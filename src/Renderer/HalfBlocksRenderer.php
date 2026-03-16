@@ -14,20 +14,19 @@ class HalfBlocksRenderer extends AbstractAsciiRenderer
         $size = $matrix->getSize();
         $margin = $options->margin;
         $sideMargin = $this->getSideMargin();
-        $lines = [];
-
         $invert = $options->invert;
         $bgChar = $invert ? '█' : ' ';
+        $result = '';
 
         for ($i = 0; $i < $margin; $i++) {
-            $lines[] = $this->createMarginLine($size, $sideMargin, $bgChar);
+            $result .= $this->createMarginLine($size, $sideMargin, $bgChar) . "\n";
         }
 
         for ($y = 0; $y < $size; $y += 2) {
             $line = str_repeat($bgChar, $sideMargin);
             for ($x = 0; $x < $size; $x++) {
-                $top = $matrix->get($x, $y);
-                $bottom = ($y + 1 < $size) ? $matrix->get($x, $y + 1) : false;
+                $top = $matrix->fastGet($x, $y);
+                $bottom = ($y + 1 < $size) ? $matrix->fastGet($x, $y + 1) : false;
                 $top = $invert ? !$top : $top;
                 $bottom = $invert ? !$bottom : $bottom;
                 $line .= match ([$top, $bottom]) {
@@ -38,12 +37,15 @@ class HalfBlocksRenderer extends AbstractAsciiRenderer
                 };
             }
             $line .= str_repeat($bgChar, $sideMargin);
-            $lines[] = $line;
+            $result .= $line . "\n";
         }
 
         $totalWidth = $size + (2 * $sideMargin);
-        $this->appendLabel($lines, $options->label, $totalWidth, $bgChar);
+        if ($options->label !== null && $options->label !== '') {
+            $result .= str_repeat($bgChar, $totalWidth) . "\n";
+            $result .= $this->centerText(' ' . $options->label . ' ', $totalWidth, $bgChar) . "\n";
+        }
 
-        return implode("\n", $lines);
+        return rtrim($result, "\n");
     }
 }

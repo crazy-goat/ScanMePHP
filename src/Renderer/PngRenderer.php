@@ -36,52 +36,46 @@ class PngRenderer implements RendererInterface
         $margin = $options->margin;
         $totalModules = $size + (2 * $margin);
         $totalPixels = $totalModules * $this->moduleSize;
-
-        $bitmap = $this->buildBitmap($matrix, $size, $margin, $totalModules);
-
-        return $this->encoder->encode($bitmap, $totalPixels, $totalPixels);
-    }
-
-    /**
-     * Build a 2D boolean pixel grid from the QR matrix.
-     *
-     * Each QR module is expanded to moduleSize x moduleSize pixels.
-     * true = dark (black module), false = light (white / margin).
-     *
-     * @return bool[][] Pixel grid [y][x]
-     */
-    private function buildBitmap(Matrix $matrix, int $size, int $margin, int $totalModules): array
-    {
         $mod = $this->moduleSize;
-        $bitmap = [];
+        $bytesPerScanline = (int) ceil($totalPixels / 8);
 
+        // Pack each unique module row into a binary scanline string ONCE,
+        // then repeat it moduleSize times. Avoids redundant bit-packing
+        // for the moduleSize identical pixel rows within each module row.
+        $packedRows = [];
         for ($moduleY = 0; $moduleY < $totalModules; $moduleY++) {
             $dataY = $moduleY - $margin;
+            $inDataY = $dataY >= 0 && $dataY < $size;
 
-            // Build one row of module values
-            $moduleRow = [];
-            for ($moduleX = 0; $moduleX < $totalModules; $moduleX++) {
-                $dataX = $moduleX - $margin;
-                $isDark = ($dataX >= 0 && $dataX < $size && $dataY >= 0 && $dataY < $size)
-                    ? $matrix->get($dataX, $dataY)
-                    : false;
-                $moduleRow[] = $isDark;
-            }
-
-            // Expand module row into moduleSize pixel rows
-            $pixelRow = [];
-            foreach ($moduleRow as $isDark) {
-                for ($px = 0; $px < $mod; $px++) {
-                    $pixelRow[] = $isDark;
+            $scanline = "\x00"; // PNG filter byte: None
+            for ($byteIndex = 0; $byteIndex < $bytesPerScanline; $byteIndex++) {
+                $byte = 0;
+                for ($bit = 0; $bit < 8; $bit++) {
+                    $pixelX = $byteIndex * 8 + $bit;
+                    if ($pixelX < $totalPixels) {
+                        $moduleX = (int) ($pixelX / $mod);
+                        $dataX = $moduleX - $margin;
+                        $isDark = ($inDataY && $dataX >= 0 && $dataX < $size)
+                            ? $matrix->fastGet($dataX, $dataY)
+                            : false;
+                        if (!$isDark) {
+                            $byte |= (0x80 >> $bit);
+                        }
+                    } else {
+                        $byte |= (0x80 >> $bit);
+                    }
                 }
+                $scanline .= chr($byte);
             }
-
-            // Duplicate the pixel row moduleSize times
-            for ($py = 0; $py < $mod; $py++) {
-                $bitmap[] = $pixelRow;
-            }
+            $packedRows[$moduleY] = $scanline;
         }
 
-        return $bitmap;
+        // Build raw IDAT data: repeat each packed row moduleSize times
+        $rawData = '';
+        for ($moduleY = 0; $moduleY < $totalModules; $moduleY++) {
+            $rawData .= str_repeat($packedRows[$moduleY], $mod);
+        }
+
+        return $this->encoder->encodeFromRaw($rawData, $totalPixels, $totalPixels);
     }
 }
