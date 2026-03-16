@@ -26,6 +26,11 @@ class QRCode
 
     private static function createDefaultEncoder(): EncoderInterface
     {
+        $libraryPath = dirname(__DIR__) . '/clib/build/libscanme_qr.so';
+        if (FfiEncoder::isAvailable($libraryPath)) {
+            return new FfiEncoder($libraryPath);
+        }
+
         if (\PHP_INT_SIZE >= 8) {
             return new FastEncoder();
         }
