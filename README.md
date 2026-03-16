@@ -2,6 +2,15 @@
 
 Pure PHP QR code generator. Zero dependencies, zero extensions. PHP 8.1+.
 
+## Features
+
+- **Zero dependencies** — no external packages, no PHP extensions required
+- **8 built-in renderers** — SVG, PNG, HTML (div/table), ASCII (full/half/simple blocks)
+- **All QR versions** — v1–v40, all error correction levels (L/M/Q/H)
+- **High performance** — optimized renderers with 20–40% faster output generation
+- **Customizable** — module styles, colors, labels, dark mode, margins
+- **Type-safe** — strict types, enums, readonly properties, PHP 8.1+ idioms
+
 ## Installation
 
 ```bash
@@ -20,6 +29,16 @@ echo $qr->render();
 ## Renderers
 
 ScanMePHP ships with 8 renderers. Each implements `RendererInterface` and can be passed as the `engine` parameter.
+
+| Renderer | Output | Constructor Options |
+|---|---|---|
+| `FullBlocksRenderer` | ASCII `█` blocks | `sideMargin` (int, default: 0) |
+| `HalfBlocksRenderer` | ASCII `▀▄█` compact | `sideMargin` (int, default: 0) |
+| `SimpleRenderer` | ASCII `●` dots | `sideMargin` (int, default: 0) |
+| `SvgRenderer` | SVG XML | `moduleSize` (int, default: 10) |
+| `PngRenderer` | PNG image (1-bit) | `moduleSize` (int, default: 10) |
+| `HtmlDivRenderer` | HTML `<div>` grid | `moduleSize` (int, default: 10), `fullHtml` (bool, default: false) |
+| `HtmlTableRenderer` | HTML `<table>` | `moduleSize` (int, default: 10), `fullHtml` (bool, default: false) |
 
 ### ASCII — FullBlocksRenderer (default)
 
@@ -67,7 +86,7 @@ use ScanMePHP\Renderer\SvgRenderer;
 use ScanMePHP\ModuleStyle;
 
 $config = new QRCodeConfig(
-    engine: new SvgRenderer(),
+    engine: new SvgRenderer(moduleSize: 12),
     moduleStyle: ModuleStyle::Rounded, // Square, Rounded, or Dot
     label: 'Scan Me!',
 );
@@ -133,6 +152,11 @@ $config = new QRCodeConfig(
 All options are set via `QRCodeConfig`:
 
 ```php
+use ScanMePHP\QRCodeConfig;
+use ScanMePHP\ErrorCorrectionLevel;
+use ScanMePHP\ModuleStyle;
+use ScanMePHP\Renderer\SvgRenderer;
+
 $config = new QRCodeConfig(
     engine: new SvgRenderer(),                          // renderer instance
     errorCorrectionLevel: ErrorCorrectionLevel::Medium,  // Low, Medium, Quartile, High
@@ -212,18 +236,6 @@ class MyCustomRenderer implements RendererInterface
 }
 ```
 
-## Renderer Reference
-
-| Renderer | Output | Constructor Options |
-|---|---|---|
-| `FullBlocksRenderer` | ASCII `█` blocks | `sideMargin` (int, default: 0) |
-| `HalfBlocksRenderer` | ASCII `▀▄█` compact | `sideMargin` (int, default: 0) |
-| `SimpleRenderer` | ASCII `●` dots | `sideMargin` (int, default: 0) |
-| `SvgRenderer` | SVG XML | — |
-| `PngRenderer` | PNG image (1-bit) | `moduleSize` (int, default: 10) |
-| `HtmlDivRenderer` | HTML `<div>` grid | `moduleSize` (int, default: 10), `fullHtml` (bool, default: false) |
-| `HtmlTableRenderer` | HTML `<table>` | `moduleSize` (int, default: 10), `fullHtml` (bool, default: false) |
-
 ## Requirements
 
 - PHP >= 8.1
@@ -245,6 +257,7 @@ php examples/ascii_fullblocks.php
 php examples/svg_example.php
 php examples/png_example.php
 php examples/html_div.php
+php examples/html_table.php
 ```
 
 Generated output files are saved to `examples/generated-assets/`.
