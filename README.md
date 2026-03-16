@@ -19,7 +19,7 @@ echo $qr->render();
 
 ## Renderers
 
-ScanMePHP ships with 7 renderers. Each implements `RendererInterface` and can be passed as the `engine` parameter.
+ScanMePHP ships with 8 renderers. Each implements `RendererInterface` and can be passed as the `engine` parameter.
 
 ### ASCII — FullBlocksRenderer (default)
 
@@ -73,6 +73,25 @@ $config = new QRCodeConfig(
 );
 $qr = new QRCode('https://example.com', $config);
 $qr->saveToFile('qrcode.svg');
+```
+
+### PNG — PngRenderer
+
+Generates valid PNG files in pure PHP — no GD, no Imagick, no external libraries. Black and white only, 1-bit monochrome. Ideal for email attachments, API responses, and print.
+
+> **Note:** Labels are not supported in PNG output (no font engine). Passing a `label` will throw a `RenderException`.
+
+```php
+use ScanMePHP\Renderer\PngRenderer;
+
+$config = new QRCodeConfig(
+    engine: new PngRenderer(moduleSize: 10),
+);
+$qr = new QRCode('https://example.com', $config);
+$qr->saveToFile('qrcode.png');
+
+// Or use as data URI (e.g. in <img> tags)
+$dataUri = $qr->getDataUri(); // data:image/png;base64,...
 ```
 
 ### HTML — HtmlDivRenderer
@@ -172,7 +191,7 @@ use ScanMePHP\RendererInterface;
 use ScanMePHP\Matrix;
 use ScanMePHP\RenderOptions;
 
-class PngRenderer implements RendererInterface
+class MyCustomRenderer implements RendererInterface
 {
     public function render(Matrix $matrix, RenderOptions $options): string
     {
@@ -180,15 +199,15 @@ class PngRenderer implements RendererInterface
         for ($y = 0; $y < $size; $y++) {
             for ($x = 0; $x < $size; $x++) {
                 $isDark = $matrix->get($x, $y);
-                // ...
+                // ... your rendering logic
             }
         }
-        return $pngData;
+        return $output;
     }
 
     public function getContentType(): string
     {
-        return 'image/png';
+        return 'text/plain';
     }
 }
 ```
@@ -201,6 +220,7 @@ class PngRenderer implements RendererInterface
 | `HalfBlocksRenderer` | ASCII `▀▄█` compact | `sideMargin` (int, default: 0) |
 | `SimpleRenderer` | ASCII `●` dots | `sideMargin` (int, default: 0) |
 | `SvgRenderer` | SVG XML | — |
+| `PngRenderer` | PNG image (1-bit) | `moduleSize` (int, default: 10) |
 | `HtmlDivRenderer` | HTML `<div>` grid | `moduleSize` (int, default: 10), `fullHtml` (bool, default: false) |
 | `HtmlTableRenderer` | HTML `<table>` | `moduleSize` (int, default: 10), `fullHtml` (bool, default: false) |
 
@@ -223,6 +243,7 @@ See the `examples/` directory. Run any example:
 ```bash
 php examples/ascii_fullblocks.php
 php examples/svg_example.php
+php examples/png_example.php
 php examples/html_div.php
 ```
 
