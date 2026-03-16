@@ -1,0 +1,9 @@
+[
+    {
+        "name": "svg",
+        "avg_time_ms": 52.279,
+        "total_time_ms": 522.79,
+        "memory_kb": 0,
+        "iterations": 10
+    }
+]
