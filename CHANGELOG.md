@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `PngRenderer` - native 1-bit monochrome PNG renderer (pure PHP, no GD, no Imagick, no external libraries)
+- `PngEncoder` - minimal PNG binary encoder (Signature + IHDR + IDAT + IEND) using `gzcompress()` and `crc32()`
+- `ext-gd` added to `require-dev` for PNG validation in tests
+
+### Fixed
+
+- Removed `version` field from `composer.json` to pass `composer validate --strict` in CI
+
 ## [0.2.0] - 2026-03-16
 
 ### Added
