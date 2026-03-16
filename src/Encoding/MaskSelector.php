@@ -80,15 +80,12 @@ class MaskSelector
         // Pre-compute constants
         self::ensurePopLut();
         $popLut = self::$popLut;
-        $pattern1 = 0b10111010000;
-        $pattern2 = 0b00001011101;
-        $mask11 = (1 << 11) - 1;
         $sizeM1 = $size - 1;
         $sizeM10 = $size - 10;
-        $sizeM11 = $size - 11;
         $sizeMask = (1 << $size) - 1;
         $sizeM1Mask = (1 << $sizeM1) - 1;
-        $runMask = (1 << $sizeM1) - 1; // mask for transition bits (size-1 bits)
+        $runMask = $sizeM1Mask; // mask for transition bits (size-1 bits)
+        $r3ValidMask = (1 << $sizeM10) - 1; // valid positions for 11-bit pattern match
         $totalModules = $size * $size;
 
         for ($mask = 0; $mask < 8; $mask++) {
@@ -166,14 +163,16 @@ class MaskSelector
                 continue;
             }
 
-            // === Rule 2: 2×2 blocks (bitwise) ===
+            // === Rule 2: 2×2 blocks (bitwise, LUT popcount) ===
             for ($y = 0; $y < $sizeM1; $y++) {
                 $same = ~($maskedRows[$y] ^ $maskedRows[$y + 1]) & $sizeMask;
                 $hSame = ~($maskedRows[$y] ^ ($maskedRows[$y] >> 1)) & $sizeM1Mask;
                 $blocks = ($same & ($same >> 1)) & $hSame & $sizeM1Mask;
-                while ($blocks) {
-                    $penalty += 3;
-                    $blocks &= ($blocks - 1);
+                if ($blocks !== 0) {
+                    $penalty += 3 * ($popLut[$blocks & 0xff] + $popLut[($blocks >> 8) & 0xff]
+                        + $popLut[($blocks >> 16) & 0xff] + $popLut[($blocks >> 24) & 0xff]
+                        + $popLut[($blocks >> 32) & 0xff] + $popLut[($blocks >> 40) & 0xff]
+                        + $popLut[($blocks >> 48) & 0xff] + $popLut[($blocks >> 56) & 0xff]);
                 }
             }
 
@@ -181,14 +180,25 @@ class MaskSelector
                 continue;
             }
 
-            // === Rule 3 horizontal: finder-like patterns ===
+            // === Rule 3 horizontal: finder-like patterns (bitwise parallel) ===
+            // Match 10111010000 and 00001011101 across all positions simultaneously.
+            // Each shifted copy isolates one bit position of the 11-bit pattern.
+            // AND/NAND of all 11 shifted copies yields a bitmask of match positions.
             for ($y = 0; $y < $size; $y++) {
                 $row = $maskedRows[$y];
-                for ($x = 0; $x < $sizeM10; $x++) {
-                    $window = ($row >> ($sizeM11 - $x)) & $mask11;
-                    if ($window === $pattern1 || $window === $pattern2) {
-                        $penalty += 40;
-                    }
+                $r1 = $row >> 1; $r2 = $row >> 2; $r3 = $row >> 3; $r4p = $row >> 4;
+                $r5 = $row >> 5; $r6 = $row >> 6; $r7 = $row >> 7; $r8 = $row >> 8;
+                $r9 = $row >> 9; $r10 = $row >> 10;
+                // Pattern 10111010000: bits 10,8,7,6,4 set; bits 9,5,3,2,1,0 clear
+                $m1 = $r10 & ~$r9 & $r8 & $r7 & $r6 & ~$r5 & $r4p & ~$r3 & ~$r2 & ~$r1 & ~$row;
+                // Pattern 00001011101: bits 6,4,3,2,0 set; bits 10,9,8,7,5,1 clear
+                $m2 = ~$r10 & ~$r9 & ~$r8 & ~$r7 & $r6 & ~$r5 & $r4p & $r3 & $r2 & ~$r1 & $row;
+                $matches = ($m1 | $m2) & $r3ValidMask;
+                if ($matches !== 0) {
+                    $penalty += 40 * ($popLut[$matches & 0xff] + $popLut[($matches >> 8) & 0xff]
+                        + $popLut[($matches >> 16) & 0xff] + $popLut[($matches >> 24) & 0xff]
+                        + $popLut[($matches >> 32) & 0xff] + $popLut[($matches >> 40) & 0xff]
+                        + $popLut[($matches >> 48) & 0xff] + $popLut[($matches >> 56) & 0xff]);
                 }
             }
 
@@ -196,14 +206,20 @@ class MaskSelector
                 continue;
             }
 
-            // === Rule 3 vertical: finder-like patterns ===
+            // === Rule 3 vertical: finder-like patterns (bitwise parallel) ===
             for ($x = 0; $x < $size; $x++) {
                 $col = $maskedCols[$x];
-                for ($y = 0; $y < $sizeM10; $y++) {
-                    $window = ($col >> ($sizeM11 - $y)) & $mask11;
-                    if ($window === $pattern1 || $window === $pattern2) {
-                        $penalty += 40;
-                    }
+                $r1 = $col >> 1; $r2 = $col >> 2; $r3 = $col >> 3; $r4p = $col >> 4;
+                $r5 = $col >> 5; $r6 = $col >> 6; $r7 = $col >> 7; $r8 = $col >> 8;
+                $r9 = $col >> 9; $r10 = $col >> 10;
+                $m1 = $r10 & ~$r9 & $r8 & $r7 & $r6 & ~$r5 & $r4p & ~$r3 & ~$r2 & ~$r1 & ~$col;
+                $m2 = ~$r10 & ~$r9 & ~$r8 & ~$r7 & $r6 & ~$r5 & $r4p & $r3 & $r2 & ~$r1 & $col;
+                $matches = ($m1 | $m2) & $r3ValidMask;
+                if ($matches !== 0) {
+                    $penalty += 40 * ($popLut[$matches & 0xff] + $popLut[($matches >> 8) & 0xff]
+                        + $popLut[($matches >> 16) & 0xff] + $popLut[($matches >> 24) & 0xff]
+                        + $popLut[($matches >> 32) & 0xff] + $popLut[($matches >> 40) & 0xff]
+                        + $popLut[($matches >> 48) & 0xff] + $popLut[($matches >> 56) & 0xff]);
                 }
             }
 
@@ -259,13 +275,10 @@ class MaskSelector
         $darkCount = 0;
         $sizeM1 = $size - 1;
         $sizeM10 = $size - 10;
-        $sizeM11 = $size - 11;
         $sizeMask = (1 << $size) - 1;
         $sizeM1Mask = (1 << $sizeM1) - 1;
         $runMask = $sizeM1Mask; // mask for transition bits (size-1 bits)
-        $pattern1 = 0b10111010000;
-        $pattern2 = 0b00001011101;
-        $mask11 = (1 << 11) - 1;
+        $r3ValidMask = (1 << $sizeM10) - 1; // valid positions for 11-bit pattern match
 
         // === Rule 1 horizontal + dark count (bitwise cascade) ===
         for ($y = 0; $y < $size; $y++) {
@@ -307,36 +320,50 @@ class MaskSelector
             }
         }
 
-        // === Rule 2: 2×2 blocks (bitwise) ===
+        // === Rule 2: 2×2 blocks (bitwise, LUT popcount) ===
         for ($y = 0; $y < $sizeM1; $y++) {
             $same = ~($rows[$y] ^ $rows[$y + 1]) & $sizeMask;
             $hSame = ~($rows[$y] ^ ($rows[$y] >> 1)) & $sizeM1Mask;
             $blocks = ($same & ($same >> 1)) & $hSame & $sizeM1Mask;
-            while ($blocks) {
-                $penalty += 3;
-                $blocks &= ($blocks - 1);
+            if ($blocks !== 0) {
+                $penalty += 3 * ($popLut[$blocks & 0xff] + $popLut[($blocks >> 8) & 0xff]
+                    + $popLut[($blocks >> 16) & 0xff] + $popLut[($blocks >> 24) & 0xff]
+                    + $popLut[($blocks >> 32) & 0xff] + $popLut[($blocks >> 40) & 0xff]
+                    + $popLut[($blocks >> 48) & 0xff] + $popLut[($blocks >> 56) & 0xff]);
             }
         }
 
-        // === Rule 3 horizontal: finder-like patterns ===
+        // === Rule 3 horizontal: finder-like patterns (bitwise parallel) ===
         for ($y = 0; $y < $size; $y++) {
             $row = $rows[$y];
-            for ($x = 0; $x < $sizeM10; $x++) {
-                $window = ($row >> ($sizeM11 - $x)) & $mask11;
-                if ($window === $pattern1 || $window === $pattern2) {
-                    $penalty += 40;
-                }
+            $r1 = $row >> 1; $r2 = $row >> 2; $r3 = $row >> 3; $r4p = $row >> 4;
+            $r5 = $row >> 5; $r6 = $row >> 6; $r7 = $row >> 7; $r8 = $row >> 8;
+            $r9 = $row >> 9; $r10 = $row >> 10;
+            $m1 = $r10 & ~$r9 & $r8 & $r7 & $r6 & ~$r5 & $r4p & ~$r3 & ~$r2 & ~$r1 & ~$row;
+            $m2 = ~$r10 & ~$r9 & ~$r8 & ~$r7 & $r6 & ~$r5 & $r4p & $r3 & $r2 & ~$r1 & $row;
+            $matches = ($m1 | $m2) & $r3ValidMask;
+            if ($matches !== 0) {
+                $penalty += 40 * ($popLut[$matches & 0xff] + $popLut[($matches >> 8) & 0xff]
+                    + $popLut[($matches >> 16) & 0xff] + $popLut[($matches >> 24) & 0xff]
+                    + $popLut[($matches >> 32) & 0xff] + $popLut[($matches >> 40) & 0xff]
+                    + $popLut[($matches >> 48) & 0xff] + $popLut[($matches >> 56) & 0xff]);
             }
         }
 
-        // === Rule 3 vertical: finder-like patterns ===
+        // === Rule 3 vertical: finder-like patterns (bitwise parallel) ===
         for ($x = 0; $x < $size; $x++) {
             $col = $cols[$x];
-            for ($y = 0; $y < $sizeM10; $y++) {
-                $window = ($col >> ($sizeM11 - $y)) & $mask11;
-                if ($window === $pattern1 || $window === $pattern2) {
-                    $penalty += 40;
-                }
+            $r1 = $col >> 1; $r2 = $col >> 2; $r3 = $col >> 3; $r4p = $col >> 4;
+            $r5 = $col >> 5; $r6 = $col >> 6; $r7 = $col >> 7; $r8 = $col >> 8;
+            $r9 = $col >> 9; $r10 = $col >> 10;
+            $m1 = $r10 & ~$r9 & $r8 & $r7 & $r6 & ~$r5 & $r4p & ~$r3 & ~$r2 & ~$r1 & ~$col;
+            $m2 = ~$r10 & ~$r9 & ~$r8 & ~$r7 & $r6 & ~$r5 & $r4p & $r3 & $r2 & ~$r1 & $col;
+            $matches = ($m1 | $m2) & $r3ValidMask;
+            if ($matches !== 0) {
+                $penalty += 40 * ($popLut[$matches & 0xff] + $popLut[($matches >> 8) & 0xff]
+                    + $popLut[($matches >> 16) & 0xff] + $popLut[($matches >> 24) & 0xff]
+                    + $popLut[($matches >> 32) & 0xff] + $popLut[($matches >> 40) & 0xff]
+                    + $popLut[($matches >> 48) & 0xff] + $popLut[($matches >> 56) & 0xff]);
             }
         }
 

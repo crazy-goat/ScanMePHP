@@ -13,6 +13,14 @@ class ReedSolomon
     /** @var array<int, array> Cached generator polynomials keyed by degree */
     private array $generatorCache = [];
 
+    /**
+     * Cached transposed factor tables keyed by eccCount.
+     * factorTableCache[eccCount][factor] = int[] of XOR values for each ECC position.
+     * Eliminates per-byte log lookups in the inner encode loop.
+     * @var array<int, array<int, int[]>>
+     */
+    private array $factorTableCache = [];
+
     public function __construct()
     {
         $this->initGaloisField();
@@ -41,33 +49,61 @@ class ReedSolomon
 
     public function encode(array $data, int $eccCount): array
     {
-        $generator = $this->getGeneratorPolynomial($eccCount);
+        $factorTable = $this->getFactorTable($eccCount);
         $ecc = array_fill(0, $eccCount, 0);
 
-        $expTable = $this->expTable;
-        $logTable = $this->logTable;
-
         foreach ($data as $byte) {
-            $factor = $byte ^ $ecc[0];
-
-            // Shift ecc left by 1
-            for ($i = 0; $i < $eccCount - 1; $i++) {
-                $ecc[$i] = $ecc[$i + 1];
-            }
-            $ecc[$eccCount - 1] = 0;
+            $factor = $byte ^ array_shift($ecc);
+            $ecc[] = 0;
 
             if ($factor !== 0) {
-                $logFactor = $logTable[$factor];
+                $ft = $factorTable[$factor];
                 for ($i = 0; $i < $eccCount; $i++) {
-                    $g = $generator[$i + 1];
-                    if ($g !== 0) {
-                        $ecc[$i] ^= $expTable[$logTable[$g] + $logFactor];
-                    }
+                    $ecc[$i] ^= $ft[$i];
                 }
             }
         }
 
         return $ecc;
+    }
+
+    /**
+     * Get transposed factor table, cached by eccCount.
+     * factorTable[factor][i] = expTable[logTable[generator[i+1]] + logTable[factor]]
+     * Pre-computes all 255 non-zero factor multiplications for each generator coefficient.
+     *
+     * @return array<int, int[]> [factor] => int[] XOR values per ECC position
+     */
+    private function getFactorTable(int $eccCount): array
+    {
+        if (isset($this->factorTableCache[$eccCount])) {
+            return $this->factorTableCache[$eccCount];
+        }
+
+        $generator = $this->getGeneratorPolynomial($eccCount);
+        $expTable = $this->expTable;
+        $logTable = $this->logTable;
+
+        // Pre-compute log of each generator coefficient (all are non-zero for RS)
+        $genLog = [];
+        for ($i = 0; $i < $eccCount; $i++) {
+            $genLog[$i] = $logTable[$generator[$i + 1]];
+        }
+
+        // Build transposed table: for each possible factor (1-255),
+        // pre-compute the XOR contribution to each ECC position
+        $factorTable = [];
+        for ($f = 1; $f < 256; $f++) {
+            $lf = $logTable[$f];
+            $row = [];
+            for ($i = 0; $i < $eccCount; $i++) {
+                $row[$i] = $expTable[$genLog[$i] + $lf];
+            }
+            $factorTable[$f] = $row;
+        }
+
+        $this->factorTableCache[$eccCount] = $factorTable;
+        return $factorTable;
     }
 
     /**
