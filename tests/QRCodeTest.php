@@ -1,0 +1,258 @@
+<?php
+
+declare(strict_types=1);
+
+use PHPUnit\Framework\TestCase;
+use ScanMePHP\QRCode;
+use ScanMePHP\QRCodeConfig;
+use ScanMePHP\Renderer\FullBlocksRenderer;
+use ScanMePHP\Renderer\HalfBlocksRenderer;
+use ScanMePHP\Renderer\SimpleRenderer;
+use ScanMePHP\Renderer\SvgRenderer;
+use ScanMePHP\Renderer\HtmlDivRenderer;
+use ScanMePHP\Renderer\HtmlTableRenderer;
+use ScanMePHP\ErrorCorrectionLevel;
+use ScanMePHP\ModuleStyle;
+
+class QRCodeTest extends TestCase
+{
+    public function testBasicAsciiQrCode(): void
+    {
+        $qr = new QRCode('https://example.com');
+        $output = $qr->render();
+
+        $this->assertIsString($output);
+        $this->assertStringContainsString('█', $output);
+    }
+
+    public function testSvgQrCode(): void
+    {
+        $config = new QRCodeConfig(engine: new SvgRenderer());
+        $qr = new QRCode('https://example.com', $config);
+        $output = $qr->render();
+
+        $this->assertIsString($output);
+        $this->assertStringContainsString('<?xml', $output);
+        $this->assertStringContainsString('<svg', $output);
+    }
+
+    public function testAsciiWithLabel(): void
+    {
+        $config = new QRCodeConfig(label: 'Test Label');
+        $qr = new QRCode('https://example.com', $config);
+        $output = $qr->render();
+
+        $this->assertStringContainsString('Test Label', $output);
+    }
+
+    public function testDifferentAsciiRenderers(): void
+    {
+        $url = 'https://example.com';
+
+        $config = new QRCodeConfig(engine: new FullBlocksRenderer());
+        $qr = new QRCode($url, $config);
+        $this->assertStringContainsString('█', $qr->render());
+
+        $config = new QRCodeConfig(engine: new HalfBlocksRenderer());
+        $qr = new QRCode($url, $config);
+        $this->assertIsString($qr->render());
+
+        $config = new QRCodeConfig(engine: new SimpleRenderer());
+        $qr = new QRCode($url, $config);
+        $this->assertStringContainsString('●', $qr->render());
+    }
+
+    public function testSvgWithDifferentStyles(): void
+    {
+        $url = 'https://example.com';
+
+        $config = new QRCodeConfig(
+            engine: new SvgRenderer(),
+            moduleStyle: ModuleStyle::Square
+        );
+        $qr = new QRCode($url, $config);
+        $this->assertIsString($qr->render());
+
+        $config = new QRCodeConfig(
+            engine: new SvgRenderer(),
+            moduleStyle: ModuleStyle::Rounded
+        );
+        $qr = new QRCode($url, $config);
+        $this->assertIsString($qr->render());
+
+        $config = new QRCodeConfig(
+            engine: new SvgRenderer(),
+            moduleStyle: ModuleStyle::Dot
+        );
+        $qr = new QRCode($url, $config);
+        $this->assertIsString($qr->render());
+    }
+
+    public function testErrorCorrectionLevels(): void
+    {
+        $url = 'https://example.com';
+
+        foreach (ErrorCorrectionLevel::cases() as $level) {
+            $config = new QRCodeConfig(errorCorrectionLevel: $level);
+            $qr = new QRCode($url, $config);
+            $this->assertIsString($qr->render());
+        }
+    }
+
+    public function testDataUri(): void
+    {
+        $config = new QRCodeConfig(engine: new SvgRenderer());
+        $qr = new QRCode('https://example.com', $config);
+        $dataUri = $qr->getDataUri();
+
+        $this->assertStringStartsWith('data:image/svg+xml;base64,', $dataUri);
+    }
+
+    public function testAsciiDataUri(): void
+    {
+        $qr = new QRCode('https://example.com');
+        $dataUri = $qr->getDataUri();
+
+        $this->assertStringStartsWith('data:text/plain;base64,', $dataUri);
+    }
+
+    public function testBase64(): void
+    {
+        $qr = new QRCode('https://example.com');
+        $base64 = $qr->toBase64();
+
+        $this->assertIsString($base64);
+        $this->assertTrue(base64_decode($base64, true) !== false);
+    }
+
+    public function testToString(): void
+    {
+        $qr = new QRCode('https://example.com');
+        $output = (string) $qr;
+
+        $this->assertIsString($output);
+        $this->assertStringContainsString('█', $output);
+    }
+
+    public function testValidation(): void
+    {
+        $qr = new QRCode('https://example.com');
+        $this->assertTrue($qr->validate());
+    }
+
+    public function testGetMinimumVersion(): void
+    {
+        $version = QRCode::getMinimumVersion(
+            'https://example.com',
+            ErrorCorrectionLevel::Medium
+        );
+
+        $this->assertIsInt($version);
+        $this->assertGreaterThanOrEqual(1, $version);
+        $this->assertLessThanOrEqual(40, $version);
+    }
+
+    public function testSaveToFile(): void
+    {
+        $tempFile = sys_get_temp_dir() . '/test_qr_' . uniqid() . '.txt';
+
+        try {
+            $qr = new QRCode('https://example.com');
+            $qr->saveToFile($tempFile);
+
+            $this->assertFileExists($tempFile);
+            $this->assertIsString(file_get_contents($tempFile));
+        } finally {
+            if (file_exists($tempFile)) {
+                unlink($tempFile);
+            }
+        }
+    }
+
+    public function testInvertColors(): void
+    {
+        $config = new QRCodeConfig(
+            engine: new SvgRenderer(),
+            invert: true,
+            foregroundColor: '#FFFFFF',
+            backgroundColor: '#000000'
+        );
+        $qr = new QRCode('https://example.com', $config);
+        $output = $qr->render();
+
+        $this->assertIsString($output);
+        $this->assertStringContainsString('fill="#FFFFFF"', $output);
+    }
+
+    public function testGetContentType(): void
+    {
+        $this->assertEquals('text/plain', (new FullBlocksRenderer())->getContentType());
+        $this->assertEquals('text/plain', (new HalfBlocksRenderer())->getContentType());
+        $this->assertEquals('text/plain', (new SimpleRenderer())->getContentType());
+        $this->assertEquals('image/svg+xml', (new SvgRenderer())->getContentType());
+        $this->assertEquals('text/html', (new HtmlDivRenderer())->getContentType());
+        $this->assertEquals('text/html', (new HtmlTableRenderer())->getContentType());
+    }
+
+    public function testHtmlDivRenderer(): void
+    {
+        $config = new QRCodeConfig(engine: new HtmlDivRenderer());
+        $qr = new QRCode('https://example.com', $config);
+        $output = $qr->render();
+
+        $this->assertStringContainsString('<div', $output);
+        $this->assertStringNotContainsString('<!DOCTYPE', $output);
+    }
+
+    public function testHtmlDivRendererFullHtml(): void
+    {
+        $config = new QRCodeConfig(engine: new HtmlDivRenderer(fullHtml: true));
+        $qr = new QRCode('https://example.com', $config);
+        $output = $qr->render();
+
+        $this->assertStringContainsString('<!DOCTYPE html>', $output);
+        $this->assertStringContainsString('<div', $output);
+    }
+
+    public function testHtmlTableRenderer(): void
+    {
+        $config = new QRCodeConfig(engine: new HtmlTableRenderer());
+        $qr = new QRCode('https://example.com', $config);
+        $output = $qr->render();
+
+        $this->assertStringContainsString('<table', $output);
+        $this->assertStringContainsString('<td', $output);
+        $this->assertStringNotContainsString('<!DOCTYPE', $output);
+    }
+
+    public function testHtmlTableRendererFullHtml(): void
+    {
+        $config = new QRCodeConfig(engine: new HtmlTableRenderer(fullHtml: true));
+        $qr = new QRCode('https://example.com', $config);
+        $output = $qr->render();
+
+        $this->assertStringContainsString('<!DOCTYPE html>', $output);
+        $this->assertStringContainsString('<table', $output);
+    }
+
+    public function testHtmlDataUri(): void
+    {
+        $config = new QRCodeConfig(engine: new HtmlDivRenderer());
+        $qr = new QRCode('https://example.com', $config);
+        $dataUri = $qr->getDataUri();
+
+        $this->assertStringStartsWith('data:text/html;base64,', $dataUri);
+    }
+
+    public function testHtmlWithLabel(): void
+    {
+        $config = new QRCodeConfig(
+            engine: new HtmlDivRenderer(),
+            label: 'Test Label'
+        );
+        $qr = new QRCode('https://example.com', $config);
+        $output = $qr->render();
+
+        $this->assertStringContainsString('Test Label', $output);
+    }
+}
