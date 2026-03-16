@@ -40,7 +40,7 @@ class HtmlTableRenderer implements RendererInterface
             for ($x = 0; $x < $totalModules; $x++) {
                 $dataX = $x - $margin;
                 $isDark = ($dataX >= 0 && $dataX < $size && $dataY >= 0 && $dataY < $size)
-                    ? $matrix->get($dataX, $dataY)
+                    ? $matrix->fastGet($dataX, $dataY)
                     : false;
                 $color = $isDark ? $escFg : $escBg;
                 $html .= '<td style="width:' . $mod . 'px;height:' . $mod . 'px;padding:0;border:0;background:' . $color . '"></td>';

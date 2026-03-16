@@ -24,12 +24,12 @@ class QRCode
         $this->encoder = $encoder ?? self::createDefaultEncoder();
     }
 
-    public static function createDefaultEncoder(): EncoderInterface
+    private static function createDefaultEncoder(): EncoderInterface
     {
-        $libraryPath = dirname(__DIR__) . '/clib/build/libscanme_qr.so';
-        if (FfiEncoder::isAvailable($libraryPath)) {
-            return new FfiEncoder($libraryPath);
+        if (\PHP_INT_SIZE >= 8) {
+            return new FastEncoder();
         }
+
         return new Encoder();
     }
 
@@ -48,11 +48,26 @@ class QRCode
     private function ensureMatrix(): Matrix
     {
         if ($this->matrix === null) {
-            $this->matrix = $this->encoder->encode(
-                $this->url,
-                $this->config->errorCorrectionLevel,
-                $this->config->size
-            );
+            $encoder = $this->encoder;
+
+            // If a specific version is requested and we're using FastEncoder,
+            // fall back to Encoder which supports the $requestedVersion parameter
+            if ($this->config->size !== 0 && $encoder instanceof FastEncoder) {
+                $encoder = new Encoder();
+            }
+
+            if ($this->config->size !== 0 && $encoder instanceof Encoder) {
+                $this->matrix = $encoder->encode(
+                    $this->url,
+                    $this->config->errorCorrectionLevel,
+                    $this->config->size
+                );
+            } else {
+                $this->matrix = $encoder->encode(
+                    $this->url,
+                    $this->config->errorCorrectionLevel,
+                );
+            }
         }
 
         return $this->matrix;
