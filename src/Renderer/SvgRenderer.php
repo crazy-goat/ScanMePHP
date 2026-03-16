@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace ScanMePHP\Renderer;
+namespace CrazyGoat\ScanMePHP\Renderer;
 
-use ScanMePHP\Exception\InvalidConfigurationException;
-use ScanMePHP\Matrix;
-use ScanMePHP\ModuleStyle;
-use ScanMePHP\RenderOptions;
-use ScanMePHP\RendererInterface;
+use CrazyGoat\ScanMePHP\Exception\InvalidConfigurationException;
+use CrazyGoat\ScanMePHP\Matrix;
+use CrazyGoat\ScanMePHP\ModuleStyle;
+use CrazyGoat\ScanMePHP\RenderOptions;
+use CrazyGoat\ScanMePHP\RendererInterface;
 
 class SvgRenderer implements RendererInterface
 {

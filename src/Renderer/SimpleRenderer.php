@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace ScanMePHP\Renderer;
+namespace CrazyGoat\ScanMePHP\Renderer;
 
-use ScanMePHP\Matrix;
-use ScanMePHP\RenderOptions;
+use CrazyGoat\ScanMePHP\Matrix;
+use CrazyGoat\ScanMePHP\RenderOptions;
 
 class SimpleRenderer extends AbstractAsciiRenderer
 {

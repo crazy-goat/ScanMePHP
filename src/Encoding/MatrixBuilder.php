@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace ScanMePHP\Encoding;
+namespace CrazyGoat\ScanMePHP\Encoding;
 
-use ScanMePHP\ErrorCorrectionLevel;
-use ScanMePHP\Matrix;
+use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
+use CrazyGoat\ScanMePHP\Matrix;
 
 class MatrixBuilder
 {

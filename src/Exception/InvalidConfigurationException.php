@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ScanMePHP\Exception;
+namespace CrazyGoat\ScanMePHP\Exception;
 
 use Exception;
 

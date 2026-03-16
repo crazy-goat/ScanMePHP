@@ -3,17 +3,17 @@
 declare(strict_types=1);
 
 use PHPUnit\Framework\TestCase;
-use ScanMePHP\QRCode;
-use ScanMePHP\QRCodeConfig;
-use ScanMePHP\Renderer\FullBlocksRenderer;
-use ScanMePHP\Renderer\HalfBlocksRenderer;
-use ScanMePHP\Renderer\SimpleRenderer;
-use ScanMePHP\Renderer\SvgRenderer;
-use ScanMePHP\Renderer\HtmlDivRenderer;
-use ScanMePHP\Renderer\HtmlTableRenderer;
-use ScanMePHP\ErrorCorrectionLevel;
-use ScanMePHP\Exception\InvalidConfigurationException;
-use ScanMePHP\ModuleStyle;
+use CrazyGoat\ScanMePHP\QRCode;
+use CrazyGoat\ScanMePHP\QRCodeConfig;
+use CrazyGoat\ScanMePHP\Renderer\FullBlocksRenderer;
+use CrazyGoat\ScanMePHP\Renderer\HalfBlocksRenderer;
+use CrazyGoat\ScanMePHP\Renderer\SimpleRenderer;
+use CrazyGoat\ScanMePHP\Renderer\SvgRenderer;
+use CrazyGoat\ScanMePHP\Renderer\HtmlDivRenderer;
+use CrazyGoat\ScanMePHP\Renderer\HtmlTableRenderer;
+use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
+use CrazyGoat\ScanMePHP\Exception\InvalidConfigurationException;
+use CrazyGoat\ScanMePHP\ModuleStyle;
 
 class QRCodeTest extends TestCase
 {

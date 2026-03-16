@@ -2,10 +2,10 @@
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use ScanMePHP\QRCode;
-use ScanMePHP\QRCodeConfig;
-use ScanMePHP\Renderer\PngRenderer;
-use ScanMePHP\ErrorCorrectionLevel;
+use CrazyGoat\ScanMePHP\QRCode;
+use CrazyGoat\ScanMePHP\QRCodeConfig;
+use CrazyGoat\ScanMePHP\Renderer\PngRenderer;
+use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
 
 echo "=== ScanMePHP - PNG QR Code Example ===\n\n";
 

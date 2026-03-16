@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ScanMePHP\Renderer;
+namespace CrazyGoat\ScanMePHP\Renderer;
 
 /**
  * Minimal PNG encoder for 1-bit monochrome images.

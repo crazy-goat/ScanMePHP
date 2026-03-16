@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace ScanMePHP;
+namespace CrazyGoat\ScanMePHP;
 
-use ScanMePHP\Encoding\Mode;
-use ScanMePHP\Exception\FileWriteException;
-use ScanMePHP\Exception\InvalidDataException;
-use ScanMePHP\Exception\RenderException;
+use CrazyGoat\ScanMePHP\Encoding\Mode;
+use CrazyGoat\ScanMePHP\Exception\FileWriteException;
+use CrazyGoat\ScanMePHP\Exception\InvalidDataException;
+use CrazyGoat\ScanMePHP\Exception\RenderException;
 
 class QRCode
 {
