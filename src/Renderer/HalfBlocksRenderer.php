@@ -25,8 +25,8 @@ class HalfBlocksRenderer extends AbstractAsciiRenderer
         for ($y = 0; $y < $size; $y += 2) {
             $line = str_repeat($bgChar, $sideMargin);
             for ($x = 0; $x < $size; $x++) {
-                $top = $matrix->get($x, $y);
-                $bottom = ($y + 1 < $size) ? $matrix->get($x, $y + 1) : false;
+                $top = $matrix->fastGet($x, $y);
+                $bottom = ($y + 1 < $size) ? $matrix->fastGet($x, $y + 1) : false;
                 $top = $invert ? !$top : $top;
                 $bottom = $invert ? !$bottom : $bottom;
                 $line .= match ([$top, $bottom]) {
