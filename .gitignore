@@ -4,3 +4,5 @@
 composer.lock
 /docs/
 /.worktrees/
+/clib/build/
+/clib/build-*/
