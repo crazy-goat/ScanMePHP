@@ -96,6 +96,16 @@ class FastEncoder implements EncoderInterface
 
     private ?Encoder $fallback = null;
 
+    public function __construct()
+    {
+        if (\PHP_INT_SIZE < 8) {
+            throw new \RuntimeException(
+                'ScanMePHP requires 64-bit PHP (PHP_INT_SIZE >= 8). '
+                . 'Current PHP_INT_SIZE is ' . \PHP_INT_SIZE . '.'
+            );
+        }
+    }
+
     public function encode(
         string $url,
         ErrorCorrectionLevel $errorCorrectionLevel,
