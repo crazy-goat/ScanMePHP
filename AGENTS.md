@@ -126,9 +126,11 @@ Requires write permissions to run CI.
 - Close issue: `gh issue close <number>`
 
 ### Branches & PRs
+- **NEVER push directly to `main`** - always create a Pull Request for review
 - Always work on a feature branch: `git checkout -b feature/<name>`
 - Push branch and create PR: `gh pr create`
 - Wait for CI to pass: `gh pr checks <number> --watch`
+- **Merge only after developer approval** - never merge your own PR without review
 - Merge PR: `gh pr merge <number> --merge --delete-branch`
 
 ### Releasing a Version
