@@ -6,18 +6,18 @@ namespace ScanMePHP;
 
 use ScanMePHP\Renderer\FullBlocksRenderer;
 
-readonly class QRCodeConfig
+class QRCodeConfig
 {
     public function __construct(
-        public RendererInterface $engine = new FullBlocksRenderer(),
-        public ErrorCorrectionLevel $errorCorrectionLevel = ErrorCorrectionLevel::Medium,
-        public ?string $label = null,
-        public int $size = 0,  // 0 = auto
-        public int $margin = 4,
-        public string $foregroundColor = '#000000',
-        public string $backgroundColor = '#FFFFFF',
-        public ModuleStyle $moduleStyle = ModuleStyle::Square,
-        public bool $invert = false,
+        public readonly RendererInterface $engine = new FullBlocksRenderer(),
+        public readonly ErrorCorrectionLevel $errorCorrectionLevel = ErrorCorrectionLevel::Medium,
+        public readonly ?string $label = null,
+        public readonly int $size = 0,  // 0 = auto
+        public readonly int $margin = 4,
+        public readonly string $foregroundColor = '#000000',
+        public readonly string $backgroundColor = '#FFFFFF',
+        public readonly ModuleStyle $moduleStyle = ModuleStyle::Square,
+        public readonly bool $invert = false,
     ) {
     }
 

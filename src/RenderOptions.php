@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace ScanMePHP;
 
-readonly class RenderOptions
+class RenderOptions
 {
     public function __construct(
-        public int $margin = 4,
-        public ?string $label = null,
-        public string $foregroundColor = '#000000',
-        public string $backgroundColor = '#FFFFFF',
-        public ModuleStyle $moduleStyle = ModuleStyle::Square,
-        public bool $invert = false,
+        public readonly int $margin = 4,
+        public readonly ?string $label = null,
+        public readonly string $foregroundColor = '#000000',
+        public readonly string $backgroundColor = '#FFFFFF',
+        public readonly ModuleStyle $moduleStyle = ModuleStyle::Square,
+        public readonly bool $invert = false,
     ) {
     }
 
