@@ -13,7 +13,7 @@ use ScanMePHP\Encoding\ReedSolomon;
 use ScanMePHP\Exception\DataTooLargeException;
 use ScanMePHP\Exception\InvalidDataException;
 
-class Encoder
+class Encoder implements EncoderInterface
 {
     private DataAnalyzer $analyzer;
     private DataEncoder $dataEncoder;
@@ -58,11 +58,12 @@ class Encoder
     }
 
     public function encode(
-        string $data,
+        string $url,
         ErrorCorrectionLevel $errorCorrectionLevel,
         int $requestedVersion = 0,
         ?Mode $forcedMode = null
     ): Matrix {
+        $data = $url;
         if (empty($data)) {
             throw InvalidDataException::emptyData();
         }

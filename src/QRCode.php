@@ -14,14 +14,14 @@ class QRCode
     private string $url;
     private QRCodeConfig $config;
     private ?Matrix $matrix = null;
-    private Encoder $encoder;
+    private EncoderInterface $encoder;
 
-    public function __construct(string $url, ?QRCodeConfig $config = null)
+    public function __construct(string $url, ?QRCodeConfig $config = null, ?EncoderInterface $encoder = null)
     {
         $this->validateUrl($url);
         $this->url = $url;
         $this->config = $config ?? new QRCodeConfig();
-        $this->encoder = new Encoder();
+        $this->encoder = $encoder ?? new Encoder();
     }
 
     private function validateUrl(string $url): void
@@ -39,11 +39,18 @@ class QRCode
     private function ensureMatrix(): Matrix
     {
         if ($this->matrix === null) {
-            $this->matrix = $this->encoder->encode(
-                $this->url,
-                $this->config->errorCorrectionLevel,
-                $this->config->size
-            );
+            if ($this->config->size !== 0 && $this->encoder instanceof Encoder) {
+                $this->matrix = $this->encoder->encode(
+                    $this->url,
+                    $this->config->errorCorrectionLevel,
+                    $this->config->size
+                );
+            } else {
+                $this->matrix = $this->encoder->encode(
+                    $this->url,
+                    $this->config->errorCorrectionLevel,
+                );
+            }
         }
 
         return $this->matrix;
