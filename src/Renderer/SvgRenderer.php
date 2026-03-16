@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ScanMePHP\Renderer;
 
+use ScanMePHP\Exception\InvalidConfigurationException;
 use ScanMePHP\Matrix;
 use ScanMePHP\ModuleStyle;
 use ScanMePHP\RenderOptions;
@@ -11,7 +12,13 @@ use ScanMePHP\RendererInterface;
 
 class SvgRenderer implements RendererInterface
 {
-    private int $moduleSize = 10;
+    public function __construct(
+        private readonly int $moduleSize = 10,
+    ) {
+        if ($this->moduleSize <= 0) {
+            throw InvalidConfigurationException::invalidModuleSize($this->moduleSize);
+        }
+    }
 
     public function getContentType(): string
     {

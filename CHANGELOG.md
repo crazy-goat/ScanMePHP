@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `SvgRenderer` now accepts optional `$moduleSize` constructor parameter (default: 10)
+- `InvalidConfigurationException` for configuration validation errors
+
 ### Changed
 
 - Removed `docs/` directory from repository tracking and added to `.gitignore`
