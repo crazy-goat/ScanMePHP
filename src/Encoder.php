@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace ScanMePHP;
+namespace CrazyGoat\ScanMePHP;
 
-use ScanMePHP\Encoding\DataAnalyzer;
-use ScanMePHP\Encoding\DataEncoder;
-use ScanMePHP\Encoding\MaskSelector;
-use ScanMePHP\Encoding\MatrixBuilder;
-use ScanMePHP\Encoding\Mode;
-use ScanMePHP\Encoding\ReedSolomon;
-use ScanMePHP\Exception\DataTooLargeException;
-use ScanMePHP\Exception\InvalidDataException;
+use CrazyGoat\ScanMePHP\Encoding\DataAnalyzer;
+use CrazyGoat\ScanMePHP\Encoding\DataEncoder;
+use CrazyGoat\ScanMePHP\Encoding\MaskSelector;
+use CrazyGoat\ScanMePHP\Encoding\MatrixBuilder;
+use CrazyGoat\ScanMePHP\Encoding\Mode;
+use CrazyGoat\ScanMePHP\Encoding\ReedSolomon;
+use CrazyGoat\ScanMePHP\Exception\DataTooLargeException;
+use CrazyGoat\ScanMePHP\Exception\InvalidDataException;
 
 class Encoder
 {

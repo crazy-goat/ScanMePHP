@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use ScanMePHP\QRCode;
-use ScanMePHP\QRCodeConfig;
-use ScanMePHP\Renderer\PngRenderer;
-use ScanMePHP\Renderer\SvgRenderer;
-use ScanMePHP\Renderer\HtmlDivRenderer;
-use ScanMePHP\Renderer\HtmlTableRenderer;
-use ScanMePHP\Renderer\FullBlocksRenderer;
-use ScanMePHP\Renderer\HalfBlocksRenderer;
-use ScanMePHP\Renderer\SimpleRenderer;
+use CrazyGoat\ScanMePHP\QRCode;
+use CrazyGoat\ScanMePHP\QRCodeConfig;
+use CrazyGoat\ScanMePHP\Renderer\PngRenderer;
+use CrazyGoat\ScanMePHP\Renderer\SvgRenderer;
+use CrazyGoat\ScanMePHP\Renderer\HtmlDivRenderer;
+use CrazyGoat\ScanMePHP\Renderer\HtmlTableRenderer;
+use CrazyGoat\ScanMePHP\Renderer\FullBlocksRenderer;
+use CrazyGoat\ScanMePHP\Renderer\HalfBlocksRenderer;
+use CrazyGoat\ScanMePHP\Renderer\SimpleRenderer;
 
 function showUsage(): void
 {

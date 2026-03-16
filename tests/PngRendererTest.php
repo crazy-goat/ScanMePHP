@@ -3,10 +3,10 @@
 declare(strict_types=1);
 
 use PHPUnit\Framework\TestCase;
-use ScanMePHP\QRCode;
-use ScanMePHP\QRCodeConfig;
-use ScanMePHP\Renderer\PngRenderer;
-use ScanMePHP\Exception\RenderException;
+use CrazyGoat\ScanMePHP\QRCode;
+use CrazyGoat\ScanMePHP\QRCodeConfig;
+use CrazyGoat\ScanMePHP\Renderer\PngRenderer;
+use CrazyGoat\ScanMePHP\Exception\RenderException;
 
 class PngRendererTest extends TestCase
 {
@@ -178,7 +178,7 @@ class PngRendererTest extends TestCase
 
     public function testDifferentErrorCorrectionLevels(): void
     {
-        foreach (\ScanMePHP\ErrorCorrectionLevel::cases() as $level) {
+        foreach (\CrazyGoat\ScanMePHP\ErrorCorrectionLevel::cases() as $level) {
             $config = new QRCodeConfig(
                 engine: new PngRenderer(),
                 errorCorrectionLevel: $level,

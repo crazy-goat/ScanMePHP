@@ -2,11 +2,11 @@
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use ScanMePHP\QRCode;
-use ScanMePHP\QRCodeConfig;
-use ScanMePHP\Renderer\SvgRenderer;
-use ScanMePHP\ErrorCorrectionLevel;
-use ScanMePHP\ModuleStyle;
+use CrazyGoat\ScanMePHP\QRCode;
+use CrazyGoat\ScanMePHP\QRCodeConfig;
+use CrazyGoat\ScanMePHP\Renderer\SvgRenderer;
+use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
+use CrazyGoat\ScanMePHP\ModuleStyle;
 
 echo "=== ScanMePHP - SVG QR Code Example ===\n\n";
 

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ScanMePHP;
+namespace CrazyGoat\ScanMePHP;
 
-use ScanMePHP\Renderer\FullBlocksRenderer;
+use CrazyGoat\ScanMePHP\Renderer\FullBlocksRenderer;
 
 class QRCodeConfig
 {
