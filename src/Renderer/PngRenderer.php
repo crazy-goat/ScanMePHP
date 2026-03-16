@@ -37,51 +37,40 @@ class PngRenderer implements RendererInterface
         $totalModules = $size + (2 * $margin);
         $totalPixels = $totalModules * $this->moduleSize;
 
-        $bitmap = $this->buildBitmap($matrix, $size, $margin, $totalModules);
-
-        return $this->encoder->encode($bitmap, $totalPixels, $totalPixels);
+        return $this->encoder->encodeStreaming(
+            function (int $y) use ($matrix, $size, $margin, $totalModules): array {
+                return $this->buildScanline($matrix, $size, $margin, $totalModules, $y);
+            },
+            $totalPixels,
+            $totalPixels
+        );
     }
 
     /**
-     * Build a 2D boolean pixel grid from the QR matrix.
+     * Build a single scanline (row of pixels) for the given Y coordinate.
+     * Uses streaming approach to avoid storing full bitmap in memory.
      *
-     * Each QR module is expanded to moduleSize x moduleSize pixels.
-     * true = dark (black module), false = light (white / margin).
-     *
-     * @return bool[][] Pixel grid [y][x]
+     * @return bool[] Array of boolean pixel values for this row
      */
-    private function buildBitmap(Matrix $matrix, int $size, int $margin, int $totalModules): array
+    private function buildScanline(Matrix $matrix, int $size, int $margin, int $totalModules, int $pixelY): array
     {
         $mod = $this->moduleSize;
-        $bitmap = [];
+        $moduleY = (int) ($pixelY / $mod);
+        $dataY = $moduleY - $margin;
+        $scanline = [];
 
-        for ($moduleY = 0; $moduleY < $totalModules; $moduleY++) {
-            $dataY = $moduleY - $margin;
+        for ($moduleX = 0; $moduleX < $totalModules; $moduleX++) {
+            $dataX = $moduleX - $margin;
+            $isDark = ($dataX >= 0 && $dataX < $size && $dataY >= 0 && $dataY < $size)
+                ? $matrix->get($dataX, $dataY)
+                : false;
 
-            // Build one row of module values
-            $moduleRow = [];
-            for ($moduleX = 0; $moduleX < $totalModules; $moduleX++) {
-                $dataX = $moduleX - $margin;
-                $isDark = ($dataX >= 0 && $dataX < $size && $dataY >= 0 && $dataY < $size)
-                    ? $matrix->get($dataX, $dataY)
-                    : false;
-                $moduleRow[] = $isDark;
-            }
-
-            // Expand module row into moduleSize pixel rows
-            $pixelRow = [];
-            foreach ($moduleRow as $isDark) {
-                for ($px = 0; $px < $mod; $px++) {
-                    $pixelRow[] = $isDark;
-                }
-            }
-
-            // Duplicate the pixel row moduleSize times
-            for ($py = 0; $py < $mod; $py++) {
-                $bitmap[] = $pixelRow;
+            // Expand this module to moduleSize pixels
+            for ($px = 0; $px < $mod; $px++) {
+                $scanline[] = $isDark;
             }
         }
 
-        return $bitmap;
+        return $scanline;
     }
 }

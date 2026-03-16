@@ -53,22 +53,34 @@ final class PngEncoder
     }
 
     /**
-     * IDAT chunk: compressed pixel data.
+     * Encode using streaming approach - callback provides scanlines one at a time.
+     * This reduces memory usage significantly for large images.
      *
-     * Each scanline is prefixed with a filter byte (0x00 = None),
-     * followed by pixel bits packed 8 per byte, MSB first.
-     * In 1-bit grayscale: bit 0 = black, bit 1 = white.
-     * The last byte of each scanline is padded with 1 bits (white) if width % 8 != 0.
+     * @param callable(int $y): bool[] $scanlineCallback Function that returns scanline array for given Y
+     * @param int $width Image width in pixels
+     * @param int $height Image height in pixels
+     * @return string Raw PNG binary data
      */
-    private function buildIdatChunk(array $bitmap, int $width, int $height): string
+    public function encodeStreaming(callable $scanlineCallback, int $width, int $height): string
+    {
+        return self::PNG_SIGNATURE
+            . $this->buildIhdrChunk($width, $height)
+            . $this->buildIdatChunkStreaming($scanlineCallback, $width, $height)
+            . $this->buildIendChunk();
+    }
+
+    /**
+     * Build IDAT chunk using streaming scanlines.
+     */
+    private function buildIdatChunkStreaming(callable $scanlineCallback, int $width, int $height): string
     {
         $bytesPerScanline = (int) ceil($width / 8);
-        $rawData = '';
+        $rawData = [];
 
         for ($y = 0; $y < $height; $y++) {
-            $rawData .= "\x00"; // filter type: None
+            $row = $scanlineCallback($y);
+            $scanline = "\x00"; // filter type: None
 
-            $row = $bitmap[$y];
             for ($byteIndex = 0; $byteIndex < $bytesPerScanline; $byteIndex++) {
                 $byte = 0;
                 for ($bit = 0; $bit < 8; $bit++) {
@@ -84,11 +96,46 @@ final class PngEncoder
                         $byte |= (0x80 >> $bit);
                     }
                 }
-                $rawData .= chr($byte);
+                $scanline .= chr($byte);
             }
+            $rawData[] = $scanline;
         }
 
-        $compressed = gzcompress($rawData);
+        $compressed = gzcompress(implode('', $rawData));
+
+        return $this->buildChunk('IDAT', $compressed);
+    }
+
+    /**
+     * IDAT chunk: compressed pixel data (legacy method for encode()).
+     */
+    private function buildIdatChunk(array $bitmap, int $width, int $height): string
+    {
+        $bytesPerScanline = (int) ceil($width / 8);
+        $rawData = [];
+
+        for ($y = 0; $y < $height; $y++) {
+            $row = $bitmap[$y];
+            $scanline = "\x00"; // filter type: None
+
+            for ($byteIndex = 0; $byteIndex < $bytesPerScanline; $byteIndex++) {
+                $byte = 0;
+                for ($bit = 0; $bit < 8; $bit++) {
+                    $x = $byteIndex * 8 + $bit;
+                    if ($x < $width) {
+                        if (!$row[$x]) {
+                            $byte |= (0x80 >> $bit);
+                        }
+                    } else {
+                        $byte |= (0x80 >> $bit);
+                    }
+                }
+                $scanline .= chr($byte);
+            }
+            $rawData[] = $scanline;
+        }
+
+        $compressed = gzcompress(implode('', $rawData));
 
         return $this->buildChunk('IDAT', $compressed);
     }
