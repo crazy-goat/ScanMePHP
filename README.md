@@ -352,6 +352,7 @@ Prebuilt FFI library binaries are available from [GitHub Releases](https://githu
 | Linux (musl/Alpine) | `libscanme_qr-linux-musl-x86_64.so` | [Latest Release](../../releases/latest) |
 | macOS Intel | `libscanme_qr-macos-x86_64.dylib` | [Latest Release](../../releases/latest) |
 | macOS Apple Silicon | `libscanme_qr-macos-arm64.dylib` | [Latest Release](../../releases/latest) |
+| Windows x86_64 | `scanme_qr-windows-x86_64.dll` | [Latest Release](../../releases/latest) |
 
 Place the downloaded binary in your project directory. The `FfiEncoder` will automatically detect and load it.
 
