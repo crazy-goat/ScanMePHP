@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- CI builds PHP extension binaries for PHP 8.1, 8.2, 8.3, 8.4 on Linux (glibc/musl) and macOS (x86_64/arm64)
+- Composer plugin now detects PHP version and downloads matching binary
+- Binary naming convention includes PHP version (e.g., `php-ext-linux-glibc-x86_64-php84.so`)
+- PHP version compatibility matrix in README
+
+### Changed
+
+- Updated release workflow to build 32 php-ext binaries (4 PHP versions × 4 platforms)
+
 ## [0.4.7] - 2026-03-17
 
 ### Added

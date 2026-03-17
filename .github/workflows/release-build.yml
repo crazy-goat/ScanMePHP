@@ -123,15 +123,35 @@ jobs:
 
   # PHP Extension Builds
   build-ext-linux:
-    name: Build PHP-Ext Linux ${{ matrix.variant }}
+    name: Build PHP-Ext Linux ${{ matrix.variant }} PHP ${{ matrix.php-version }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
           - variant: glibc
             container: ubuntu:22.04
+            php-version: '8.1'
+          - variant: glibc
+            container: ubuntu:22.04
+            php-version: '8.2'
+          - variant: glibc
+            container: ubuntu:22.04
+            php-version: '8.3'
+          - variant: glibc
+            container: ubuntu:22.04
+            php-version: '8.4'
           - variant: musl
             container: alpine:3.19
+            php-version: '8.1'
+          - variant: musl
+            container: alpine:3.19
+            php-version: '8.2'
+          - variant: musl
+            container: alpine:3.19
+            php-version: '8.3'
+          - variant: musl
+            container: alpine:3.19
+            php-version: '8.4'
     container:
       image: ${{ matrix.container }}
     steps:
@@ -143,16 +163,19 @@ jobs:
           export DEBIAN_FRONTEND=noninteractive
           export TZ=UTC
           apt-get update
-          apt-get install -y cmake g++ make php-dev
+          apt-get install -y cmake g++ make software-properties-common
+          add-apt-repository -y ppa:ondrej/php
+          apt-get update
+          apt-get install -y php${{ matrix.php-version }}-dev
 
       - name: Install dependencies (Alpine)
         if: matrix.variant == 'musl'
         run: |
           export TZ=UTC
           apk add --no-cache cmake g++ make linux-headers
-          # Install PHP dev from edge repository (use specific version)
+          # Install PHP dev from edge repository
           echo "https://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories
-          apk add --no-cache php84-dev
+          apk add --no-cache php${{ matrix.php-version }}-dev
 
       - name: Build FFI library (dependency)
         working-directory: clib
@@ -164,33 +187,39 @@ jobs:
       - name: Build PHP extension
         working-directory: php-ext
         run: |
-          phpize
-          ./configure --with-scanmeqr="$GITHUB_WORKSPACE/clib"
+          phpize${{ matrix.php-version }}
+          ./configure --with-php-config=/usr/bin/php-config${{ matrix.php-version }} --with-scanmeqr="$GITHUB_WORKSPACE/clib"
           make -j$(nproc)
 
       - name: Rename artifact
         working-directory: php-ext/modules
         run: |
-          cp scanmeqr.so "php-ext-linux-${{ matrix.variant }}-x86_64.so"
+          cp scanmeqr.so "php-ext-linux-${{ matrix.variant }}-x86_64-php${{ matrix.php-version }}.so"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ext-linux-${{ matrix.variant }}-x86_64
-          path: php-ext/modules/php-ext-linux-${{ matrix.variant }}-x86_64.so
+          name: ext-linux-${{ matrix.variant }}-x86_64-php${{ matrix.php-version }}
+          path: php-ext/modules/php-ext-linux-${{ matrix.variant }}-x86_64-php${{ matrix.php-version }}.so
 
   build-ext-macos:
-    name: Build PHP-Ext macOS ${{ matrix.arch }}
+    name: Build PHP-Ext macOS ${{ matrix.arch }} PHP ${{ matrix.php-version }}
     runs-on: macos-latest
     strategy:
       matrix:
         arch: [x86_64, arm64]
+        php-version: ['8.1', '8.2', '8.3', '8.4']
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+
       - name: Install dependencies
         run: |
-          brew install cmake php
+          brew install cmake
 
       - name: Build FFI library (dependency)
         working-directory: clib
@@ -210,13 +239,13 @@ jobs:
       - name: Rename artifact
         working-directory: php-ext/modules
         run: |
-          cp scanmeqr.so "php-ext-macos-${{ matrix.arch }}.so"
+          cp scanmeqr.so "php-ext-macos-${{ matrix.arch }}-php${{ matrix.php-version }}.so"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ext-macos-${{ matrix.arch }}
-          path: php-ext/modules/php-ext-macos-${{ matrix.arch }}.so
+          name: ext-macos-${{ matrix.arch }}-php${{ matrix.php-version }}
+          path: php-ext/modules/php-ext-macos-${{ matrix.arch }}-php${{ matrix.php-version }}.so
 
   release:
     name: Create Release
@@ -254,20 +283,53 @@ jobs:
 
             ## PHP Extension Binaries
 
-            Precompiled PHP extension binaries are attached to this release:
+            Precompiled PHP extension binaries are attached to this release for PHP 8.1, 8.2, 8.3, and 8.4:
 
-            - `php-ext-linux-glibc-x86_64.so` - Linux with glibc (Ubuntu, Debian, etc.)
-            - `php-ext-linux-musl-x86_64.so` - Linux with musl (Alpine Linux)
-            - `php-ext-macos-x86_64.so` - macOS Intel
-            - `php-ext-macos-arm64.so` - macOS Apple Silicon
+            **Linux (glibc)** - Ubuntu, Debian, etc.:
+            - `php-ext-linux-glibc-x86_64-php81.so` - PHP 8.1
+            - `php-ext-linux-glibc-x86_64-php82.so` - PHP 8.2
+            - `php-ext-linux-glibc-x86_64-php83.so` - PHP 8.3
+            - `php-ext-linux-glibc-x86_64-php84.so` - PHP 8.4
+
+            **Linux (musl)** - Alpine Linux:
+            - `php-ext-linux-musl-x86_64-php81.so` - PHP 8.1
+            - `php-ext-linux-musl-x86_64-php82.so` - PHP 8.2
+            - `php-ext-linux-musl-x86_64-php83.so` - PHP 8.3
+            - `php-ext-linux-musl-x86_64-php84.so` - PHP 8.4
+
+            **macOS Intel**:
+            - `php-ext-macos-x86_64-php81.so` - PHP 8.1
+            - `php-ext-macos-x86_64-php82.so` - PHP 8.2
+            - `php-ext-macos-x86_64-php83.so` - PHP 8.3
+            - `php-ext-macos-x86_64-php84.so` - PHP 8.4
+
+            **macOS Apple Silicon**:
+            - `php-ext-macos-arm64-php81.so` - PHP 8.1
+            - `php-ext-macos-arm64-php82.so` - PHP 8.2
+            - `php-ext-macos-arm64-php83.so` - PHP 8.3
+            - `php-ext-macos-arm64-php84.so` - PHP 8.4
 
             ### Installation
 
-            1. Download the appropriate binary for your platform
-            2. Place it in your PHP extensions directory (check `php --ini` for location)
+            **Option 1: Composer (Recommended)**
+            ```bash
+            composer require crazy-goat/scanmephp
+            ```
+            The Composer plugin will automatically download the correct binary for your PHP version.
+
+            **Option 2: Manual**
+            1. Download the appropriate binary for your platform and PHP version
+            2. Place it in your PHP extensions directory (check `php-config --extension-dir`)
             3. Add `extension=scanmeqr.so` to your php.ini
             4. Restart your web server or PHP-FPM
 
-            Or use Composer to auto-install: `composer require crazy-goat/scanmephp`
+            ### PHP Version Compatibility
+
+            | PHP Version | Linux glibc | Linux musl | macOS x86_64 | macOS arm64 |
+            |-------------|-------------|------------|--------------|-------------|
+            | 8.1 | ✅ | ✅ | ✅ | ✅ |
+            | 8.2 | ✅ | ✅ | ✅ | ✅ |
+            | 8.3 | ✅ | ✅ | ✅ | ✅ |
+            | 8.4 | ✅ | ✅ | ✅ | ✅ |
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
