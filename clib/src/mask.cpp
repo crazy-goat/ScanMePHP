@@ -6,6 +6,20 @@
 #include <cstdlib>
 #include <cstring>
 
+// Cross-platform count trailing zeros
+#ifdef _MSC_VER
+#include <intrin.h>
+static inline int ctzll(uint64_t x) {
+    unsigned long index;
+    _BitScanForward64(&index, x);
+    return static_cast<int>(index);
+}
+#else
+static inline int ctzll(uint64_t x) {
+    return __builtin_ctzll(x);
+}
+#endif
+
 namespace scanme {
 
 static constexpr int MASK_Y_PERIOD = 12;
@@ -39,7 +53,7 @@ void apply_mask(QRMatrix& m, int mask_id) {
         for (int word = 0; word < 3; ++word) {
             uint64_t bits = m.rows[y].w[word];
             while (bits) {
-                int bit = __builtin_ctzll(bits);
+                int bit = ctzll(bits);
                 int x = word * 64 + bit;
                 if (x < m.size) {
                     m.cols[x].w[y >> 6] |= uint64_t(1) << (y & 63);
@@ -212,7 +226,7 @@ static void rows_to_cols(const Row3* rows, Row3* cols, int size) {
         for (int word = 0; word < 3; ++word) {
             uint64_t bits = rows[y].w[word];
             while (bits) {
-                int bit = __builtin_ctzll(bits);
+                int bit = ctzll(bits);
                 int x = word * 64 + bit;
                 if (x < size) {
                     cols[x].w[y >> 6] |= uint64_t(1) << (y & 63);
