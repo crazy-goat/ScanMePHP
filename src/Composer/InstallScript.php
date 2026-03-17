@@ -136,7 +136,15 @@ class InstallScript
 
     public static function getPackageVersion(string $projectRoot): string
     {
-        // Try to read from composer/installed.json
+        // Try to get version from git tag (preferred for development/root project)
+        if (is_dir($projectRoot . '/.git')) {
+            $tag = trim(shell_exec('git describe --tags --abbrev=0 2>/dev/null') ?: '');
+            if ($tag !== '') {
+                return ltrim($tag, 'v');
+            }
+        }
+
+        // Fallback: try to read from composer/installed.json
         $installedJsonPath = $projectRoot . '/vendor/composer/installed.json';
 
         if (file_exists($installedJsonPath)) {
@@ -156,15 +164,7 @@ class InstallScript
             }
         }
 
-        // Fallback: try to get version from git tag (for development/root project)
-        if (is_dir($projectRoot . '/.git')) {
-            $tag = trim(shell_exec('git describe --tags --abbrev=0 2>/dev/null') ?: '');
-            if ($tag !== '') {
-                return ltrim($tag, 'v');
-            }
-        }
-
-        throw new \RuntimeException('Package ' . self::PACKAGE_NAME . ' not found in installed.json');
+        throw new \RuntimeException('Cannot determine package version: no git tag and package not found in installed.json');
     }
 
     private static function findProjectRoot(): string
