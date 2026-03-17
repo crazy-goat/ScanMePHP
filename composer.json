@@ -32,7 +32,9 @@
     "scripts": {
         "test": "phpunit",
         "test:fast": "php -d xdebug.mode=off vendor/bin/phpunit",
-        "test:parallel": "paratest --processes=4 --colors --testdox"
+        "test:parallel": "paratest --processes=4 --colors --testdox",
+        "post-install-cmd": "CrazyGoat\\ScanMePHP\\Composer\\InstallScript::run",
+        "post-update-cmd": "CrazyGoat\\ScanMePHP\\Composer\\InstallScript::run"
     },
     "minimum-stability": "stable",
     "prefer-stable": true
