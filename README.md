@@ -342,6 +342,19 @@ $qr = new QRCode('https://example.com', encoder: $encoder);
 
 Or let `QRCode` auto-detect it (looks for `clib/build/libscanme_qr.so` in the project root).
 
+### Prebuilt Binaries
+
+Prebuilt FFI library binaries are available from [GitHub Releases](https://github.com/crazy-goat/ScanMePHP/releases). Download the appropriate binary for your platform:
+
+| Platform | Binary | Download |
+|----------|--------|----------|
+| Linux (glibc) | `libscanme_qr-linux-glibc-x86_64.so` | [Latest Release](../../releases/latest) |
+| Linux (musl/Alpine) | `libscanme_qr-linux-musl-x86_64.so` | [Latest Release](../../releases/latest) |
+| macOS Intel | `libscanme_qr-macos-x86_64.dylib` | [Latest Release](../../releases/latest) |
+| macOS Apple Silicon | `libscanme_qr-macos-arm64.dylib` | [Latest Release](../../releases/latest) |
+
+Place the downloaded binary in your project directory. The `FfiEncoder` will automatically detect and load it.
+
 ## Requirements
 
 - PHP >= 8.1
