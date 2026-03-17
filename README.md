@@ -2,6 +2,8 @@
 
 Pure PHP QR code generator. Zero dependencies, zero extensions. PHP 8.1+.
 
+QR encoding algorithms are based on [Nayuki's QR Code generator](https://www.nayuki.io/page/qr-code-generator-library).
+
 ## Features
 
 - **Zero dependencies** — no external packages, no PHP extensions required
