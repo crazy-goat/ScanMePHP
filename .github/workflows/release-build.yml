@@ -147,9 +147,9 @@ jobs:
         if: matrix.variant == 'musl'
         run: |
           apk add --no-cache cmake g++ make linux-headers
-          # Install PHP dev from edge repository
+          # Install PHP dev from edge repository (use specific version)
           echo "https://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories
-          apk add --no-cache php-dev
+          apk add --no-cache php84-dev
 
       - name: Build FFI library (dependency)
         working-directory: clib
