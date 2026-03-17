@@ -108,3 +108,7 @@ jobs:
 
     - name: Run test suite
       run: composer run-script test
+
+    - name: Test without xdebug
+      run: |
+        php -d xdebug.mode=off vendor/bin/phpunit --filter testEncodeMatchesFastEncoder 2>&1
