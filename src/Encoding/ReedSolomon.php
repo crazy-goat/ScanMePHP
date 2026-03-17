@@ -181,7 +181,7 @@ class ReedSolomon
         // Use -1 as sentinel for zero coefficients (log(0) is undefined).
         $genLog = [];
         for ($i = 0; $i < $eccCount; $i++) {
-            $coeff = $generator[$i + 1];
+            $coeff = $generator[$eccCount - 1 - $i];
             $genLog[$i] = $coeff !== 0 ? $logTable[$coeff] : -1;
         }
 
@@ -218,27 +218,20 @@ class ReedSolomon
 
     private function buildGeneratorPolynomial(int $degree): array
     {
-        $poly = [1];
         $expTable = $this->expTable;
         $logTable = $this->logTable;
 
+        $gen = array_fill(0, $degree + 1, 0);
+        $gen[0] = 1;
+
         for ($i = 0; $i < $degree; $i++) {
-            $polyLen = count($poly);
-            $newPoly = array_fill(0, $polyLen + 1, 0);
-            $alphaI = $expTable[$i % 255];
-
-            for ($j = 0; $j < $polyLen; $j++) {
-                $newPoly[$j] ^= $poly[$j];
-                $p = $poly[$j];
-                if ($p !== 0 && $alphaI !== 0) {
-                    $newPoly[$j + 1] ^= $expTable[$logTable[$p] + $logTable[$alphaI]];
-                }
+            for ($j = $degree; $j >= 1; $j--) {
+                $gen[$j] = $gen[$j - 1] ^ ($gen[$j] === 0 ? 0 : $expTable[$logTable[$gen[$j]] + $i]);
             }
-
-            $poly = $newPoly;
+            $gen[0] = $expTable[$logTable[$gen[0]] + $i];
         }
 
-        return $poly;
+        return $gen;
     }
 
     public function getEccCount(int $version, int $errorCorrectionLevel): int

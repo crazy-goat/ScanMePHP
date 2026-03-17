@@ -36,35 +36,67 @@ class MatrixBuilder
         ErrorCorrectionLevel $errorCorrectionLevel,
         int $maskPattern
     ): Matrix {
+        $matrix = $this->buildUnmasked($version, $dataCodewords, $eccCodewords);
+
+        $this->applyMaskAndFormatInfo($matrix, $errorCorrectionLevel, $maskPattern);
+
+        return $matrix;
+    }
+
+    public function buildUnmasked(
+        int $version,
+        array $dataCodewords,
+        array $eccCodewords,
+    ): Matrix {
         $matrix = new Matrix($version);
-        
-        // Add finder patterns
+
         $this->addFinderPatterns($matrix);
-        
-        // Add separators
         $this->addSeparators($matrix);
-        
-        // Add timing patterns
         $this->addTimingPatterns($matrix);
-        
-        // Add alignment patterns
         $this->addAlignmentPatterns($matrix);
-        
-        // Add dark module
         $this->addDarkModule($matrix);
-        
-        // Add format information
-        $this->addFormatInfo($matrix, $errorCorrectionLevel, $maskPattern);
-        
-        // Add version information (for versions >= 7)
+
         if ($version >= 7) {
             $this->addVersionInfo($matrix);
         }
-        
-        // Place data and ECC
-        $this->placeData($matrix, array_merge($dataCodewords, $eccCodewords), $maskPattern);
-        
+
+        $this->placeDataRaw($matrix, array_merge($dataCodewords, $eccCodewords));
+
         return $matrix;
+    }
+
+    public function applyMaskAndFormatInfo(
+        Matrix $matrix,
+        ErrorCorrectionLevel $errorCorrectionLevel,
+        int $maskPattern
+    ): void {
+        $size = $matrix->getSize();
+        $reserved = $matrix->getReservedBitmap();
+        $rawData = $matrix->getRawData();
+
+        for ($i = 0, $total = $size * $size; $i < $total; $i++) {
+            if (!$reserved[$i]) {
+                $x = $i % $size;
+                $y = intdiv($i, $size);
+                $condition = match ($maskPattern) {
+                    0 => ($x + $y) % 2 === 0,
+                    1 => $y % 2 === 0,
+                    2 => $x % 3 === 0,
+                    3 => ($x + $y) % 3 === 0,
+                    4 => (intdiv($y, 2) + intdiv($x, 3)) % 2 === 0,
+                    5 => ($x * $y) % 2 + ($x * $y) % 3 === 0,
+                    6 => (($x * $y) % 2 + ($x * $y) % 3) % 2 === 0,
+                    7 => ((($x + $y) % 2) + ($x * $y) % 3) % 2 === 0,
+                    default => false,
+                };
+                if ($condition) {
+                    $rawData[$i] = !$rawData[$i];
+                }
+            }
+        }
+
+        $matrix->setRawData($rawData);
+        $this->addFormatInfo($matrix, $errorCorrectionLevel, $maskPattern);
     }
 
     private function addFinderPatterns(Matrix $matrix): void
@@ -318,55 +350,35 @@ class MatrixBuilder
         return ($data << 12) | $versionInfo;
     }
 
-    private function placeData(Matrix $matrix, array $codewords, int $maskPattern): void
+    private function placeDataRaw(Matrix $matrix, array $codewords): void
     {
         $size = $matrix->getSize();
         $bitIndex = 0;
-        
-        // Place data in upward columns, alternating direction
+        $totalBits = count($codewords) * 8;
+
         for ($col = $size - 1; $col > 0; $col -= 2) {
             if ($col === 6) {
-                $col--; // Skip timing column
+                $col--;
             }
-            
+
             $up = (int)(($size - 1 - $col) / 2) % 2 === 0;
-            
+
             for ($row = $up ? $size - 1 : 0; $up ? $row >= 0 : $row < $size; $up ? $row-- : $row++) {
                 for ($c = 0; $c < 2; $c++) {
                     $x = $col - $c;
                     $y = $row;
-                    
+
                     if (!$matrix->isReserved($x, $y)) {
-                        $byteIndex = (int) ($bitIndex / 8);
-                        $bitOffset = 7 - ($bitIndex % 8);
-                        
-                        if ($byteIndex < count($codewords)) {
+                        if ($bitIndex < $totalBits) {
+                            $byteIndex = $bitIndex >> 3;
+                            $bitOffset = 7 - ($bitIndex & 7);
                             $bit = (($codewords[$byteIndex] >> $bitOffset) & 1) === 1;
-                            $bit = $this->applyMask($x, $y, $bit, $maskPattern);
                             $matrix->set($x, $y, $bit);
                         }
-                        
                         $bitIndex++;
                     }
                 }
             }
         }
-    }
-
-    private function applyMask(int $x, int $y, bool $bit, int $maskPattern): bool
-    {
-        $condition = match ($maskPattern) {
-            0 => ($x + $y) % 2 === 0,
-            1 => $y % 2 === 0,
-            2 => $x % 3 === 0,
-            3 => ($x + $y) % 3 === 0,
-            4 => ((int) ($y / 2) + (int) ($x / 3)) % 2 === 0,
-            5 => ($x * $y) % 2 + ($x * $y) % 3 === 0,
-            6 => (($x * $y) % 2 + ($x * $y) % 3) % 2 === 0,
-            7 => ((($x + $y) % 2) + ($x * $y) % 3) % 2 === 0,
-            default => false,
-        };
-        
-        return $condition ? !$bit : $bit;
     }
 }

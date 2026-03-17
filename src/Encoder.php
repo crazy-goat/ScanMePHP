@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP;
 
-use CrazyGoat\ScanMePHP\Encoding\DataAnalyzer;
 use CrazyGoat\ScanMePHP\Encoding\DataEncoder;
 use CrazyGoat\ScanMePHP\Encoding\MaskSelector;
 use CrazyGoat\ScanMePHP\Encoding\MatrixBuilder;
@@ -15,7 +14,6 @@ use CrazyGoat\ScanMePHP\Exception\InvalidDataException;
 
 class Encoder implements EncoderInterface
 {
-    private DataAnalyzer $analyzer;
     private DataEncoder $dataEncoder;
     private ReedSolomon $reedSolomon;
     private MatrixBuilder $matrixBuilder;
@@ -70,7 +68,6 @@ class Encoder implements EncoderInterface
 
     public function __construct()
     {
-        $this->analyzer = new DataAnalyzer();
         $this->dataEncoder = new DataEncoder();
         $this->reedSolomon = new ReedSolomon();
         $this->matrixBuilder = new MatrixBuilder();
@@ -88,15 +85,10 @@ class Encoder implements EncoderInterface
             throw InvalidDataException::emptyData();
         }
 
-        // Determine encoding mode
-        $mode = $forcedMode ?? $this->analyzer->analyze($data);
-        
-        if ($forcedMode !== null && !$this->isDataCompatible($data, $forcedMode)) {
-            throw InvalidDataException::incompatibleMode($forcedMode->name, $data);
-        }
+        $mode = Mode::Byte;
 
         // Determine version
-        $version = $this->determineVersion($data, $mode, $errorCorrectionLevel, $requestedVersion);
+        $version = $this->determineVersion($data, $errorCorrectionLevel, $requestedVersion);
 
         // Encode data
         $encodedData = $this->dataEncoder->encode($data, $mode, $version);
@@ -114,24 +106,13 @@ class Encoder implements EncoderInterface
             $errorCorrectionLevel->value
         );
 
-        // Select best mask pattern
-        $tempMatrix = $this->matrixBuilder->build(
-            $version,
-            $allCodewords,
-            [],
-            $errorCorrectionLevel,
-            0
-        );
-        $maskPattern = $this->maskSelector->selectBestMask($tempMatrix);
+        $matrix = $this->matrixBuilder->buildUnmasked($version, $allCodewords, []);
 
-        // Build final matrix
-        return $this->matrixBuilder->build(
-            $version,
-            $allCodewords,
-            [],
-            $errorCorrectionLevel,
-            $maskPattern
-        );
+        $maskPattern = $this->maskSelector->selectBestMask($matrix, $errorCorrectionLevel);
+
+        $this->matrixBuilder->applyMaskAndFormatInfo($matrix, $errorCorrectionLevel, $maskPattern);
+
+        return $matrix;
     }
 
     public function getMinimumVersion(
@@ -139,15 +120,8 @@ class Encoder implements EncoderInterface
         ErrorCorrectionLevel $errorCorrectionLevel,
         ?Mode $forcedMode = null
     ): int {
-        $mode = $forcedMode ?? $this->analyzer->analyze($data);
-        $modeIndex = match ($mode) {
-            Mode::Numeric => 0,
-            Mode::Alphanumeric => 1,
-            Mode::Byte => 2,
-            Mode::Kanji => 3,
-        };
-
-        $dataLength = $this->analyzer->getDataLength($data, $mode);
+        $modeIndex = 2;
+        $dataLength = strlen($data);
         $eccIndex = $errorCorrectionLevel->value;
 
         for ($version = 1; $version <= 40; $version++) {
@@ -179,11 +153,10 @@ class Encoder implements EncoderInterface
 
     private function determineVersion(
         string $data,
-        Mode $mode,
         ErrorCorrectionLevel $errorCorrectionLevel,
         int $requestedVersion
     ): int {
-        $minimumVersion = $this->getMinimumVersion($data, $errorCorrectionLevel, $mode);
+        $minimumVersion = $this->getMinimumVersion($data, $errorCorrectionLevel);
 
         if ($requestedVersion === 0) {
             // Auto-detect version
@@ -200,16 +173,6 @@ class Encoder implements EncoderInterface
         }
 
         return $requestedVersion;
-    }
-
-    private function isDataCompatible(string $data, Mode $mode): bool
-    {
-        return match ($mode) {
-            Mode::Numeric => $this->analyzer->isNumeric($data),
-            Mode::Alphanumeric => $this->analyzer->isAlphanumeric($data),
-            Mode::Kanji => $this->analyzer->isKanji($data),
-            Mode::Byte => true, // Byte mode accepts any data
-        };
     }
 
     private const TOTAL_CODEWORDS = [

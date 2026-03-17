@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP\Tests;
 
+use CrazyGoat\ScanMePHP\Encoder;
 use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
 use CrazyGoat\ScanMePHP\FastEncoder;
 use CrazyGoat\ScanMePHP\FfiEncoder;
@@ -50,6 +51,17 @@ class QrReferenceTest extends TestCase
             yield $label => [$row[0], $row[1], (int)$row[2], (int)$row[3], $row[4]];
         }
         fclose($handle);
+    }
+
+    #[DataProvider('csvFixtureProvider')]
+    public function testEncoderMatchesReference(string $url, string $ecl, int $version, int $size, string $expectedBits): void
+    {
+        $encoder = new Encoder();
+        $matrix = $encoder->encode($url, self::eclFromString($ecl));
+
+        $this->assertSame($size, $matrix->getSize(), 'Size mismatch');
+        $bits = self::matrixToBits($matrix->getData(), $size);
+        $this->assertSame($expectedBits, $bits);
     }
 
     #[DataProvider('csvFixtureProvider')]
