@@ -88,9 +88,42 @@ jobs:
           name: macos-${{ matrix.arch }}
           path: clib/build/libscanme_qr-macos-${{ matrix.arch }}.dylib
 
+  build-windows:
+    name: Build Windows x86_64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+      
+      - name: Configure CMake
+        working-directory: clib
+        run: |
+          cmake -B build -S . -A x64 `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DBUILD_TESTS=OFF `
+            -DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=OFF
+      
+      - name: Build library
+        working-directory: clib
+        run: |
+          cmake --build build --config Release
+      
+      - name: Rename artifact
+        working-directory: clib/build/Release
+        run: |
+          copy scanme_qr.dll scanme_qr-windows-x86_64.dll
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x86_64
+          path: clib/build/Release/scanme_qr-windows-x86_64.dll
+
   release:
     name: Create Release
-    needs: [build-linux, build-macos]
+    needs: [build-linux, build-macos, build-windows]
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
@@ -116,6 +149,7 @@ jobs:
             - `libscanme_qr-linux-musl-x86_64.so` - Linux with musl (Alpine Linux)
             - `libscanme_qr-macos-x86_64.dylib` - macOS Intel
             - `libscanme_qr-macos-arm64.dylib` - macOS Apple Silicon
+            - `scanme_qr-windows-x86_64.dll` - Windows x86_64
             
             ### Installation
             
