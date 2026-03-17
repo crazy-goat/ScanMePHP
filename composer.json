@@ -16,6 +16,7 @@
     },
     "require-dev": {
         "phpunit/phpunit": "^10.0",
+        "brianium/paratest": "^7.0",
         "ext-gd": "*"
     },
     "autoload": {
@@ -29,7 +30,8 @@
         }
     },
     "scripts": {
-        "test": "phpunit"
+        "test": "paratest --processes=4 --colors",
+        "test:unit": "phpunit"
     },
     "minimum-stability": "stable",
     "prefer-stable": true
