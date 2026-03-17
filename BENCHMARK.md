@@ -47,6 +47,6 @@ All encoders implement `EncoderInterface` and produce identical, spec-compliant 
 ## Running the Benchmark
 
 ```bash
-php examples/benchmark_encoder.php          # 200 iterations, table output
-php examples/benchmark_encoder.php 500      # 500 iterations
+php bench/benchmark_encoder.php          # 200 iterations, table output
+php bench/benchmark_encoder.php 500      # 500 iterations
 ```

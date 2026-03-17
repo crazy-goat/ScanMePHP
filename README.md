@@ -262,8 +262,8 @@ All three encoders produce identical, spec-compliant QR codes verified against [
 Run the benchmark yourself:
 
 ```bash
-php examples/benchmark_encoder.php        # 200 iterations
-php examples/benchmark_encoder.php 500    # 500 iterations
+php bench/benchmark_encoder.php        # 200 iterations
+php bench/benchmark_encoder.php 500    # 500 iterations
 ```
 
 See [BENCHMARK.md](BENCHMARK.md) for full results with percentiles.
