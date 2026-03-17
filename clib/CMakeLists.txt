@@ -45,8 +45,9 @@ target_include_directories(scanme_qr
 )
 
 target_compile_options(scanme_qr PRIVATE
-    -Wall -Wextra -Werror
-    $<$<CONFIG:Release>:-O3>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Werror>
+    $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX>
+    $<$<CONFIG:Release>:$<IF:$<CXX_COMPILER_ID:MSVC>,/O2,-O3>>
 )
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "13")
