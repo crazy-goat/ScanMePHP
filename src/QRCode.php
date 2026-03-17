@@ -26,6 +26,11 @@ class QRCode
 
     private static function createDefaultEncoder(): EncoderInterface
     {
+        // Try NativeEncoder (PHP extension) first - fastest option
+        if (extension_loaded('scanme_qr') && class_exists('CrazyGoat\\ScanMePHP\\NativeEncoder')) {
+            return new NativeEncoder();
+        }
+
         // Try FFI encoder with downloaded binary first (vendor location)
         $vendorBinary = dirname(__DIR__) . '/../../crazy-goat/scanmephp/ffi-binaries/' . PlatformDetector::getCurrentPlatformBinaryName();
         if (FfiEncoder::isAvailable($vendorBinary)) {

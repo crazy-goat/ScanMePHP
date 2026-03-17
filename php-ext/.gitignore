@@ -1,0 +1,20 @@
+# Build artifacts
+.libs/
+*.lo
+*.la
+*.o
+*.dep
+*.so
+modules/
+build/
+autom4te.cache/
+config.log
+config.status
+configure
+Makefile*
+libtool
+run-tests.php
+config.h*
+config.nice
+*.la
+*.lai
