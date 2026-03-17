@@ -101,13 +101,10 @@ jobs:
     - name: Build C++ FFI library
       working-directory: clib
       run: |
-        if [ ! -f build/libscanme_qr.so ]; then
-          mkdir -p build && cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF
-          make -j$(nproc)
-        else
-          echo "Library already built (cached)"
-        fi
+        rm -rf build
+        mkdir -p build && cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF
+        make -j$(nproc)
 
     - name: Run test suite
       run: composer run-script test
