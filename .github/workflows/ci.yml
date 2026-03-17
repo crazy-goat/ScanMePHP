@@ -116,3 +116,7 @@ jobs:
     - name: Test paratest without xdebug (1 process)
       run: |
         php -d xdebug.mode=off vendor/bin/paratest --processes=1 --filter testEncodeMatchesFastEncoder 2>&1
+
+    - name: Test full suite with phpunit (no xdebug)
+      run: |
+        time php -d xdebug.mode=off vendor/bin/phpunit 2>&1 | tail -5
