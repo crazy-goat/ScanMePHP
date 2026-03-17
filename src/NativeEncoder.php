@@ -5,39 +5,31 @@ declare(strict_types=1);
 namespace CrazyGoat\ScanMePHP;
 
 /**
- * NativeEncoder - PHP wrapper for the scanme_qr PHP extension.
- *
- * This class provides the fastest QR encoding by using the native C library
- * via the scanme_qr PHP extension. It implements EncoderInterface for
- * seamless integration with ScanMePHP.
+ * NativeEncoder - Implementacja hybrydowa.
  */
-final class NativeEncoder implements EncoderInterface
-{
-    private static ?NativeEncoderExt $extInstance = null;
-    
-    private function getExt(): NativeEncoderExt
+if (extension_loaded('scanmeqr')) {
+    // Jeśli extension jest, dziedziczymy po klasie z C (NativeEncoderCore)
+    // i implementujemy interfejs PHP.
+    // Dzięki temu mamy szybkość C i zgodność typów PHP.
+    final class NativeEncoder extends NativeEncoderCore implements EncoderInterface
     {
-        if (self::$extInstance === null) {
-            if (!extension_loaded('scanme_qr')) {
-                throw new \RuntimeException('scanme_qr extension is not loaded');
-            }
-            self::$extInstance = new NativeEncoderExt();
+        public function encode(
+            string $url,
+            ErrorCorrectionLevel $errorCorrectionLevel,
+        ): Matrix {
+            // Przekazujemy do metody z NativeEncoderCore (zdefiniowanej w C)
+            return parent::encodeMatrix($url, $errorCorrectionLevel);
         }
-        return self::$extInstance;
     }
-
-    public function encode(
-        string $url,
-        ErrorCorrectionLevel $errorCorrectionLevel,
-    ): Matrix {
-        // Get raw data from extension as array
-        $rawData = $this->getExt()->encodeRaw($url, $errorCorrectionLevel);
-
-        // Create Matrix and populate it
-        $version = $rawData['version'];
-        $matrix = new Matrix($version);
-        $matrix->setRawData($rawData['data']);
-
-        return $matrix;
+} else {
+    // Fallback gdy brak extensionu
+    final class NativeEncoder implements EncoderInterface
+    {
+        public function encode(
+            string $url,
+            ErrorCorrectionLevel $errorCorrectionLevel,
+        ): Matrix {
+            return (new FfiEncoder())->encode($url, $errorCorrectionLevel);
+        }
     }
 }

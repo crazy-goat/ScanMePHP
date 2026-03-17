@@ -24,6 +24,16 @@ typedef struct {
     int      version;
 } scanme_qr_result_t;
 
+/* New matrix-based result for better integration */
+typedef struct {
+    int version;
+    int size;
+    /* Packed bits: 1 byte per module (0 or 1) for simplicity in PHP,
+       or we could use packed bits. Let's stick to uint8_t for now
+       as it's easiest to convert to PHP array or string. */
+    uint8_t* data;
+} scanme_qr_matrix_t;
+
 SCANME_QR_API int scanme_qr_encode(
     const char*         data,
     size_t              len,
@@ -33,14 +43,16 @@ SCANME_QR_API int scanme_qr_encode(
 
 SCANME_QR_API void scanme_qr_result_free(scanme_qr_result_t* out);
 
-SCANME_QR_API const char* scanme_qr_version(void);
-
-SCANME_QR_API int scanme_qr_debug_penalties(
+/* Improved API */
+SCANME_QR_API scanme_qr_matrix_t* scanme_qr_encode_matrix(
     const char* data,
     size_t      len,
-    int         ecl,
-    int         penalties_out[8]
+    int         ecl
 );
+
+SCANME_QR_API void scanme_qr_matrix_free(scanme_qr_matrix_t* matrix);
+
+SCANME_QR_API const char* scanme_qr_version(void);
 
 #ifdef __cplusplus
 }

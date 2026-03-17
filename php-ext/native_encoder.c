@@ -1,6 +1,6 @@
 /*
   +----------------------------------------------------------------------+
-  | NativeEncoder class implementation                                   |
+  | NativeEncoderExt class implementation                                |
   +----------------------------------------------------------------------+
 */
 
@@ -16,7 +16,7 @@
 #include "native_encoder.h"
 #include "scanme_qr.h"
 
-/* Object structure for NativeEncoder */
+/* Object structure for NativeEncoderExt */
 typedef struct {
     zend_object std;
 } scanme_qr_native_encoder_object;
@@ -28,33 +28,34 @@ zend_class_entry *scanme_qr_native_encoder_ce;
 static zend_object *scanme_qr_native_encoder_create(zend_class_entry *class_type);
 static void scanme_qr_native_encoder_free(zend_object *object);
 static PHP_METHOD(NativeEncoderExt, encodeRaw);
+static PHP_METHOD(NativeEncoderExt, encodeMatrix);
 
-/* Arginfo for NativeEncoderExt::encodeRaw() */
+/* Arginfo for encodeRaw() */
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_NativeEncoderExt_encodeRaw, 0, 2, IS_ARRAY, 0)
     ZEND_ARG_TYPE_INFO(0, url, IS_STRING, 0)
-    ZEND_ARG_OBJ_INFO(0, errorCorrectionLevel, BackedEnum, 0)
+    ZEND_ARG_TYPE_INFO(0, errorCorrectionLevel, IS_OBJECT, 0)
 ZEND_END_ARG_INFO()
 
-/* Method entries for NativeEncoderExt */
+/* Arginfo for encodeMatrix() */
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_NativeEncoderExt_encodeMatrix, 0, 2, "CrazyGoat\\ScanMePHP\\Matrix", 0)
+    ZEND_ARG_TYPE_INFO(0, url, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, errorCorrectionLevel, IS_OBJECT, 0)
+ZEND_END_ARG_INFO()
+
+/* Method entries */
 static const zend_function_entry native_encoder_methods[] = {
     PHP_ME(NativeEncoderExt, encodeRaw, arginfo_NativeEncoderExt_encodeRaw, ZEND_ACC_PUBLIC)
+    PHP_ME(NativeEncoderExt, encodeMatrix, arginfo_NativeEncoderExt_encodeMatrix, ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
-/* Object handlers */
 static zend_object_handlers scanme_qr_native_encoder_handlers;
 
-/*
- * Create NativeEncoder object
- */
 zend_object *scanme_qr_create_native_encoder(void)
 {
     return scanme_qr_native_encoder_create(scanme_qr_native_encoder_ce);
 }
 
-/*
- * Create NativeEncoder object handler
- */
 static zend_object *scanme_qr_native_encoder_create(zend_class_entry *class_type)
 {
     scanme_qr_native_encoder_object *intern;
@@ -68,86 +69,52 @@ static zend_object *scanme_qr_native_encoder_create(zend_class_entry *class_type
     return &intern->std;
 }
 
-/*
- * Free NativeEncoder object handler
- */
 static void scanme_qr_native_encoder_free(zend_object *object)
 {
     zend_object_std_dtor(object);
 }
 
-/*
- * NativeEncoderExt::encodeRaw() method
- *
- * public function encodeRaw(string $url, ErrorCorrectionLevel $errorCorrectionLevel): array
- * Returns: ['version' => int, 'size' => int, 'data' => bool[]]
- */
+static int get_ecl_from_enum(zval *ecl_obj)
+{
+    zval retval;
+    zval *value_prop = zend_read_property(Z_OBJCE_P(ecl_obj), Z_OBJ_P(ecl_obj), "value", sizeof("value") - 1, 0, &retval);
+    
+    if (!value_prop || Z_TYPE_P(value_prop) != IS_LONG) {
+        return -1;
+    }
+    
+    return (int)Z_LVAL_P(value_prop);
+}
+
 static PHP_METHOD(NativeEncoderExt, encodeRaw)
 {
     zend_string *url;
     zval *ecl_obj;
-    zend_long ecl_value;
     
-    /* Parse parameters */
     ZEND_PARSE_PARAMETERS_START(2, 2)
         Z_PARAM_STR(url)
         Z_PARAM_OBJECT(ecl_obj)
     ZEND_PARSE_PARAMETERS_END();
 
-    /* Validate URL is not empty */
-    if (ZSTR_LEN(url) == 0) {
-        zend_throw_exception(zend_ce_exception, "Data cannot be empty", 0);
-        RETURN_THROWS();
+    int ecl_value = get_ecl_from_enum(ecl_obj);
+    if (ecl_value < 0) {
+        zend_throw_exception(zend_ce_exception, "ErrorCorrectionLevel must be an integer backed enum", 0);
+        return;
     }
 
-    /* Check if the object is an enum */
-    zend_class_entry *ecl_ce = Z_OBJCE_P(ecl_obj);
-    if (!(ecl_ce->ce_flags & ZEND_ACC_ENUM)) {
-        zend_throw_exception(zend_ce_exception, "Second argument must be an ErrorCorrectionLevel enum", 0);
-        RETURN_THROWS();
-    }
-
-    /* Get ErrorCorrectionLevel value (0=Low, 1=Medium, 2=Quartile, 3=High) */
-    zval retval;
-    
-    /* Access $ecl_obj->value property (BackedEnum) */
-    zval *value_prop = zend_read_property(ecl_ce, Z_OBJ_P(ecl_obj), "value", sizeof("value") - 1, 0, &retval);
-    
-    if (value_prop == NULL || Z_TYPE_P(value_prop) != IS_LONG) {
-        zval_ptr_dtor(&retval);
-        zend_throw_exception(zend_ce_exception, "ErrorCorrectionLevel value must be an integer", 0);
-        RETURN_THROWS();
-    }
-    
-    ecl_value = Z_LVAL_P(value_prop);
-    zval_ptr_dtor(&retval);
-
-    /* Validate ECL value */
-    if (ecl_value < 0 || ecl_value > 3) {
-        zend_throw_exception(zend_ce_exception, "Invalid ErrorCorrectionLevel value", 0);
-        RETURN_THROWS();
-    }
-
-    /* Call C library encode function */
     scanme_qr_result_t result;
-    int ret = scanme_qr_encode(ZSTR_VAL(url), ZSTR_LEN(url), (int)ecl_value, &result);
+    int ret = scanme_qr_encode(ZSTR_VAL(url), ZSTR_LEN(url), ecl_value, &result);
 
     if (ret != 0) {
         scanme_qr_result_free(&result);
         zend_throw_exception(zend_ce_exception, "Failed to encode QR code", ret);
-        RETURN_THROWS();
+        return;
     }
 
-    /* Return array: ['version' => int, 'size' => int, 'data' => bool[]] */
     array_init(return_value);
-    
-    /* Add version */
     add_assoc_long(return_value, "version", result.version);
-    
-    /* Add size */
     add_assoc_long(return_value, "size", result.size);
     
-    /* Add data array */
     zval data_array;
     array_init(&data_array);
     
@@ -157,24 +124,84 @@ static PHP_METHOD(NativeEncoderExt, encodeRaw)
     }
     
     add_assoc_zval(return_value, "data", &data_array);
-
-    /* Free C library result */
     scanme_qr_result_free(&result);
 }
 
+static PHP_METHOD(NativeEncoderExt, encodeMatrix)
+{
+    zend_string *url;
+    zval *ecl_obj;
+    
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_STR(url)
+        Z_PARAM_OBJECT(ecl_obj)
+    ZEND_PARSE_PARAMETERS_END();
+
+    int ecl_value = get_ecl_from_enum(ecl_obj);
+    if (ecl_value < 0) {
+        zend_throw_exception(zend_ce_exception, "ErrorCorrectionLevel must be an integer backed enum", 0);
+        return;
+    }
+
+    scanme_qr_matrix_t* matrix = scanme_qr_encode_matrix(ZSTR_VAL(url), ZSTR_LEN(url), ecl_value);
+    if (!matrix) {
+        zend_throw_exception(zend_ce_exception, "Failed to encode QR code", 0);
+        return;
+    }
+
+    /* Find CrazyGoat\ScanMePHP\Matrix class */
+    zend_class_entry *matrix_ce = zend_lookup_class(zend_string_init("CrazyGoat\\ScanMePHP\\Matrix", sizeof("CrazyGoat\\ScanMePHP\\Matrix") - 1, 0));
+    if (!matrix_ce) {
+        scanme_qr_matrix_free(matrix);
+        zend_throw_exception(zend_ce_exception, "CrazyGoat\\ScanMePHP\\Matrix class not found", 0);
+        return;
+    }
+
+    /* Instantiate Matrix: new Matrix($version) */
+    object_init_ex(return_value, matrix_ce);
+    
+    zval version_val;
+    ZVAL_LONG(&version_val, matrix->version);
+    
+    zval constructor_retval;
+    zend_call_method(Z_OBJ_P(return_value), matrix_ce, &matrix_ce->constructor, "__construct", sizeof("__construct") - 1, &constructor_retval, 1, &version_val, NULL);
+    zval_ptr_dtor(&constructor_retval);
+
+    /* Populate data: $matrix->setRawData($data) */
+    zval data_array;
+    array_init(&data_array);
+    int total_modules = matrix->size * matrix->size;
+    for (int i = 0; i < total_modules; i++) {
+        add_next_index_bool(&data_array, matrix->data[i] != 0);
+    }
+
+    /* Call setRawData. We need to find the function entry. */
+    zend_function *set_raw_data_fn = zend_hash_str_find_ptr(&matrix_ce->function_table, "setrawdata", sizeof("setrawdata") - 1);
+    if (set_raw_data_fn) {
+        zval set_data_retval;
+        zend_call_method(Z_OBJ_P(return_value), matrix_ce, &set_raw_data_fn, "setrawdata", sizeof("setrawdata") - 1, &set_data_retval, 1, &data_array, NULL);
+        zval_ptr_dtor(&set_data_retval);
+    }
+    
+    zval_ptr_dtor(&data_array);
+    scanme_qr_matrix_free(matrix);
+}
+
 /*
- * Register NativeEncoderExt class
+ * Register NativeEncoder class
  */
 void scanme_qr_register_native_encoder(zend_class_entry *parent_ce)
 {
     zend_class_entry ce;
 
-    INIT_CLASS_ENTRY(ce, "CrazyGoat\\ScanMePHP\\NativeEncoderExt", native_encoder_methods);
+    INIT_CLASS_ENTRY(ce, "CrazyGoat\\ScanMePHP\\NativeEncoderCore", native_encoder_methods);
     scanme_qr_native_encoder_ce = zend_register_internal_class(&ce);
     scanme_qr_native_encoder_ce->create_object = scanme_qr_native_encoder_create;
-    scanme_qr_native_encoder_ce->ce_flags |= ZEND_ACC_FINAL;
+    // Usuwamy flagę FINAL, żeby można było po niej dziedziczyć w PHP
+    // scanme_qr_native_encoder_ce->ce_flags |= ZEND_ACC_FINAL;
 
     memcpy(&scanme_qr_native_encoder_handlers, &std_object_handlers, sizeof(zend_object_handlers));
     scanme_qr_native_encoder_handlers.free_obj = scanme_qr_native_encoder_free;
     scanme_qr_native_encoder_handlers.offset = XtOffsetOf(scanme_qr_native_encoder_object, std);
 }
+
