@@ -68,6 +68,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FfiEncoder: 0.102-1.319ms (7-11× faster than pure PHP)
 - FastEncoder: 0.629-5.724ms (1.6-2× faster than pure PHP)
 
+## [0.4.9] - 2026-03-17
+
+### Added
+
+- CI workflow to build and release PHP extension binaries alongside FFI library on version tag push (#26)
+- `Composer\Plugin` updated to support automatic download and installation of both PHP extension and FFI library binaries
+- PHP extension binaries for Linux (glibc/musl) and macOS (x86_64/arm64) in GitHub releases
+
+### Changed
+
+- Composer plugin now tries to install PHP extension first (13-21× faster), falls back to FFI library (10-12× faster)
+- Updated README with comprehensive PHP extension installation instructions
+
+### Fixed
+
+- Test assertion in `InstallScriptTest::testGetPackageVersionFromComposer` to match normalized version format
+
 ## [Unreleased]
 
 ### Added
@@ -83,8 +100,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reference test suite — 1772 test cases × 2 encoders (FastEncoder + FfiEncoder) verified against nayuki's QR Code generator
 - CI workflow to automatically build and release FFI library binaries for Linux (glibc/musl) and macOS (x86_64/ARM64) on version tag push (#22)
 - PHP extension (`php-ext/`) with 13–21× performance improvement over pure PHP encoder
-- CI workflow to build and release PHP extension binaries alongside FFI library on version tag push (#26)
-- `Composer\Plugin` updated to support automatic download and installation of both PHP extension and FFI library binaries
 
 ### Changed
 
@@ -161,7 +176,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive test suite with PHPUnit
 - Full documentation and usage examples
 
-[Unreleased]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.8...HEAD
+[Unreleased]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.9...HEAD
+[0.4.9]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.8...v0.4.9
 [0.4.8]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.7...v0.4.8
 [0.4.7]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.6...v0.4.7
 [0.4.6]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.5...v0.4.6
