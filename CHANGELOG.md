@@ -48,6 +48,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `InstallScript` — Composer script handler with fallback support for manual download instructions
 - `Builder` — CLI tool to manually trigger binary download
 
+## [0.4.8] - 2026-03-17
+
+### Added
+
+- PHP extension (`php-ext/`) with `NativeEncoderExt` class for maximum performance
+- `bench/benchmark_all.php` - benchmark script comparing all 4 encoders
+- `encodeMatrix()` method to NativeEncoderExt for direct Matrix return type
+
+### Changed
+
+- Renamed PHP extension from `scanme_qr` to `scanmeqr` for consistency
+- Improved NativeEncoder.php fallback and namespace handling
+- Cleaned up C++ encoder code (removed unused functions and comments)
+
+### Performance
+
+- NativeEncoderExt: 0.053-0.880ms (13-21× faster than pure PHP)
+- FfiEncoder: 0.102-1.319ms (7-11× faster than pure PHP)
+- FastEncoder: 0.629-5.724ms (1.6-2× faster than pure PHP)
+
 ## [Unreleased]
 
 ### Added
@@ -138,7 +158,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive test suite with PHPUnit
 - Full documentation and usage examples
 
-[Unreleased]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.7...HEAD
+[Unreleased]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.8...HEAD
+[0.4.8]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.7...v0.4.8
 [0.4.7]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.6...v0.4.7
 [0.4.6]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.5...v0.4.6
 [0.4.5]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.4...v0.4.5
