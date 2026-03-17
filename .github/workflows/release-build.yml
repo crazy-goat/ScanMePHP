@@ -1,0 +1,124 @@
+name: Build FFI Library on Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    name: Build Linux ${{ matrix.variant }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - variant: glibc
+            container: ubuntu:22.04
+            cxx_flags: ""
+          - variant: musl
+            container: alpine:latest
+            cxx_flags: "-static-libgcc -static-libstdc++"
+    container:
+      image: ${{ matrix.container }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install dependencies (Ubuntu)
+        if: matrix.variant == 'glibc'
+        run: |
+          apt-get update
+          apt-get install -y cmake g++ make
+      
+      - name: Install dependencies (Alpine)
+        if: matrix.variant == 'musl'
+        run: |
+          apk add --no-cache cmake g++ make linux-headers
+      
+      - name: Build library
+        working-directory: clib
+        run: |
+          mkdir -p build && cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF \
+            -DCMAKE_CXX_FLAGS="${{ matrix.cxx_flags }}"
+          make -j$(nproc)
+      
+      - name: Rename artifact
+        working-directory: clib/build
+        run: |
+          cp libscanme_qr.so "libscanme_qr-linux-${{ matrix.variant }}-x86_64.so"
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.variant }}-x86_64
+          path: clib/build/libscanme_qr-linux-${{ matrix.variant }}-x86_64.so
+
+  build-macos:
+    name: Build macOS ${{ matrix.arch }}
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [x86_64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install dependencies
+        run: |
+          brew install cmake
+      
+      - name: Build library
+        working-directory: clib
+        run: |
+          mkdir -p build && cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF \
+            -DCMAKE_OSX_ARCHITECTURES="${{ matrix.arch }}"
+          make -j$(sysctl -n hw.ncpu)
+      
+      - name: Rename artifact
+        working-directory: clib/build
+        run: |
+          cp libscanme_qr.dylib "libscanme_qr-macos-${{ matrix.arch }}.dylib"
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}
+          path: clib/build/libscanme_qr-macos-${{ matrix.arch }}.dylib
+
+  release:
+    name: Create Release
+    needs: [build-linux, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      
+      - name: List artifacts
+        run: ls -la artifacts/
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: artifacts/*
+          generate_release_notes: true
+          body: |
+            ## FFI Library Binaries
+            
+            Prebuilt binaries for the ScanMePHP FFI library are attached to this release:
+            
+            - `libscanme_qr-linux-glibc-x86_64.so` - Linux with glibc (Ubuntu, Debian, etc.)
+            - `libscanme_qr-linux-musl-x86_64.so` - Linux with musl (Alpine Linux)
+            - `libscanme_qr-macos-x86_64.dylib` - macOS Intel
+            - `libscanme_qr-macos-arm64.dylib` - macOS Apple Silicon
+            
+            ### Installation
+            
+            Download the appropriate binary for your platform and place it in your project directory. The PHP FFI encoder will automatically detect and load it.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
