@@ -90,6 +90,14 @@ jobs:
         mkdir -p build && cd build
         cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF
         make -j$(nproc)
+        ls -la libscanme_qr.so
+
+    - name: Verify library location
+      run: |
+        ls -la clib/build/
+        ls -la clib/build/libscanme_qr.so || echo "Library not found!"
+        php -r "echo 'FFI extension: ' . (extension_loaded('ffi') ? 'YES' : 'NO') . PHP_EOL;"
+        php -r "echo 'Library exists: ' . (file_exists('clib/build/libscanme_qr.so') ? 'YES' : 'NO') . PHP_EOL;"
 
     - name: Run test suite
       run: composer run-script test
