@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.5] - 2026-03-17
+
+### Added
+
+- Composer post-install/post-update hooks to auto-download prebuilt FFI binaries (#23)
+- `BinaryDownloader` — downloads FFI binaries from GitHub releases with checksum verification
+- `ChecksumManager` — SHA256 checksum validation for downloaded binaries
+- `PlatformDetector` — automatic OS and architecture detection (Linux/macOS, x86_64/ARM64, glibc/musl)
+- `InstallScript` — Composer script handler with fallback support for manual download instructions
+- `Builder` — CLI tool to manually trigger binary download
+
 ## [Unreleased]
 
 ### Added
@@ -103,7 +114,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive test suite with PHPUnit
 - Full documentation and usage examples
 
-[Unreleased]: https://github.com/crazy-goat/ScanMePHP/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.5...HEAD
+[0.4.5]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.4...v0.4.5
 [0.3.0]: https://github.com/crazy-goat/ScanMePHP/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/crazy-goat/ScanMePHP/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/crazy-goat/ScanMePHP/releases/tag/v0.1.0
