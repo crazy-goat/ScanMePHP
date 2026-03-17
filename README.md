@@ -7,7 +7,7 @@ Pure PHP QR code generator. Zero dependencies, zero extensions. PHP 8.1+.
 - **Zero dependencies** — no external packages, no PHP extensions required
 - **8 built-in renderers** — SVG, PNG, HTML (div/table), ASCII (full/half/simple blocks)
 - **All QR versions** — v1–v40, all error correction levels (L/M/Q/H)
-- **High performance** — optimized renderers with 20–40% faster output generation
+- **High performance** — 3 encoder tiers: native C++ FFI (50–78× faster), FastEncoder (18–41×), portable Encoder
 - **Customizable** — module styles, colors, labels, dark mode, margins
 - **Type-safe** — strict types, enums, readonly properties, PHP 8.1+ idioms
 
@@ -236,11 +236,65 @@ class MyCustomRenderer implements RendererInterface
 }
 ```
 
+## Performance
+
+ScanMePHP includes three encoder implementations. `QRCode` auto-selects the fastest available:
+
+| Encoder | Versions | Requirements | Relative Speed |
+|---|---|---|---|
+| `FfiEncoder` | v1–v27 | 64-bit PHP + FFI + `libscanme_qr.so` | **50–78×** faster |
+| `FastEncoder` | v1–v27 | 64-bit PHP | **18–41×** faster |
+| `Encoder` | v1–v40 | any PHP 8.1+ | baseline |
+
+### Benchmark Results
+
+Measured on PHP 8.4, 200 iterations per case, median latency:
+
+| Test case | Encoder | FastEncoder | FfiEncoder | Speedup (Encoder/FFI) |
+|---|---|---|---|---|
+| v1 (21×21) L | 5.1 ms | 0.29 ms | 0.07 ms | **78×** |
+| v2 (25×25) M | 7.3 ms | 0.35 ms | 0.14 ms | **50×** |
+| v5 (37×37) M | 16.7 ms | 0.49 ms | 0.22 ms | **74×** |
+| v10 (57×57) M | 56.5 ms | 1.88 ms | 0.74 ms | **76×** |
+
+All three encoders produce identical, spec-compliant QR codes verified against [nayuki's reference implementation](https://www.nayuki.io/page/qr-code-generator-library).
+
+Run the benchmark yourself:
+
+```bash
+php examples/benchmark_encoder.php        # 200 iterations
+php examples/benchmark_encoder.php 500    # 500 iterations
+```
+
+See [BENCHMARK.md](BENCHMARK.md) for full results with percentiles.
+
+### Building the C++ Library (optional)
+
+The native C++ encoder is optional — ScanMePHP works without it. To enable `FfiEncoder`:
+
+```bash
+cmake -B clib/build -S clib -DCMAKE_BUILD_TYPE=Release
+cmake --build clib/build -j$(nproc)
+cp clib/build/libscanme_qr.so .
+```
+
+Then pass the library path when creating the encoder:
+
+```php
+use ScanMePHP\FfiEncoder;
+
+$encoder = new FfiEncoder(__DIR__ . '/libscanme_qr.so');
+$qr = new QRCode('https://example.com', encoder: $encoder);
+```
+
+Or let `QRCode` auto-detect it (looks for `clib/build/libscanme_qr.so` in the project root).
+
 ## Requirements
 
 - PHP >= 8.1
 - No extensions required
 - No external dependencies
+- Optional: C++20 compiler + CMake for native FFI encoder
 
 ## Testing
 
