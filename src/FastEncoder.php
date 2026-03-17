@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP;
 
-use ScanMePHP\Exception\DataTooLargeException;
-use ScanMePHP\Exception\InvalidDataException;
+use CrazyGoat\ScanMePHP\Exception\DataTooLargeException;
+use CrazyGoat\ScanMePHP\Exception\InvalidDataException;
 
 /**
  * High-performance monolithic QR encoder for URLs (Byte mode, v1-v27).
@@ -86,71 +86,42 @@ class FastEncoder implements EncoderInterface
         [ 360,  700, 1020, 1200], // v27
     ];
 
-    private const NUM_BLOCKS = [
-        [ 1,  1,  1,  1], // v1
-        [ 1,  1,  1,  1], // v2
-        [ 1,  1,  2,  2], // v3
-        [ 1,  2,  2,  4], // v4
-        [ 1,  2,  4,  4], // v5
-        [ 2,  4,  4,  4], // v6
-        [ 2,  4,  6,  5], // v7
-        [ 2,  4,  6,  6], // v8
-        [ 2,  5,  8,  8], // v9
-        [ 4,  5,  8,  8], // v10
-        [ 4,  5,  8, 11], // v11
-        [ 4,  8, 10, 11], // v12
-        [ 4,  9, 12, 16], // v13
-        [ 4,  9, 16, 16], // v14
-        [ 6, 10, 12, 18], // v15
-        [ 6, 10, 17, 16], // v16
-        [ 6, 11, 16, 19], // v17
-        [ 6, 13, 18, 21], // v18
-        [ 7, 14, 21, 25], // v19
-        [ 8, 16, 20, 25], // v20
-        [ 8, 17, 23, 25], // v21
-        [ 9, 17, 23, 34], // v22
-        [ 9, 18, 25, 30], // v23
-        [10, 20, 27, 32], // v24
-        [12, 21, 29, 35], // v25
-        [12, 23, 34, 37], // v26
-        [12, 25, 34, 40], // v27
-    ];
-
-    private const ECC_PER_BLOCK = [
-        [ 7, 10, 13, 17], // v1
-        [10, 16, 22, 28], // v2
-        [15, 26, 18, 22], // v3
-        [20, 18, 26, 16], // v4
-        [26, 24, 18, 22], // v5
-        [18, 16, 24, 28], // v6
-        [20, 18, 18, 26], // v7
-        [24, 22, 22, 26], // v8
-        [30, 22, 20, 24], // v9
-        [18, 26, 24, 28], // v10
-        [20, 30, 28, 24], // v11
-        [24, 22, 26, 28], // v12
-        [26, 22, 24, 22], // v13
-        [30, 24, 20, 24], // v14
-        [22, 24, 30, 24], // v15
-        [24, 28, 24, 30], // v16
-        [28, 28, 28, 28], // v17
-        [30, 26, 28, 28], // v18
-        [28, 26, 26, 26], // v19
-        [28, 26, 30, 28], // v20
-        [28, 26, 28, 30], // v21
-        [28, 28, 30, 24], // v22
-        [30, 28, 30, 30], // v23
-        [30, 28, 30, 30], // v24
-        [26, 28, 30, 30], // v25
-        [28, 28, 28, 30], // v26
-        [30, 28, 30, 30], // v27
-    ];
-
     private const TOTAL_CODEWORDS = [
         0,
         26, 44, 70, 100, 134, 172, 196, 242, 292, 346,
         404, 466, 532, 581, 655, 733, 815, 901, 991, 1085,
         1156, 1258, 1364, 1474, 1588, 1706, 1828,
+    ];
+
+    // [version-1][ecl] = [g1_blocks, g1_data, ecc_per_block, g2_blocks, g2_data]
+    private const EC_BLOCKS = [
+        [[1,19,7,0,0],[1,16,10,0,0],[1,13,13,0,0],[1,9,17,0,0]],         // v1
+        [[1,34,10,0,0],[1,28,16,0,0],[1,22,22,0,0],[1,16,28,0,0]],       // v2
+        [[1,55,15,0,0],[1,44,26,0,0],[2,17,18,0,0],[2,13,22,0,0]],       // v3
+        [[1,80,20,0,0],[2,32,18,0,0],[2,24,26,0,0],[4,9,16,0,0]],        // v4
+        [[1,108,26,0,0],[2,43,24,0,0],[2,15,18,2,16],[2,11,22,2,12]],    // v5
+        [[2,68,18,0,0],[4,27,16,0,0],[4,19,24,0,0],[4,15,28,0,0]],       // v6
+        [[2,78,20,0,0],[4,31,18,0,0],[2,14,18,4,15],[4,13,26,1,14]],     // v7
+        [[2,97,24,0,0],[2,38,22,2,39],[4,18,22,2,19],[4,14,26,2,15]],    // v8
+        [[2,116,30,0,0],[3,36,22,2,37],[4,16,20,4,17],[4,12,24,4,13]],   // v9
+        [[2,68,18,2,69],[4,43,26,1,44],[6,19,24,2,20],[6,15,28,2,16]],   // v10
+        [[4,81,20,0,0],[1,50,30,4,51],[4,22,28,4,23],[3,12,24,8,13]],    // v11
+        [[2,92,24,2,93],[6,36,22,2,37],[4,20,26,6,21],[7,14,28,4,15]],   // v12
+        [[4,107,26,0,0],[8,37,22,1,38],[8,20,24,4,21],[12,11,22,4,12]],  // v13
+        [[3,115,30,1,116],[4,40,24,5,41],[11,16,20,5,17],[11,12,24,5,13]], // v14
+        [[5,87,22,1,88],[5,41,24,5,42],[5,24,30,7,25],[11,12,24,7,13]],  // v15
+        [[5,98,24,1,99],[7,45,28,3,46],[15,19,24,2,20],[3,15,30,13,16]], // v16
+        [[1,107,28,5,108],[10,46,28,1,47],[1,22,28,15,23],[2,14,28,17,15]], // v17
+        [[5,120,30,1,121],[9,43,26,4,44],[17,22,28,1,23],[2,14,28,19,15]], // v18
+        [[3,113,28,4,114],[3,44,26,11,45],[17,21,26,4,22],[9,13,26,16,14]], // v19
+        [[3,107,28,5,108],[3,41,26,13,42],[15,24,30,5,25],[15,15,28,10,16]], // v20
+        [[4,116,28,4,117],[17,42,26,0,0],[17,22,28,6,23],[19,16,30,6,17]], // v21
+        [[2,111,28,7,112],[17,46,28,0,0],[7,24,30,16,25],[34,13,24,0,0]], // v22
+        [[4,121,30,5,122],[4,47,28,14,48],[11,24,30,14,25],[16,15,30,14,16]], // v23
+        [[6,117,30,4,118],[6,45,28,14,46],[11,24,30,16,25],[30,16,30,2,17]], // v24
+        [[8,106,26,4,107],[8,47,28,13,48],[7,24,30,22,25],[22,15,30,13,16]], // v25
+        [[10,114,28,2,115],[19,46,28,4,47],[28,22,28,6,23],[33,16,30,4,17]], // v26
+        [[8,122,30,4,123],[22,45,28,3,46],[8,23,30,26,24],[12,15,30,28,16]], // v27
     ];
 
     private const ALIGNMENT_POSITIONS = [
@@ -248,14 +219,13 @@ class FastEncoder implements EncoderInterface
         }
         $fc = self::$formatCache[$fmtKey];
 
-        $numBlocks = self::NUM_BLOCKS[$version - 1][$eclVal];
-        $blockEccLen = self::ECC_PER_BLOCK[$version - 1][$eclVal];
-
-        // === Ensure RS factor table cache ===
-        if (!isset(self::$rsCache[$blockEccLen])) {
-            self::buildRsCache($blockEccLen);
+        // === Ensure RS factor table cache (per-block ECC count) ===
+        $ecBlock = self::EC_BLOCKS[$version - 1][$eclVal];
+        $eccPerBlock = $ecBlock[2];
+        if (!isset(self::$rsCache[$eccPerBlock])) {
+            self::buildRsCache($eccPerBlock);
         }
-        $factorTable = self::$rsCache[$blockEccLen];
+        $factorTable = self::$rsCache[$eccPerBlock];
 
         // =====================================================================
         // HOT PATH — everything below is inlined, zero method calls
@@ -290,6 +260,7 @@ class FastEncoder implements EncoderInterface
             $usedCodewords = $dataLen + 3;
         }
 
+        // Pad to dataCodewords
         $padByte = 0xEC;
         for ($i = $usedCodewords; $i < $dataCodewords; $i++) {
             $codewords[$i] = $padByte;
@@ -297,55 +268,59 @@ class FastEncoder implements EncoderInterface
         }
 
         // === 2. Reed-Solomon ECC with multi-block interleaving ===
-        $numShortBlocks = $numBlocks - $totalCodewords % $numBlocks;
-        $shortBlockLen = intdiv($totalCodewords, $numBlocks);
-        $shortDataLen = $shortBlockLen - $blockEccLen;
+        $g1Blocks = $ecBlock[0];
+        $g1Data   = $ecBlock[1];
+        $g2Blocks = $ecBlock[3];
+        $g2Data   = $ecBlock[4];
+        $numBlocks = $g1Blocks + $g2Blocks;
 
         $blockData = [];
-        $blockEcc = [];
+        $blockEcc  = [];
         $k = 0;
         for ($b = 0; $b < $numBlocks; $b++) {
-            $dLen = $b < $numShortBlocks ? $shortDataLen : $shortDataLen + 1;
-            $blockData[$b] = array_slice($codewords, $k, $dLen);
-            $k += $dLen;
+            $dlen = ($b < $g1Blocks) ? $g1Data : $g2Data;
+            $bd = array_slice($codewords, $k, $dlen);
+            $k += $dlen;
 
-            $ecc = array_fill(0, $blockEccLen, 0);
-            for ($i = 0; $i < $dLen; $i++) {
-                $factor = $blockData[$b][$i] ^ array_shift($ecc);
+            $ecc = array_fill(0, $eccPerBlock, 0);
+            for ($i = 0; $i < $dlen; $i++) {
+                $factor = $bd[$i] ^ array_shift($ecc);
                 $ecc[] = 0;
                 if ($factor !== 0) {
                     $ft = $factorTable[$factor];
-                    for ($j = 0; $j < $blockEccLen; $j++) {
+                    for ($j = 0; $j < $eccPerBlock; $j++) {
                         $ecc[$j] ^= $ft[$j];
                     }
                 }
             }
-            $blockEcc[$b] = $ecc;
+            $blockData[$b] = $bd;
+            $blockEcc[$b]  = $ecc;
         }
 
-        $longDataLen = $shortDataLen + 1;
-        $allCount = $totalCodewords;
-        $codewords = [];
-        $idx = 0;
-        for ($col = 0; $col < $longDataLen; $col++) {
+        $maxDataLen = ($g2Blocks > 0) ? $g2Data : $g1Data;
+        $interleaved = [];
+        for ($col = 0; $col < $maxDataLen; $col++) {
             for ($b = 0; $b < $numBlocks; $b++) {
-                $dLen = $b < $numShortBlocks ? $shortDataLen : $longDataLen;
-                if ($col < $dLen) {
-                    $codewords[$idx++] = $blockData[$b][$col];
+                $dlen = ($b < $g1Blocks) ? $g1Data : $g2Data;
+                if ($col < $dlen) {
+                    $interleaved[] = $blockData[$b][$col];
                 }
             }
         }
-        for ($col = 0; $col < $blockEccLen; $col++) {
+        for ($col = 0; $col < $eccPerBlock; $col++) {
             for ($b = 0; $b < $numBlocks; $b++) {
-                $codewords[$idx++] = $blockEcc[$b][$col];
+                $interleaved[] = $blockEcc[$b][$col];
             }
         }
+        $codewords = $interleaved;
 
         // === 3. Place data into int-pair rows/cols ===
         $rowsHi = $vc['baseRowsHi'];
         $rowsLo = $vc['baseRowsLo'];
         $colsHi = $vc['baseColsHi'];
         $colsLo = $vc['baseColsLo'];
+
+        $allCount = count($codewords);
 
         // Place data bits using pre-computed zigzag positions
         $zigX = $vc['zigX'];
@@ -407,124 +382,123 @@ class FastEncoder implements EncoderInterface
             $penalty = 0;
             $darkCount = 0;
 
-            $getModule = static function (int $x, int $y) use (&$mrHi, &$mrLo): bool {
-                return $x < 64
-                    ? (bool)(($mrLo[$y] >> $x) & 1)
-                    : (bool)(($mrHi[$y] >> ($x - 64)) & 1);
-            };
-
-            $addHistory = static function (int $runLen, array &$hist) use ($size): void {
-                if ($hist[0] === 0) {
-                    $runLen += $size;
-                }
-                for ($i = 6; $i >= 1; $i--) {
-                    $hist[$i] = $hist[$i - 1];
-                }
-                $hist[0] = $runLen;
-            };
-
-            $countPatterns = static function (array &$hist): int {
-                $n = $hist[1];
-                if ($n <= 0) {
-                    return 0;
-                }
-                $core = $hist[2] === $n && $hist[3] === $n * 3 && $hist[4] === $n && $hist[5] === $n;
-                return ($core && $hist[0] >= $n * 4 && $hist[6] >= $n ? 1 : 0)
-                     + ($core && $hist[6] >= $n * 4 && $hist[0] >= $n ? 1 : 0);
-            };
-
-            $terminateAndCount = static function (bool $curColor, int $curLen, array &$hist) use ($size, $addHistory, $countPatterns): int {
-                if ($curColor) {
-                    $addHistory($curLen, $hist);
-                    $curLen = 0;
-                }
-                $curLen += $size;
-                $addHistory($curLen, $hist);
-                return $countPatterns($hist);
-            };
-
             for ($y = 0; $y < $size; $y++) {
-                $lo = $mrLo[$y];
-                $hi = $mrHi[$y];
-                $darkCount += $pop[$lo & 0xff] + $pop[($lo >> 8) & 0xff]
-                    + $pop[($lo >> 16) & 0xff] + $pop[($lo >> 24) & 0xff]
-                    + $pop[($lo >> 32) & 0xff] + $pop[($lo >> 40) & 0xff]
-                    + $pop[($lo >> 48) & 0xff] + $pop[($lo >> 56) & 0xff]
-                    + $pop[$hi & 0xff] + $pop[($hi >> 8) & 0xff]
-                    + $pop[($hi >> 16) & 0xff] + $pop[($hi >> 24) & 0xff]
-                    + $pop[($hi >> 32) & 0xff] + $pop[($hi >> 40) & 0xff]
-                    + $pop[($hi >> 48) & 0xff] + $pop[($hi >> 56) & 0xff];
-
-                $runColor = false;
-                $runX = 0;
-                $runHistory = [0, 0, 0, 0, 0, 0, 0];
+                $lo = $mrLo[$y]; $hi = $mrHi[$y];
+                $runColor = 0; $runLen = 0;
+                $hist = [0,0,0,0,0,0,0];
                 for ($x = 0; $x < $size; $x++) {
-                    if ($getModule($x, $y) === $runColor) {
-                        $runX++;
-                        if ($runX === 5) {
-                            $penalty += 3;
-                        } elseif ($runX > 5) {
-                            $penalty++;
-                        }
+                    $c = ($x < 64) ? (($lo >> $x) & 1) : (($hi >> ($x - 64)) & 1);
+                    if ($c === $runColor) {
+                        $runLen++;
+                        if ($runLen === 5) $penalty += 3;
+                        elseif ($runLen > 5) $penalty++;
                     } else {
-                        $addHistory($runX, $runHistory);
+                        if ($hist[0] === 0) $runLen += $size;
+                        $hist[6] = $hist[5]; $hist[5] = $hist[4]; $hist[4] = $hist[3];
+                        $hist[3] = $hist[2]; $hist[2] = $hist[1]; $hist[1] = $hist[0]; $hist[0] = $runLen;
                         if (!$runColor) {
-                            $penalty += $countPatterns($runHistory) * 40;
+                            $n = $hist[1];
+                            if ($n > 0 && $hist[2] === $n && $hist[3] === $n * 3 && $hist[4] === $n && $hist[5] === $n) {
+                                if ($hist[0] >= $n * 4 && $hist[6] >= $n) $penalty += 40;
+                                if ($hist[6] >= $n * 4 && $hist[0] >= $n) $penalty += 40;
+                            }
                         }
-                        $runColor = $getModule($x, $y);
-                        $runX = 1;
+                        $runColor = $c;
+                        $runLen = 1;
                     }
+                    $darkCount += $c;
                 }
-                $penalty += $terminateAndCount($runColor, $runX, $runHistory) * 40;
+                if ($runColor) {
+                    if ($hist[0] === 0) $runLen += $size;
+                    $hist[6] = $hist[5]; $hist[5] = $hist[4]; $hist[4] = $hist[3];
+                    $hist[3] = $hist[2]; $hist[2] = $hist[1]; $hist[1] = $hist[0]; $hist[0] = $runLen;
+                    $runLen = 0;
+                }
+                $runLen += $size;
+                if ($hist[0] === 0) $runLen += $size;
+                $hist[6] = $hist[5]; $hist[5] = $hist[4]; $hist[4] = $hist[3];
+                $hist[3] = $hist[2]; $hist[2] = $hist[1]; $hist[1] = $hist[0]; $hist[0] = $runLen;
+                $n = $hist[1];
+                if ($n > 0 && $hist[2] === $n && $hist[3] === $n * 3 && $hist[4] === $n && $hist[5] === $n) {
+                    if ($hist[0] >= $n * 4 && $hist[6] >= $n) $penalty += 40;
+                    if ($hist[6] >= $n * 4 && $hist[0] >= $n) $penalty += 40;
+                }
             }
 
             for ($x = 0; $x < $size; $x++) {
-                $runColor = false;
-                $runY = 0;
-                $runHistory = [0, 0, 0, 0, 0, 0, 0];
+                $runColor = 0; $runLen = 0;
+                $hist = [0,0,0,0,0,0,0];
                 for ($y = 0; $y < $size; $y++) {
-                    if ($getModule($x, $y) === $runColor) {
-                        $runY++;
-                        if ($runY === 5) {
-                            $penalty += 3;
-                        } elseif ($runY > 5) {
-                            $penalty++;
-                        }
+                    $lo = $mrLo[$y]; $hi = $mrHi[$y];
+                    $c = ($x < 64) ? (($lo >> $x) & 1) : (($hi >> ($x - 64)) & 1);
+                    if ($c === $runColor) {
+                        $runLen++;
+                        if ($runLen === 5) $penalty += 3;
+                        elseif ($runLen > 5) $penalty++;
                     } else {
-                        $addHistory($runY, $runHistory);
+                        if ($hist[0] === 0) $runLen += $size;
+                        $hist[6] = $hist[5]; $hist[5] = $hist[4]; $hist[4] = $hist[3];
+                        $hist[3] = $hist[2]; $hist[2] = $hist[1]; $hist[1] = $hist[0]; $hist[0] = $runLen;
                         if (!$runColor) {
-                            $penalty += $countPatterns($runHistory) * 40;
+                            $n = $hist[1];
+                            if ($n > 0 && $hist[2] === $n && $hist[3] === $n * 3 && $hist[4] === $n && $hist[5] === $n) {
+                                if ($hist[0] >= $n * 4 && $hist[6] >= $n) $penalty += 40;
+                                if ($hist[6] >= $n * 4 && $hist[0] >= $n) $penalty += 40;
+                            }
                         }
-                        $runColor = $getModule($x, $y);
-                        $runY = 1;
+                        $runColor = $c;
+                        $runLen = 1;
                     }
                 }
-                $penalty += $terminateAndCount($runColor, $runY, $runHistory) * 40;
+                if ($runColor) {
+                    if ($hist[0] === 0) $runLen += $size;
+                    $hist[6] = $hist[5]; $hist[5] = $hist[4]; $hist[4] = $hist[3];
+                    $hist[3] = $hist[2]; $hist[2] = $hist[1]; $hist[1] = $hist[0]; $hist[0] = $runLen;
+                    $runLen = 0;
+                }
+                $runLen += $size;
+                if ($hist[0] === 0) $runLen += $size;
+                $hist[6] = $hist[5]; $hist[5] = $hist[4]; $hist[4] = $hist[3];
+                $hist[3] = $hist[2]; $hist[2] = $hist[1]; $hist[1] = $hist[0]; $hist[0] = $runLen;
+                $n = $hist[1];
+                if ($n > 0 && $hist[2] === $n && $hist[3] === $n * 3 && $hist[4] === $n && $hist[5] === $n) {
+                    if ($hist[0] >= $n * 4 && $hist[6] >= $n) $penalty += 40;
+                    if ($hist[6] >= $n * 4 && $hist[0] >= $n) $penalty += 40;
+                }
             }
 
             for ($y = 0; $y < $sizeM1; $y++) {
                 for ($x = 0; $x < $sizeM1; $x++) {
-                    $color = $getModule($x, $y);
-                    if ($color === $getModule($x + 1, $y)
-                        && $color === $getModule($x, $y + 1)
-                        && $color === $getModule($x + 1, $y + 1)) {
+                    if ($x < 64) {
+                        $c = ($mrLo[$y] >> $x) & 1;
+                        $c1 = ($mrLo[$y] >> ($x + 1)) & 1;
+                        $c2 = ($mrLo[$y + 1] >> $x) & 1;
+                        $c3 = ($mrLo[$y + 1] >> ($x + 1)) & 1;
+                    } elseif ($x === 63) {
+                        $c = ($mrLo[$y] >> 63) & 1;
+                        $c1 = $mrHi[$y] & 1;
+                        $c2 = ($mrLo[$y + 1] >> 63) & 1;
+                        $c3 = $mrHi[$y + 1] & 1;
+                    } else {
+                        $bx = $x - 64;
+                        $c = ($mrHi[$y] >> $bx) & 1;
+                        $c1 = ($mrHi[$y] >> ($bx + 1)) & 1;
+                        $c2 = ($mrHi[$y + 1] >> $bx) & 1;
+                        $c3 = ($mrHi[$y + 1] >> ($bx + 1)) & 1;
+                    }
+                    if ($c === $c1 && $c === $c2 && $c === $c3) {
                         $penalty += 3;
                     }
                 }
             }
 
-            $total = $size * $size;
-            $k = (int)((\abs($darkCount * 20 - $total * 10) + $total - 1) / $total) - 1;
-            $penalty += $k * 10;
+            $k = intdiv(abs($darkCount * 20 - $totalModules * 10) + $totalModules - 1, $totalModules) - 1;
+            $penalty += ($k > 0 ? $k : 0) * 10;
 
             if ($penalty < $bestScore) {
                 $bestScore = $penalty;
                 $bestMask = $mask;
             }
-        }
-
-        if (getenv('SCANME_DEBUG_PENALTIES')) {
-            fwrite(STDERR, "PHP best mask: $bestMask (penalty=$bestScore)\n");
         }
 
         // === 5. Apply best mask to get final rows ===
