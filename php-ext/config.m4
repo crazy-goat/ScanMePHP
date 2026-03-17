@@ -26,8 +26,10 @@ if test "$PHP_SCANMEQR" != "no"; then
     SCANMEQR_LIB="$SCANMEQR_DIR/build/libscanme_qr.so"
   elif test -f "$SCANMEQR_DIR/build/libscanme_qr.a"; then
     SCANMEQR_LIB="$SCANMEQR_DIR/build/libscanme_qr.a"
+  elif test -f "$SCANMEQR_DIR/build/libscanme_qr.dylib"; then
+    SCANMEQR_LIB="$SCANMEQR_DIR/build/libscanme_qr.dylib"
   else
-    AC_MSG_ERROR([libscanme_qr.so or libscanme_qr.a not found in $SCANMEQR_DIR/build/])
+    AC_MSG_ERROR([libscanme_qr.so, libscanme_qr.a, or libscanme_qr.dylib not found in $SCANMEQR_DIR/build/])
   fi
 
   AC_MSG_RESULT([Using scanmeqr library from: $SCANMEQR_DIR])
