@@ -39,6 +39,9 @@ endif()
 
 add_library(scanme_qr SHARED ${LIB_SOURCES})
 
+# Define SCANME_QR_EXPORTS when building the library (for Windows DLL exports)
+target_compile_definitions(scanme_qr PRIVATE SCANME_QR_EXPORTS)
+
 target_include_directories(scanme_qr
     PUBLIC include
     PRIVATE src

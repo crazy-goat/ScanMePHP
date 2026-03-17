@@ -102,9 +102,7 @@ jobs:
         run: |
           cmake -B build -S . -A x64 `
             -DCMAKE_BUILD_TYPE=Release `
-            -DBUILD_TESTS=OFF `
-            -DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=OFF `
-            -DSCANME_QR_EXPORTS=ON
+            -DBUILD_TESTS=OFF
       
       - name: Build library
         working-directory: clib
