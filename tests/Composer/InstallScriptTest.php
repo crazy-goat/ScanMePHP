@@ -72,13 +72,13 @@ class InstallScriptTest extends TestCase
                 ],
             ],
         ];
-        
+
         file_put_contents(
             $this->tempDir . '/vendor/composer/installed.json',
             json_encode($installedJson, JSON_PRETTY_PRINT)
         );
-        
+
         $version = InstallScript::getPackageVersion($this->tempDir);
-        $this->assertEquals('v0.4.4', $version);
+        $this->assertEquals('0.4.4', $version);
     }
 }
