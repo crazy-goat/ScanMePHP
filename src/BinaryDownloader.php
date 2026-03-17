@@ -18,13 +18,16 @@ class BinaryDownloader
         if (!preg_match('/^v?\d+\.\d+\.\d+$/', $version)) {
             throw DownloadException::invalidVersion($version);
         }
-        
+
+        // Normalize version to include 'v' prefix for GitHub releases URL
+        $versionWithTag = str_starts_with($version, 'v') ? $version : 'v' . $version;
+
         $this->baseUrl = sprintf(
             'https://github.com/%s/releases/download/%s',
             $repository,
-            $version
+            $versionWithTag
         );
-        
+
         if (!is_dir($downloadPath)) {
             mkdir($downloadPath, 0755, true);
         }

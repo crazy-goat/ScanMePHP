@@ -138,29 +138,32 @@ class InstallScript
     {
         // Try to read from composer/installed.json
         $installedJsonPath = $projectRoot . '/vendor/composer/installed.json';
-        
-        if (!file_exists($installedJsonPath)) {
-            throw new \RuntimeException('Cannot find vendor/composer/installed.json');
-        }
-        
-        $installed = json_decode(file_get_contents($installedJsonPath), true);
-        
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            throw new \RuntimeException('Failed to parse installed.json');
-        }
-        
-        // Handle both old and new composer formats
-        $packages = $installed['packages'] ?? $installed;
-        
-        foreach ($packages as $package) {
-            if ($package['name'] === self::PACKAGE_NAME) {
-                $version = $package['version'];
-                
-                // Normalize version (remove 'v' prefix if present for consistency)
-                return $version;
+
+        if (file_exists($installedJsonPath)) {
+            $installed = json_decode(file_get_contents($installedJsonPath), true);
+
+            if (json_last_error() === JSON_ERROR_NONE) {
+                // Handle both old and new composer formats
+                $packages = $installed['packages'] ?? $installed;
+
+                foreach ($packages as $package) {
+                    if ($package['name'] === self::PACKAGE_NAME) {
+                        $version = $package['version'];
+                        // Normalize version (remove 'v' prefix if present for consistency)
+                        return ltrim($version, 'v');
+                    }
+                }
             }
         }
-        
+
+        // Fallback: try to get version from git tag (for development/root project)
+        if (is_dir($projectRoot . '/.git')) {
+            $tag = trim(shell_exec('git describe --tags --abbrev=0 2>/dev/null') ?: '');
+            if ($tag !== '') {
+                return ltrim($tag, 'v');
+            }
+        }
+
         throw new \RuntimeException('Package ' . self::PACKAGE_NAME . ' not found in installed.json');
     }
 
