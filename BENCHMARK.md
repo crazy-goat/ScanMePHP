@@ -4,7 +4,7 @@ Benchmark comparing three encoder implementations across QR versions 1–27.
 
 - **Encoder (portable)** — scalar algorithms, v1–v40, all encoding modes (Numeric, Alphanumeric, Byte, Kanji), 32/64-bit safe
 - **FastEncoder (64-bit)** — monolithic int-packed encoder using int-pair `[$hi, $lo]` representation, v1–v27, Byte mode only, 64-bit PHP required
-- **FfiEncoder (native C++)** — C++20 library via PHP FFI, SIMD-ready Row3 bitset matrix, precomputed RS factor tables, v1–v27, Byte mode only
+- **FfiEncoder (native C++)** — C++20 library via PHP FFI, SIMD-ready Row3 bitset matrix, precomputed RS factor tables, v1–v40, Byte mode only
 
 ## Environment
 
@@ -35,7 +35,7 @@ Benchmark comparing three encoder implementations across QR versions 1–27.
 
 ```
 QRCode (factory — auto-selects fastest available)
-  ├── FfiEncoder (v1-v27, C++ via FFI, requires libscanme_qr.so)
+  ├── FfiEncoder (v1-v40, C++ via FFI, requires libscanme_qr.so)
   │     └── fallback ↓
   ├── FastEncoder (v1-v27, Byte mode, int-pair packed, 64-bit PHP)
   │     └── fallback ↓

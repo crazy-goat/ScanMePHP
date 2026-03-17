@@ -1,8 +1,32 @@
 # ScanMePHP
 
-Pure PHP QR code generator. Zero dependencies, zero extensions. PHP 8.1+.
+**The fastest pure PHP QR code generator with optional native C++ acceleration.**
+
+Generate QR codes in PHP without dependencies — then go **10× faster** with a single C++ library. Zero bloat, maximum speed, production-ready.
 
 QR encoding algorithms are based on [Nayuki's QR Code generator](https://www.nayuki.io/page/qr-code-generator-library).
+
+## Why ScanMePHP?
+
+**🚀 Blazing Fast — 3-Tier Performance**
+- **Native C++ via FFI**: 10–12× faster than pure PHP (sub-millisecond generation)
+- **64-bit Optimized**: 2× faster with int-pair bit packing (no extensions needed)
+- **Portable Fallback**: Works on any PHP 8.1+, 32-bit or 64-bit
+
+Auto-selects the fastest encoder available — no configuration needed.
+
+**📦 Zero Dependencies**
+- No Composer packages to install
+- No GD, Imagick, or extensions required
+- Single `composer require`, instant QR codes
+
+**🎨 8 Output Formats**
+SVG, PNG (pure PHP, 1-bit), HTML (div/table), ASCII (3 styles). Works in terminals, browsers, emails, and print.
+
+**🔧 Full QR Spec Support**
+- All versions v1–v40 (17 to 2953 bytes)
+- All error correction levels (L/M/Q/H)
+- Custom styling, colors, labels, dark mode
 
 ## Features
 
@@ -22,7 +46,7 @@ composer require crazy-goat/scanmephp
 ## Quick Start
 
 ```php
-use ScanMePHP\QRCode;
+use CrazyGoat\ScanMePHP\QRCode;
 
 $qr = new QRCode('https://example.com');
 echo $qr->render();
@@ -44,10 +68,12 @@ ScanMePHP ships with 8 renderers. Each implements `RendererInterface` and can be
 
 ### ASCII — FullBlocksRenderer (default)
 
+**Example:** [qrcode_fullblocks.txt](examples/generated-assets/qrcode_fullblocks.txt)
+
 ```php
-use ScanMePHP\QRCode;
-use ScanMePHP\QRCodeConfig;
-use ScanMePHP\Renderer\FullBlocksRenderer;
+use CrazyGoat\ScanMePHP\QRCode;
+use CrazyGoat\ScanMePHP\QRCodeConfig;
+use CrazyGoat\ScanMePHP\Renderer\FullBlocksRenderer;
 
 $config = new QRCodeConfig(
     engine: new FullBlocksRenderer(sideMargin: 4),
@@ -59,10 +85,12 @@ echo $qr->render();
 
 ### ASCII — HalfBlocksRenderer
 
+**Example:** [qrcode_halfblocks.txt](examples/generated-assets/qrcode_halfblocks.txt)
+
 Compact output — two rows per character using `▀▄█` half-block characters.
 
 ```php
-use ScanMePHP\Renderer\HalfBlocksRenderer;
+use CrazyGoat\ScanMePHP\Renderer\HalfBlocksRenderer;
 
 $config = new QRCodeConfig(
     engine: new HalfBlocksRenderer(sideMargin: 4),
@@ -71,10 +99,12 @@ $config = new QRCodeConfig(
 
 ### ASCII — SimpleRenderer
 
+**Example:** [qrcode_simple.txt](examples/generated-assets/qrcode_simple.txt)
+
 Uses `●` dots. Works in terminals without full Unicode block support.
 
 ```php
-use ScanMePHP\Renderer\SimpleRenderer;
+use CrazyGoat\ScanMePHP\Renderer\SimpleRenderer;
 
 $config = new QRCodeConfig(
     engine: new SimpleRenderer(sideMargin: 4),
@@ -83,9 +113,11 @@ $config = new QRCodeConfig(
 
 ### SVG — SvgRenderer
 
+**Examples:** [qrcode.svg](examples/generated-assets/qrcode.svg) | [qrcode_rounded.svg](examples/generated-assets/qrcode_rounded.svg) | [qrcode_dark.svg](examples/generated-assets/qrcode_dark.svg) | [qrcode_with_label.svg](examples/generated-assets/qrcode_with_label.svg)
+
 ```php
-use ScanMePHP\Renderer\SvgRenderer;
-use ScanMePHP\ModuleStyle;
+use CrazyGoat\ScanMePHP\Renderer\SvgRenderer;
+use CrazyGoat\ScanMePHP\ModuleStyle;
 
 $config = new QRCodeConfig(
     engine: new SvgRenderer(moduleSize: 12),
@@ -98,12 +130,14 @@ $qr->saveToFile('qrcode.svg');
 
 ### PNG — PngRenderer
 
+**Examples:** [qrcode.png](examples/generated-assets/qrcode.png) | [qrcode_small.png](examples/generated-assets/qrcode_small.png) | [qrcode_large.png](examples/generated-assets/qrcode_large.png) | [qrcode_high_ecc.png](examples/generated-assets/qrcode_high_ecc.png)
+
 Generates valid PNG files in pure PHP — no GD, no Imagick, no external libraries. Black and white only, 1-bit monochrome. Ideal for email attachments, API responses, and print.
 
 > **Note:** Labels are not supported in PNG output (no font engine). Passing a `label` will throw a `RenderException`.
 
 ```php
-use ScanMePHP\Renderer\PngRenderer;
+use CrazyGoat\ScanMePHP\Renderer\PngRenderer;
 
 $config = new QRCodeConfig(
     engine: new PngRenderer(moduleSize: 10),
@@ -117,10 +151,12 @@ $dataUri = $qr->getDataUri(); // data:image/png;base64,...
 
 ### HTML — HtmlDivRenderer
 
+**Examples:** [qrcode_div.html](examples/generated-assets/qrcode_div.html) | [qrcode_div_full.html](examples/generated-assets/qrcode_div_full.html) | [qrcode_div_inverted.html](examples/generated-assets/qrcode_div_inverted.html) | [qrcode_div_label.html](examples/generated-assets/qrcode_div_label.html)
+
 Renders QR as a `<div>` flexbox grid with inline styles. No external CSS needed.
 
 ```php
-use ScanMePHP\Renderer\HtmlDivRenderer;
+use CrazyGoat\ScanMePHP\Renderer\HtmlDivRenderer;
 
 $config = new QRCodeConfig(
     engine: new HtmlDivRenderer(moduleSize: 10, fullHtml: false),
@@ -139,10 +175,12 @@ $config = new QRCodeConfig(
 
 ### HTML — HtmlTableRenderer
 
+**Examples:** [qrcode_table.html](examples/generated-assets/qrcode_table.html) | [qrcode_table_full.html](examples/generated-assets/qrcode_table_full.html) | [qrcode_table_inverted.html](examples/generated-assets/qrcode_table_inverted.html) | [qrcode_table_label.html](examples/generated-assets/qrcode_table_label.html)
+
 Same as above but uses `<table>` with `<td>` elements.
 
 ```php
-use ScanMePHP\Renderer\HtmlTableRenderer;
+use CrazyGoat\ScanMePHP\Renderer\HtmlTableRenderer;
 
 $config = new QRCodeConfig(
     engine: new HtmlTableRenderer(moduleSize: 8, fullHtml: true),
@@ -154,10 +192,10 @@ $config = new QRCodeConfig(
 All options are set via `QRCodeConfig`:
 
 ```php
-use ScanMePHP\QRCodeConfig;
-use ScanMePHP\ErrorCorrectionLevel;
-use ScanMePHP\ModuleStyle;
-use ScanMePHP\Renderer\SvgRenderer;
+use CrazyGoat\ScanMePHP\QRCodeConfig;
+use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
+use CrazyGoat\ScanMePHP\ModuleStyle;
+use CrazyGoat\ScanMePHP\Renderer\SvgRenderer;
 
 $config = new QRCodeConfig(
     engine: new SvgRenderer(),                          // renderer instance
@@ -213,9 +251,9 @@ echo $qr;                   // __toString() calls render()
 Implement `RendererInterface`:
 
 ```php
-use ScanMePHP\RendererInterface;
-use ScanMePHP\Matrix;
-use ScanMePHP\RenderOptions;
+use CrazyGoat\ScanMePHP\RendererInterface;
+use CrazyGoat\ScanMePHP\Matrix;
+use CrazyGoat\ScanMePHP\RenderOptions;
 
 class MyCustomRenderer implements RendererInterface
 {
@@ -244,9 +282,22 @@ ScanMePHP includes three encoder implementations. `QRCode` auto-selects the fast
 
 | Encoder | Versions | Requirements | Relative Speed |
 |---|---|---|---|
-| `FfiEncoder` | v1–v27 | 64-bit PHP + FFI + `libscanme_qr.so` | **10–12×** faster |
+| `FfiEncoder` | v1–v40 | 64-bit PHP + FFI + `libscanme_qr.so` | **10–12×** faster |
 | `FastEncoder` | v1–v27 | 64-bit PHP | **~2×** faster |
 | `Encoder` | v1–v40 | any PHP 8.1+ | baseline |
+
+### Capacity (Byte Mode)
+
+Maximum data length for URL/text encoding (Byte mode) at different QR versions:
+
+| Version | Size | L (Low) | M (Medium) | Q (Quartile) | H (High) |
+|---|---|---|---|---|---|
+| v1 | 21×21 | 17 | 14 | 11 | 7 |
+| v10 | 57×57 | 271 | 213 | 151 | 119 |
+| v27 | 125×125 | 1465 | 1125 | 805 | 625 |
+| v40 | 177×177 | **2953** | **2331** | **1663** | **1273** |
+
+**Note:** FastEncoder and FfiEncoder support up to v27 (1465 bytes max). For larger data, the portable Encoder (v1–v40) is automatically used.
 
 ### Benchmark Results
 
@@ -283,7 +334,7 @@ cp clib/build/libscanme_qr.so .
 Then pass the library path when creating the encoder:
 
 ```php
-use ScanMePHP\FfiEncoder;
+use CrazyGoat\ScanMePHP\FfiEncoder;
 
 $encoder = new FfiEncoder(__DIR__ . '/libscanme_qr.so');
 $qr = new QRCode('https://example.com', encoder: $encoder);
