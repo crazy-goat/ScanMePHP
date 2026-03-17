@@ -1,4 +1,4 @@
-name: Build FFI Library on Release
+name: Build FFI Library and PHP Extension on Release
 
 on:
   push:
@@ -9,8 +9,9 @@ permissions:
   contents: write
 
 jobs:
-  build-linux:
-    name: Build Linux ${{ matrix.variant }}
+  # FFI Library Builds
+  build-ffi-linux:
+    name: Build FFI Linux ${{ matrix.variant }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -25,18 +26,18 @@ jobs:
       image: ${{ matrix.container }}
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install dependencies (Ubuntu)
         if: matrix.variant == 'glibc'
         run: |
           apt-get update
           apt-get install -y cmake g++ make
-      
+
       - name: Install dependencies (Alpine)
         if: matrix.variant == 'musl'
         run: |
           apk add --no-cache cmake g++ make linux-headers
-      
+
       - name: Build library
         working-directory: clib
         run: |
@@ -44,31 +45,31 @@ jobs:
           cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF \
             -DCMAKE_CXX_FLAGS="${{ matrix.cxx_flags }}"
           make -j$(nproc)
-      
+
       - name: Rename artifact
         working-directory: clib/build
         run: |
           cp libscanme_qr.so "libscanme_qr-linux-${{ matrix.variant }}-x86_64.so"
-      
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: linux-${{ matrix.variant }}-x86_64
+          name: ffi-linux-${{ matrix.variant }}-x86_64
           path: clib/build/libscanme_qr-linux-${{ matrix.variant }}-x86_64.so
 
-  build-macos:
-    name: Build macOS ${{ matrix.arch }}
+  build-ffi-macos:
+    name: Build FFI macOS ${{ matrix.arch }}
     runs-on: macos-latest
     strategy:
       matrix:
         arch: [x86_64, arm64]
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install dependencies
         run: |
           brew install cmake
-      
+
       - name: Build library
         working-directory: clib
         run: |
@@ -76,53 +77,147 @@ jobs:
           cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF \
             -DCMAKE_OSX_ARCHITECTURES="${{ matrix.arch }}"
           make -j$(sysctl -n hw.ncpu)
-      
+
       - name: Rename artifact
         working-directory: clib/build
         run: |
           cp libscanme_qr.dylib "libscanme_qr-macos-${{ matrix.arch }}.dylib"
-      
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: macos-${{ matrix.arch }}
+          name: ffi-macos-${{ matrix.arch }}
           path: clib/build/libscanme_qr-macos-${{ matrix.arch }}.dylib
 
-  build-windows:
-    name: Build Windows x86_64
+  build-ffi-windows:
+    name: Build FFI Windows x86_64
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
-      
+
       - name: Configure CMake
         working-directory: clib
         run: |
           cmake -B build -S . -A x64 `
             -DCMAKE_BUILD_TYPE=Release `
             -DBUILD_TESTS=OFF
-      
+
       - name: Build library
         working-directory: clib
         run: |
           cmake --build build --config Release
-      
+
       - name: Rename artifact
         working-directory: clib/build/Release
         run: |
           copy scanme_qr.dll scanme_qr-windows-x86_64.dll
-      
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: windows-x86_64
+          name: ffi-windows-x86_64
           path: clib/build/Release/scanme_qr-windows-x86_64.dll
+
+  # PHP Extension Builds
+  build-ext-linux:
+    name: Build PHP-Ext Linux ${{ matrix.variant }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - variant: glibc
+            container: ubuntu:22.04
+            php_packages: php-dev
+          - variant: musl
+            container: alpine:latest
+            php_packages: php-dev
+    container:
+      image: ${{ matrix.container }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (Ubuntu)
+        if: matrix.variant == 'glibc'
+        run: |
+          apt-get update
+          apt-get install -y cmake g++ make php-dev
+
+      - name: Install dependencies (Alpine)
+        if: matrix.variant == 'musl'
+        run: |
+          apk add --no-cache php-dev cmake g++ make linux-headers
+
+      - name: Build FFI library (dependency)
+        working-directory: clib
+        run: |
+          mkdir -p build && cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF
+          make -j$(nproc)
+
+      - name: Build PHP extension
+        working-directory: php-ext
+        run: |
+          phpize
+          ./configure --with-scanmeqr="$GITHUB_WORKSPACE/clib"
+          make -j$(nproc)
+
+      - name: Rename artifact
+        working-directory: php-ext/modules
+        run: |
+          cp scanmeqr.so "php-ext-linux-${{ matrix.variant }}-x86_64.so"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ext-linux-${{ matrix.variant }}-x86_64
+          path: php-ext/modules/php-ext-linux-${{ matrix.variant }}-x86_64.so
+
+  build-ext-macos:
+    name: Build PHP-Ext macOS ${{ matrix.arch }}
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [x86_64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          brew install cmake php
+
+      - name: Build FFI library (dependency)
+        working-directory: clib
+        run: |
+          mkdir -p build && cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF \
+            -DCMAKE_OSX_ARCHITECTURES="${{ matrix.arch }}"
+          make -j$(sysctl -n hw.ncpu)
+
+      - name: Build PHP extension
+        working-directory: php-ext
+        run: |
+          phpize
+          ./configure --with-scanmeqr="$GITHUB_WORKSPACE/clib" \
+            -arch ${{ matrix.arch }}
+          make -j$(sysctl -n hw.ncpu)
+
+      - name: Rename artifact
+        working-directory: php-ext/modules
+        run: |
+          cp scanmeqr.so "php-ext-macos-${{ matrix.arch }}.so"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ext-macos-${{ matrix.arch }}
+          path: php-ext/modules/php-ext-macos-${{ matrix.arch }}.so
 
   release:
     name: Create Release
-    needs: [build-linux, build-macos, build-windows]
+    needs: [build-ffi-linux, build-ffi-macos, build-ffi-windows, build-ext-linux, build-ext-macos]
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
@@ -130,10 +225,10 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
-      
+
       - name: List artifacts
         run: ls -la artifacts/
-      
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
@@ -141,17 +236,35 @@ jobs:
           generate_release_notes: true
           body: |
             ## FFI Library Binaries
-            
+
             Prebuilt binaries for the ScanMePHP FFI library are attached to this release:
-            
+
             - `libscanme_qr-linux-glibc-x86_64.so` - Linux with glibc (Ubuntu, Debian, etc.)
             - `libscanme_qr-linux-musl-x86_64.so` - Linux with musl (Alpine Linux)
             - `libscanme_qr-macos-x86_64.dylib` - macOS Intel
             - `libscanme_qr-macos-arm64.dylib` - macOS Apple Silicon
             - `scanme_qr-windows-x86_64.dll` - Windows x86_64
-            
+
             ### Installation
-            
+
             Download the appropriate binary for your platform and place it in your project directory. The PHP FFI encoder will automatically detect and load it.
+
+            ## PHP Extension Binaries
+
+            Precompiled PHP extension binaries are attached to this release:
+
+            - `php-ext-linux-glibc-x86_64.so` - Linux with glibc (Ubuntu, Debian, etc.)
+            - `php-ext-linux-musl-x86_64.so` - Linux with musl (Alpine Linux)
+            - `php-ext-macos-x86_64.so` - macOS Intel
+            - `php-ext-macos-arm64.so` - macOS Apple Silicon
+
+            ### Installation
+
+            1. Download the appropriate binary for your platform
+            2. Place it in your PHP extensions directory (check `php --ini` for location)
+            3. Add `extension=scanmeqr.so` to your php.ini
+            4. Restart your web server or PHP-FPM
+
+            Or use Composer to auto-install: `composer require crazy-goat/scanmephp`
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
