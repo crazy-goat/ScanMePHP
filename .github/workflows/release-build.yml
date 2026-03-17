@@ -140,12 +140,15 @@ jobs:
       - name: Install dependencies (Ubuntu)
         if: matrix.variant == 'glibc'
         run: |
+          export DEBIAN_FRONTEND=noninteractive
+          export TZ=UTC
           apt-get update
           apt-get install -y cmake g++ make php-dev
 
       - name: Install dependencies (Alpine)
         if: matrix.variant == 'musl'
         run: |
+          export TZ=UTC
           apk add --no-cache cmake g++ make linux-headers
           # Install PHP dev from edge repository (use specific version)
           echo "https://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories
