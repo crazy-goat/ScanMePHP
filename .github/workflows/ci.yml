@@ -78,5 +78,17 @@ jobs:
     - name: Install dependencies
       run: composer install --prefer-dist --no-progress
 
+    - name: Install build tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake g++ make
+
+    - name: Build C++ FFI library
+      working-directory: clib
+      run: |
+        mkdir -p build && cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF
+        make -j$(nproc)
+
     - name: Run test suite
       run: composer run-script test
