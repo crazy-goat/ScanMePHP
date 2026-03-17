@@ -130,10 +130,8 @@ jobs:
         include:
           - variant: glibc
             container: ubuntu:22.04
-            php_packages: php-dev
           - variant: musl
-            container: alpine:latest
-            php_packages: php-dev
+            container: alpine:3.19
     container:
       image: ${{ matrix.container }}
     steps:
@@ -148,7 +146,7 @@ jobs:
       - name: Install dependencies (Alpine)
         if: matrix.variant == 'musl'
         run: |
-          apk add --no-cache php-dev cmake g++ make linux-headers
+          apk add --no-cache php8-dev cmake g++ make linux-headers
 
       - name: Build FFI library (dependency)
         working-directory: clib
@@ -200,8 +198,7 @@ jobs:
         working-directory: php-ext
         run: |
           phpize
-          ./configure --with-scanmeqr="$GITHUB_WORKSPACE/clib" \
-            -arch ${{ matrix.arch }}
+          ./configure --with-scanmeqr="$GITHUB_WORKSPACE/clib"
           make -j$(sysctl -n hw.ncpu)
 
       - name: Rename artifact
