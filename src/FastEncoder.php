@@ -384,8 +384,16 @@ class FastEncoder implements EncoderInterface
 
             for ($y = 0; $y < $size; $y++) {
                 $lo = $mrLo[$y]; $hi = $mrHi[$y];
+
+                $darkCount += $pop[$lo & 0xff] + $pop[($lo >> 8) & 0xff]
+                    + $pop[($lo >> 16) & 0xff] + $pop[($lo >> 24) & 0xff]
+                    + $pop[($lo >> 32) & 0xff] + $pop[($lo >> 40) & 0xff]
+                    + $pop[($lo >> 48) & 0xff] + $pop[($lo >> 56) & 0xff]
+                    + $pop[$hi & 0xff] + $pop[($hi >> 8) & 0xff]
+                    + $pop[($hi >> 16) & 0xff] + $pop[($hi >> 24) & 0xff];
+
                 $runColor = 0; $runLen = 0;
-                $hist = [0,0,0,0,0,0,0];
+                $h0 = 0; $h1 = 0; $h2 = 0; $h3 = 0; $h4 = 0; $h5 = 0; $h6 = 0;
                 for ($x = 0; $x < $size; $x++) {
                     $c = ($x < 64) ? (($lo >> $x) & 1) : (($hi >> ($x - 64)) & 1);
                     if ($c === $runColor) {
@@ -393,102 +401,113 @@ class FastEncoder implements EncoderInterface
                         if ($runLen === 5) $penalty += 3;
                         elseif ($runLen > 5) $penalty++;
                     } else {
-                        if ($hist[0] === 0) $runLen += $size;
-                        $hist[6] = $hist[5]; $hist[5] = $hist[4]; $hist[4] = $hist[3];
-                        $hist[3] = $hist[2]; $hist[2] = $hist[1]; $hist[1] = $hist[0]; $hist[0] = $runLen;
+                        if ($h0 === 0) $runLen += $size;
+                        $h6=$h5;$h5=$h4;$h4=$h3;$h3=$h2;$h2=$h1;$h1=$h0;$h0=$runLen;
                         if (!$runColor) {
-                            $n = $hist[1];
-                            if ($n > 0 && $hist[2] === $n && $hist[3] === $n * 3 && $hist[4] === $n && $hist[5] === $n) {
-                                if ($hist[0] >= $n * 4 && $hist[6] >= $n) $penalty += 40;
-                                if ($hist[6] >= $n * 4 && $hist[0] >= $n) $penalty += 40;
+                            if ($h1>0&&$h2===$h1&&$h3===$h1*3&&$h4===$h1&&$h5===$h1) {
+                                if ($h0>=$h1*4&&$h6>=$h1) $penalty+=40;
+                                if ($h6>=$h1*4&&$h0>=$h1) $penalty+=40;
                             }
                         }
-                        $runColor = $c;
-                        $runLen = 1;
+                        $runColor=$c; $runLen=1;
                     }
-                    $darkCount += $c;
                 }
                 if ($runColor) {
-                    if ($hist[0] === 0) $runLen += $size;
-                    $hist[6] = $hist[5]; $hist[5] = $hist[4]; $hist[4] = $hist[3];
-                    $hist[3] = $hist[2]; $hist[2] = $hist[1]; $hist[1] = $hist[0]; $hist[0] = $runLen;
-                    $runLen = 0;
+                    if ($h0===0) $runLen+=$size;
+                    $h6=$h5;$h5=$h4;$h4=$h3;$h3=$h2;$h2=$h1;$h1=$h0;$h0=$runLen;
+                    $runLen=0;
                 }
-                $runLen += $size;
-                if ($hist[0] === 0) $runLen += $size;
-                $hist[6] = $hist[5]; $hist[5] = $hist[4]; $hist[4] = $hist[3];
-                $hist[3] = $hist[2]; $hist[2] = $hist[1]; $hist[1] = $hist[0]; $hist[0] = $runLen;
-                $n = $hist[1];
-                if ($n > 0 && $hist[2] === $n && $hist[3] === $n * 3 && $hist[4] === $n && $hist[5] === $n) {
-                    if ($hist[0] >= $n * 4 && $hist[6] >= $n) $penalty += 40;
-                    if ($hist[6] >= $n * 4 && $hist[0] >= $n) $penalty += 40;
+                $runLen+=$size;
+                if ($h0===0) $runLen+=$size;
+                $h6=$h5;$h5=$h4;$h4=$h3;$h3=$h2;$h2=$h1;$h1=$h0;$h0=$runLen;
+                if ($h1>0&&$h2===$h1&&$h3===$h1*3&&$h4===$h1&&$h5===$h1) {
+                    if ($h0>=$h1*4&&$h6>=$h1) $penalty+=40;
+                    if ($h6>=$h1*4&&$h0>=$h1) $penalty+=40;
                 }
             }
 
             for ($x = 0; $x < $size; $x++) {
                 $runColor = 0; $runLen = 0;
-                $hist = [0,0,0,0,0,0,0];
-                for ($y = 0; $y < $size; $y++) {
-                    $lo = $mrLo[$y]; $hi = $mrHi[$y];
-                    $c = ($x < 64) ? (($lo >> $x) & 1) : (($hi >> ($x - 64)) & 1);
-                    if ($c === $runColor) {
-                        $runLen++;
-                        if ($runLen === 5) $penalty += 3;
-                        elseif ($runLen > 5) $penalty++;
-                    } else {
-                        if ($hist[0] === 0) $runLen += $size;
-                        $hist[6] = $hist[5]; $hist[5] = $hist[4]; $hist[4] = $hist[3];
-                        $hist[3] = $hist[2]; $hist[2] = $hist[1]; $hist[1] = $hist[0]; $hist[0] = $runLen;
-                        if (!$runColor) {
-                            $n = $hist[1];
-                            if ($n > 0 && $hist[2] === $n && $hist[3] === $n * 3 && $hist[4] === $n && $hist[5] === $n) {
-                                if ($hist[0] >= $n * 4 && $hist[6] >= $n) $penalty += 40;
-                                if ($hist[6] >= $n * 4 && $hist[0] >= $n) $penalty += 40;
+                $h0 = 0; $h1 = 0; $h2 = 0; $h3 = 0; $h4 = 0; $h5 = 0; $h6 = 0;
+                if ($x < 64) {
+                    $xbit = $x;
+                    for ($y = 0; $y < $size; $y++) {
+                        $c = ($mrLo[$y] >> $xbit) & 1;
+                        if ($c === $runColor) {
+                            $runLen++;
+                            if ($runLen === 5) $penalty += 3;
+                            elseif ($runLen > 5) $penalty++;
+                        } else {
+                            if ($h0===0) $runLen+=$size;
+                            $h6=$h5;$h5=$h4;$h4=$h3;$h3=$h2;$h2=$h1;$h1=$h0;$h0=$runLen;
+                            if (!$runColor) {
+                                if ($h1>0&&$h2===$h1&&$h3===$h1*3&&$h4===$h1&&$h5===$h1) {
+                                    if ($h0>=$h1*4&&$h6>=$h1) $penalty+=40;
+                                    if ($h6>=$h1*4&&$h0>=$h1) $penalty+=40;
+                                }
                             }
+                            $runColor=$c; $runLen=1;
                         }
-                        $runColor = $c;
-                        $runLen = 1;
+                    }
+                } else {
+                    $xbit = $x - 64;
+                    for ($y = 0; $y < $size; $y++) {
+                        $c = ($mrHi[$y] >> $xbit) & 1;
+                        if ($c === $runColor) {
+                            $runLen++;
+                            if ($runLen === 5) $penalty += 3;
+                            elseif ($runLen > 5) $penalty++;
+                        } else {
+                            if ($h0===0) $runLen+=$size;
+                            $h6=$h5;$h5=$h4;$h4=$h3;$h3=$h2;$h2=$h1;$h1=$h0;$h0=$runLen;
+                            if (!$runColor) {
+                                if ($h1>0&&$h2===$h1&&$h3===$h1*3&&$h4===$h1&&$h5===$h1) {
+                                    if ($h0>=$h1*4&&$h6>=$h1) $penalty+=40;
+                                    if ($h6>=$h1*4&&$h0>=$h1) $penalty+=40;
+                                }
+                            }
+                            $runColor=$c; $runLen=1;
+                        }
                     }
                 }
                 if ($runColor) {
-                    if ($hist[0] === 0) $runLen += $size;
-                    $hist[6] = $hist[5]; $hist[5] = $hist[4]; $hist[4] = $hist[3];
-                    $hist[3] = $hist[2]; $hist[2] = $hist[1]; $hist[1] = $hist[0]; $hist[0] = $runLen;
-                    $runLen = 0;
+                    if ($h0===0) $runLen+=$size;
+                    $h6=$h5;$h5=$h4;$h4=$h3;$h3=$h2;$h2=$h1;$h1=$h0;$h0=$runLen;
+                    $runLen=0;
                 }
-                $runLen += $size;
-                if ($hist[0] === 0) $runLen += $size;
-                $hist[6] = $hist[5]; $hist[5] = $hist[4]; $hist[4] = $hist[3];
-                $hist[3] = $hist[2]; $hist[2] = $hist[1]; $hist[1] = $hist[0]; $hist[0] = $runLen;
-                $n = $hist[1];
-                if ($n > 0 && $hist[2] === $n && $hist[3] === $n * 3 && $hist[4] === $n && $hist[5] === $n) {
-                    if ($hist[0] >= $n * 4 && $hist[6] >= $n) $penalty += 40;
-                    if ($hist[6] >= $n * 4 && $hist[0] >= $n) $penalty += 40;
+                $runLen+=$size;
+                if ($h0===0) $runLen+=$size;
+                $h6=$h5;$h5=$h4;$h4=$h3;$h3=$h2;$h2=$h1;$h1=$h0;$h0=$runLen;
+                if ($h1>0&&$h2===$h1&&$h3===$h1*3&&$h4===$h1&&$h5===$h1) {
+                    if ($h0>=$h1*4&&$h6>=$h1) $penalty+=40;
+                    if ($h6>=$h1*4&&$h0>=$h1) $penalty+=40;
                 }
             }
 
+            $validLo = ($size >= 64) ? -1 : ((1 << $size) - 1);
+            $validHi = ($size <= 64) ? 0 : ((1 << ($size - 64)) - 1);
             for ($y = 0; $y < $sizeM1; $y++) {
-                for ($x = 0; $x < $sizeM1; $x++) {
-                    if ($x < 64) {
-                        $c = ($mrLo[$y] >> $x) & 1;
-                        $c1 = ($mrLo[$y] >> ($x + 1)) & 1;
-                        $c2 = ($mrLo[$y + 1] >> $x) & 1;
-                        $c3 = ($mrLo[$y + 1] >> ($x + 1)) & 1;
-                    } elseif ($x === 63) {
-                        $c = ($mrLo[$y] >> 63) & 1;
-                        $c1 = $mrHi[$y] & 1;
-                        $c2 = ($mrLo[$y + 1] >> 63) & 1;
-                        $c3 = $mrHi[$y + 1] & 1;
-                    } else {
-                        $bx = $x - 64;
-                        $c = ($mrHi[$y] >> $bx) & 1;
-                        $c1 = ($mrHi[$y] >> ($bx + 1)) & 1;
-                        $c2 = ($mrHi[$y + 1] >> $bx) & 1;
-                        $c3 = ($mrHi[$y + 1] >> ($bx + 1)) & 1;
-                    }
-                    if ($c === $c1 && $c === $c2 && $c === $c3) {
-                        $penalty += 3;
-                    }
+                $curLo = $mrLo[$y] & $validLo; $curHi = $mrHi[$y] & $validHi;
+                $nxtLo = $mrLo[$y+1] & $validLo; $nxtHi = $mrHi[$y+1] & $validHi;
+                $csLo = (($curLo >> 1) & \PHP_INT_MAX) | ($curHi << 63);
+                $csHi = ($curHi >> 1) & \PHP_INT_MAX;
+                $nsLo = (($nxtLo >> 1) & \PHP_INT_MAX) | ($nxtHi << 63);
+                $nsHi = ($nxtHi >> 1) & \PHP_INT_MAX;
+                $validR2Lo = ($sizeM1 >= 64) ? -1 : ((1 << $sizeM1) - 1);
+                $validR2Hi = ($sizeM1 <= 64) ? 0 : ((1 << ($sizeM1 - 64)) - 1);
+                $adLo = $curLo & $csLo & $nxtLo & $nsLo & $validR2Lo;
+                $adHi = $curHi & $csHi & $nxtHi & $nsHi & $validR2Hi;
+                $alLo = ~$curLo & ~$csLo & ~$nxtLo & ~$nsLo & $validR2Lo;
+                $alHi = ~$curHi & ~$csHi & ~$nxtHi & ~$nsHi & $validR2Hi;
+                $bLo = $adLo | $alLo;
+                $bHi = $adHi | $alHi;
+                if ($bLo !== 0 || $bHi !== 0) {
+                    $penalty += 3 * ($pop[$bLo & 0xff] + $pop[($bLo >> 8) & 0xff]
+                        + $pop[($bLo >> 16) & 0xff] + $pop[($bLo >> 24) & 0xff]
+                        + $pop[($bLo >> 32) & 0xff] + $pop[($bLo >> 40) & 0xff]
+                        + $pop[($bLo >> 48) & 0xff] + $pop[($bLo >> 56) & 0xff]
+                        + $pop[$bHi & 0xff] + $pop[($bHi >> 8) & 0xff]
+                        + $pop[($bHi >> 16) & 0xff] + $pop[($bHi >> 24) & 0xff]);
                 }
             }
 
