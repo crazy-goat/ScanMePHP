@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `QRCode` constructor now accepts optional `EncoderInterface $encoder` parameter
 - `ReedSolomon::encodeWithInterleaving()` — multi-block RS interleaving for correct ECC across all QR versions
 - Reference test suite — 1772 test cases × 2 encoders (FastEncoder + FfiEncoder) verified against nayuki's QR Code generator
+- CI workflow to automatically build and release FFI library binaries for Linux (glibc/musl) and macOS (x86_64/ARM64) on version tag push (#22)
 
 ### Changed
 
