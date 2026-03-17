@@ -43,6 +43,38 @@ SVG, PNG (pure PHP, 1-bit), HTML (div/table), ASCII (3 styles). Works in termina
 composer require crazy-goat/scanmephp
 ```
 
+## FFI Binary Auto-Download
+
+When you install or update the package via Composer, the library will automatically:
+
+1. Detect your platform (Linux glibc/musl, macOS Intel/ARM, Windows)
+2. Download the appropriate prebuilt FFI binary from GitHub releases
+3. Verify checksums (if configured)
+4. Fall back to building from source if download fails
+
+### Requirements for Auto-Download
+
+- FFI extension must be available (optional but recommended)
+- cURL extension for downloading
+- Write permissions to `ffi-binaries/` directory in your project
+
+### Manual Binary Installation
+
+If auto-download doesn't work, you can manually download binaries from the 
+[GitHub releases page](https://github.com/crazy-goat/scanmephp/releases) and place
+them in your project directory.
+
+### Building from Source
+
+If no prebuilt binary is available for your platform, the installer will attempt
+to build from source. Requirements:
+
+- CMake 3.10+
+- C++ compiler (g++ or clang++)
+- Make
+
+The build will happen automatically during `composer install` if needed.
+
 ## Quick Start
 
 ```php

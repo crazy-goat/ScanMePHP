@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Automatic FFI binary download during `composer install` based on platform detection
+- `PlatformDetector` class for OS/architecture detection (Linux glibc/musl, macOS x86_64/arm64, Windows)
+- `BinaryDownloader` class for downloading prebuilt binaries from GitHub releases
+- `ChecksumManager` class for optional checksum verification from composer.json extra section
+- `Builder` class for fallback to building from source when download fails
+- `Composer\InstallScript` with post-install and post-update hooks for automatic binary management
+- `DownloadException` for download-related error handling
 - `SvgRenderer` now accepts optional `$moduleSize` constructor parameter (default: 10)
 - `InvalidConfigurationException` for configuration validation errors
 - Native C++ QR encoder library (`clib/`) with SIMD acceleration (SSE2, SSE4.2, AVX2, AVX-512, NEON, scalar fallback)
