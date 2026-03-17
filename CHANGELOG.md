@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.6] - 2026-03-17
+
+### Added
+
+- Automatic FFI binary download during `composer install` based on platform detection
+- `PlatformDetector` class for OS/architecture detection (Linux glibc/musl, macOS x86_64/arm64, Windows)
+- `BinaryDownloader` class for downloading prebuilt binaries from GitHub releases
+- `ChecksumManager` class for optional checksum verification from composer.json extra section
+- `Builder` class for fallback to building from source when download fails
+- `Composer\InstallScript` with post-install and post-update hooks for automatic binary management
+- `DownloadException` for download-related error handling
+- `SvgRenderer` now accepts optional `$moduleSize` constructor parameter (default: 10)
+
+### Changed
+
+- FFI binaries stored in `vendor/crazy-goat/scanmephp/ffi-binaries/` for proper isolation
+- `QRCode::createDefaultEncoder()` auto-selects FFI encoder from vendor directory
+- Version detection prefers git tag over composer/installed.json for GitHub releases
+
 ## [0.4.5] - 2026-03-17
 
 ### Added
@@ -20,14 +39,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Automatic FFI binary download during `composer install` based on platform detection
-- `PlatformDetector` class for OS/architecture detection (Linux glibc/musl, macOS x86_64/arm64, Windows)
-- `BinaryDownloader` class for downloading prebuilt binaries from GitHub releases
-- `ChecksumManager` class for optional checksum verification from composer.json extra section
-- `Builder` class for fallback to building from source when download fails
-- `Composer\InstallScript` with post-install and post-update hooks for automatic binary management
-- `DownloadException` for download-related error handling
-- `SvgRenderer` now accepts optional `$moduleSize` constructor parameter (default: 10)
 - `InvalidConfigurationException` for configuration validation errors
 - Native C++ QR encoder library (`clib/`) with SIMD acceleration (SSE2, SSE4.2, AVX2, AVX-512, NEON, scalar fallback)
 - `EncoderInterface` extracted from `Encoder` for dependency injection
@@ -114,7 +125,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive test suite with PHPUnit
 - Full documentation and usage examples
 
-[Unreleased]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.5...HEAD
+[Unreleased]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.6...HEAD
+[0.4.6]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.5...v0.4.6
 [0.4.5]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.4...v0.4.5
 [0.3.0]: https://github.com/crazy-goat/ScanMePHP/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/crazy-goat/ScanMePHP/compare/v0.1.0...v0.2.0
