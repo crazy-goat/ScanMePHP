@@ -61,7 +61,7 @@ jobs:
       uses: shivammathur/setup-php@v2
       with:
         php-version: ${{ matrix.php-version }}
-        coverage: xdebug
+        coverage: none
         extensions: ffi, gd
 
     - name: Validate composer.json and composer.lock
@@ -84,20 +84,6 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y cmake g++ make
 
-    - name: Cache C++ build
-      uses: actions/cache@v3
-      with:
-        path: clib/build
-        key: ${{ runner.os }}-cpp-build-${{ hashFiles('clib/**/*.cpp', 'clib/**/*.hpp', 'clib/**/*.h', 'clib/CMakeLists.txt') }}
-
-    - name: Cache PHPUnit results
-      uses: actions/cache@v3
-      with:
-        path: .phpunit.cache
-        key: ${{ runner.os }}-phpunit-${{ matrix.php-version }}-${{ github.sha }}
-        restore-keys: |
-          ${{ runner.os }}-phpunit-${{ matrix.php-version }}-
-
     - name: Build C++ FFI library
       working-directory: clib
       run: |
@@ -108,15 +94,3 @@ jobs:
 
     - name: Run test suite
       run: composer run-script test
-
-    - name: Test without xdebug
-      run: |
-        php -d xdebug.mode=off vendor/bin/phpunit --filter testEncodeMatchesFastEncoder 2>&1
-
-    - name: Test paratest without xdebug (1 process)
-      run: |
-        php -d xdebug.mode=off vendor/bin/paratest --processes=1 --filter testEncodeMatchesFastEncoder 2>&1
-
-    - name: Test full suite with phpunit (no xdebug)
-      run: |
-        time php -d xdebug.mode=off vendor/bin/phpunit 2>&1 | tail -5
