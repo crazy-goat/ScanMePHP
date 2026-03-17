@@ -107,15 +107,18 @@ class Encoder implements EncoderInterface
         // Add terminator and padding
         $encodedData = $this->dataEncoder->addTerminatorAndPadding($encodedData, $totalCapacity);
 
-        // Calculate ECC
-        $eccCount = $this->reedSolomon->getEccCount($version, $errorCorrectionLevel->value);
-        $ecc = $this->reedSolomon->encode($encodedData, $eccCount);
+        // Generate ECC per block and interleave all codewords
+        $allCodewords = $this->reedSolomon->encodeWithInterleaving(
+            $encodedData,
+            $version,
+            $errorCorrectionLevel->value
+        );
 
         // Select best mask pattern
         $tempMatrix = $this->matrixBuilder->build(
             $version,
-            $encodedData,
-            $ecc,
+            $allCodewords,
+            [],
             $errorCorrectionLevel,
             0
         );
@@ -124,8 +127,8 @@ class Encoder implements EncoderInterface
         // Build final matrix
         return $this->matrixBuilder->build(
             $version,
-            $encodedData,
-            $ecc,
+            $allCodewords,
+            [],
             $errorCorrectionLevel,
             $maskPattern
         );
