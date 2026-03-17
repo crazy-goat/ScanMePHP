@@ -61,7 +61,7 @@ jobs:
       uses: shivammathur/setup-php@v2
       with:
         php-version: ${{ matrix.php-version }}
-        coverage: none
+        coverage: xdebug
         extensions: ffi, gd
 
     - name: Validate composer.json and composer.lock
