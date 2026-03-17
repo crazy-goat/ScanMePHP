@@ -1,4 +1,5 @@
-/vendor/
+/vendor/*
+!/vendor/crazy-goat/scanmephp/ffi-binaries/.gitkeep
 /.idea/
 /.phpunit.cache/
 composer.lock
