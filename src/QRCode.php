@@ -26,10 +26,10 @@ class QRCode
 
     private static function createDefaultEncoder(): EncoderInterface
     {
-        // Try FFI encoder with downloaded binary first
-        $downloadedBinary = dirname(__DIR__) . '/../ffi-binaries/' . PlatformDetector::getCurrentPlatformBinaryName();
-        if (FfiEncoder::isAvailable($downloadedBinary)) {
-            return new FfiEncoder($downloadedBinary);
+        // Try FFI encoder with downloaded binary first (vendor location)
+        $vendorBinary = dirname(__DIR__) . '/../../crazy-goat/scanmephp/ffi-binaries/' . PlatformDetector::getCurrentPlatformBinaryName();
+        if (FfiEncoder::isAvailable($vendorBinary)) {
+            return new FfiEncoder($vendorBinary);
         }
 
         // Fallback to local build

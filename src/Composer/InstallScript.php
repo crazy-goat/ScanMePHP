@@ -11,7 +11,6 @@ use CrazyGoat\ScanMePHP\PlatformDetector;
 class InstallScript
 {
     private const PACKAGE_NAME = 'crazy-goat/scanmephp';
-    private const BINARY_DIR = 'ffi-binaries';
 
     public static function run(): void
     {
@@ -125,12 +124,13 @@ class InstallScript
 
     public static function getBinaryPath(string $projectRoot): string
     {
-        $path = $projectRoot . '/' . self::BINARY_DIR;
-        
+        // Store binaries in vendor directory for proper isolation
+        $path = $projectRoot . '/vendor/crazy-goat/scanmephp/ffi-binaries';
+
         if (!is_dir($path)) {
             mkdir($path, 0755, true);
         }
-        
+
         return $path;
     }
 
