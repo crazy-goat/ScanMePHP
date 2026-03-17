@@ -117,8 +117,12 @@ class Plugin implements PluginInterface, EventSubscriberInterface
             return true;
         }
 
+        // Get PHP version
+        $phpVersion = $this->getPhpVersion();
+        $this->io->write('✓ Detected PHP version: ' . $phpVersion);
+
         $binaryPath = rtrim($installPath, '/') . '/' . self::EXT_BINARY_DIR;
-        $binaryName = $this->getExtensionBinaryName($os, $variant, $arch);
+        $binaryName = $this->getExtensionBinaryName($os, $variant, $arch, $phpVersion);
         $targetFile = $binaryPath . '/' . $binaryName;
 
         $this->io->write('✓ Target extension: ' . $binaryName);
@@ -299,12 +303,22 @@ class Plugin implements PluginInterface, EventSubscriberInterface
         return 'glibc';
     }
 
-    private function getExtensionBinaryName(string $os, ?string $variant, string $arch): string
+    private function getPhpVersion(): string
+    {
+        $version = PHP_VERSION;
+        // Extract major.minor version (e.g., 8.1 from 8.1.27)
+        if (preg_match('/^(\d+\.\d+)/', $version, $matches)) {
+            return str_replace('.', '', $matches[1]); // Return "81" for "8.1"
+        }
+        throw new \RuntimeException('Could not determine PHP version');
+    }
+
+    private function getExtensionBinaryName(string $os, ?string $variant, string $arch, string $phpVersion): string
     {
         return match ($os) {
-            'linux' => sprintf('php-ext-linux-%s-%s.so', $variant ?? 'glibc', $arch),
-            'macos' => sprintf('php-ext-macos-%s.so', $arch),
-            'windows' => sprintf('php-ext-windows-%s.dll', $arch),
+            'linux' => sprintf('php-ext-linux-%s-%s-php%s.so', $variant ?? 'glibc', $arch, $phpVersion),
+            'macos' => sprintf('php-ext-macos-%s-php%s.so', $arch, $phpVersion),
+            'windows' => sprintf('php-ext-windows-%s-php%s.dll', $arch, $phpVersion),
             default => throw new \RuntimeException('Unsupported OS: ' . $os),
         };
     }

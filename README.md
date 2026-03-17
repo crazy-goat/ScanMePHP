@@ -68,12 +68,14 @@ During `composer install` or `composer update`, the plugin will:
 
 1. Download the appropriate binary from [GitHub Releases](https://github.com/crazy-goat/ScanMePHP/releases):
 
-| Platform | Binary |
-|----------|--------|
-| Linux (glibc) | `php-ext-linux-glibc-x86_64.so` |
-| Linux (musl/Alpine) | `php-ext-linux-musl-x86_64.so` |
-| macOS Intel | `php-ext-macos-x86_64.so` |
-| macOS Apple Silicon | `php-ext-macos-arm64.so` |
+| Platform | PHP 8.1 | PHP 8.2 | PHP 8.3 | PHP 8.4 |
+|----------|---------|---------|---------|---------|
+| Linux (glibc) | `php-ext-linux-glibc-x86_64-php81.so` | `php-ext-linux-glibc-x86_64-php82.so` | `php-ext-linux-glibc-x86_64-php83.so` | `php-ext-linux-glibc-x86_64-php84.so` |
+| Linux (musl/Alpine) | `php-ext-linux-musl-x86_64-php81.so` | `php-ext-linux-musl-x86_64-php82.so` | `php-ext-linux-musl-x86_64-php83.so` | `php-ext-linux-musl-x86_64-php84.so` |
+| macOS Intel | `php-ext-macos-x86_64-php81.so` | `php-ext-macos-x86_64-php82.so` | `php-ext-macos-x86_64-php83.so` | `php-ext-macos-x86_64-php84.so` |
+| macOS Apple Silicon | `php-ext-macos-arm64-php81.so` | `php-ext-macos-arm64-php82.so` | `php-ext-macos-arm64-php83.so` | `php-ext-macos-arm64-php84.so` |
+
+> **Note:** Binaries are built for specific PHP versions due to ABI compatibility. Make sure to download the binary matching your PHP version (check with `php -v`).
 
 2. Copy to your PHP extensions directory:
    ```bash
