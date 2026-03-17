@@ -43,37 +43,111 @@ SVG, PNG (pure PHP, 1-bit), HTML (div/table), ASCII (3 styles). Works in termina
 composer require crazy-goat/scanmephp
 ```
 
-## FFI Binary Auto-Download
+## Binary Auto-Download
 
 When you install or update the package via Composer, the library will automatically:
 
 1. Detect your platform (Linux glibc/musl, macOS Intel/ARM, Windows)
-2. Download the appropriate prebuilt FFI binary from GitHub releases
-3. Verify checksums (if configured)
-4. Fall back to building from source if download fails
+2. Try to download and install the PHP extension (`scanmeqr`) — **fastest option** (13–21× faster)
+3. Fall back to FFI library if extension is not available — **10–12× faster**
+4. Use pure PHP encoder as final fallback — works everywhere
 
-### Requirements for Auto-Download
+### PHP Extension Installation (Recommended)
 
-- FFI extension must be available (optional but recommended)
-- cURL extension for downloading
-- Write permissions to `ffi-binaries/` directory in your project
+The PHP extension provides the best performance. The Composer plugin will attempt to download it automatically.
 
-### Manual Binary Installation
+#### Auto-Download
 
-If auto-download doesn't work, you can manually download binaries from the 
-[GitHub releases page](https://github.com/crazy-goat/scanmephp/releases) and place
-them in your project directory.
+During `composer install` or `composer update`, the plugin will:
 
-### Building from Source
+1. Check if the `scanmeqr` extension is already loaded
+2. Download the appropriate prebuilt binary for your platform
+3. Provide instructions to enable it in `php.ini`
 
-If no prebuilt binary is available for your platform, the installer will attempt
-to build from source. Requirements:
+#### Manual Installation
 
+1. Download the appropriate binary from [GitHub Releases](https://github.com/crazy-goat/ScanMePHP/releases):
+
+| Platform | Binary |
+|----------|--------|
+| Linux (glibc) | `php-ext-linux-glibc-x86_64.so` |
+| Linux (musl/Alpine) | `php-ext-linux-musl-x86_64.so` |
+| macOS Intel | `php-ext-macos-x86_64.so` |
+| macOS Apple Silicon | `php-ext-macos-arm64.so` |
+
+2. Copy to your PHP extensions directory:
+   ```bash
+   cp php-ext-linux-glibc-x86_64.so $(php-config --extension-dir)/
+   ```
+
+3. Add to your `php.ini`:
+   ```ini
+   extension=scanmeqr.so
+   ```
+
+4. Restart your web server or PHP-FPM:
+   ```bash
+   sudo systemctl restart php-fpm
+   # or
+   sudo systemctl restart apache2
+   ```
+
+5. Verify installation:
+   ```bash
+   php -m | grep scanmeqr
+   ```
+
+#### Building from Source
+
+Requirements:
+- PHP 8.1+ with `php-dev`/`phpize`
 - CMake 3.10+
 - C++ compiler (g++ or clang++)
 - Make
 
-The build will happen automatically during `composer install` if needed.
+```bash
+# Build the C++ library first
+cd clib
+cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j$(nproc)
+cd ..
+
+# Build the PHP extension
+cd php-ext
+phpize
+./configure --with-scanmeqr="$PWD/../clib"
+make -j$(nproc)
+make install
+cd ..
+```
+
+Then add `extension=scanmeqr.so` to your `php.ini`.
+
+### FFI Library Installation
+
+If the PHP extension is not available, the plugin will download the FFI library instead.
+
+#### Requirements for Auto-Download
+
+- FFI extension (`extension=ffi` in php.ini)
+- cURL extension for downloading
+- Write permissions to `ffi-binaries/` directory in your project
+
+#### Manual Binary Installation
+
+If auto-download doesn't work, you can manually download binaries from the
+[GitHub releases page](https://github.com/crazy-goat/scanmephp/releases) and place
+them in your project directory.
+
+Prebuilt FFI library binaries are available for:
+
+| Platform | Binary |
+|----------|--------|
+| Linux (glibc) | `libscanme_qr-linux-glibc-x86_64.so` |
+| Linux (musl/Alpine) | `libscanme_qr-linux-musl-x86_64.so` |
+| macOS Intel | `libscanme_qr-macos-x86_64.dylib` |
+| macOS Apple Silicon | `libscanme_qr-macos-arm64.dylib` |
+| Windows x86_64 | `scanme_qr-windows-x86_64.dll` |
 
 ## Quick Start
 
@@ -310,10 +384,11 @@ class MyCustomRenderer implements RendererInterface
 
 ## Performance
 
-ScanMePHP includes three encoder implementations. `QRCode` auto-selects the fastest available:
+ScanMePHP includes four encoder implementations. `QRCode` auto-selects the fastest available:
 
 | Encoder | Versions | Requirements | Relative Speed |
 |---|---|---|---|
+| `NativeEncoderExt` | v1–v27 | 64-bit PHP + `scanmeqr` extension | **13–21×** faster |
 | `FfiEncoder` | v1–v40 | 64-bit PHP + FFI + `libscanme_qr.so` | **10–12×** faster |
 | `FastEncoder` | v1–v27 | 64-bit PHP | **~2×** faster |
 | `Encoder` | v1–v40 | any PHP 8.1+ | baseline |
@@ -376,7 +451,18 @@ Or let `QRCode` auto-detect it (looks for `clib/build/libscanme_qr.so` in the pr
 
 ### Prebuilt Binaries
 
-Prebuilt FFI library binaries are available from [GitHub Releases](https://github.com/crazy-goat/ScanMePHP/releases). Download the appropriate binary for your platform:
+Prebuilt binaries are available from [GitHub Releases](https://github.com/crazy-goat/ScanMePHP/releases). Download the appropriate binary for your platform:
+
+#### PHP Extension Binaries (Recommended)
+
+| Platform | Binary | Download |
+|----------|--------|----------|
+| Linux (glibc) | `php-ext-linux-glibc-x86_64.so` | [Latest Release](../../releases/latest) |
+| Linux (musl/Alpine) | `php-ext-linux-musl-x86_64.so` | [Latest Release](../../releases/latest) |
+| macOS Intel | `php-ext-macos-x86_64.so` | [Latest Release](../../releases/latest) |
+| macOS Apple Silicon | `php-ext-macos-arm64.so` | [Latest Release](../../releases/latest) |
+
+#### FFI Library Binaries
 
 | Platform | Binary | Download |
 |----------|--------|----------|
