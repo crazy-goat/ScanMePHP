@@ -30,7 +30,7 @@
         }
     },
     "scripts": {
-        "test": "paratest --processes=4 --colors --testdox",
+        "test": "paratest --processes=2 --colors --testdox",
         "test:unit": "phpunit"
     },
     "minimum-stability": "stable",
