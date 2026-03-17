@@ -45,11 +45,11 @@ $testData = str_repeat('https://example.com/', (int) ceil($dataSize / 20));
 $config = new QRCodeConfig();
 $qr = new QRCode($testData, $config);
 $matrix = $qr->getMatrix();
-$renderOptions = new \ScanMePHP\RenderOptions(
+$renderOptions = new \CrazyGoat\ScanMePHP\RenderOptions(
     margin: 4,
     foregroundColor: '#000000',
     backgroundColor: '#FFFFFF',
-    moduleStyle: \ScanMePHP\ModuleStyle::Square,
+    moduleStyle: \CrazyGoat\ScanMePHP\ModuleStyle::Square,
 );
 
 echo "Test data length: " . strlen($testData) . " bytes\n";

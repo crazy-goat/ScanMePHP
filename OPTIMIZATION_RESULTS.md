@@ -86,8 +86,8 @@ All 34 existing tests pass without modification.
 
 ### New Files
 
-- `examples/benchmark.php` - General benchmark tool
-- `examples/benchmark_render.php` - Rendering-only benchmark
+- `bench/benchmark_encoder.php` - Encoder benchmark (all 3 encoders)
+- `bench/benchmark_render.php` - Rendering-only benchmark
 
 ### Summary
 

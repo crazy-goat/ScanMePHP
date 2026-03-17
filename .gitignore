@@ -3,3 +3,8 @@
 /.phpunit.cache/
 composer.lock
 /docs/
+/.worktrees/
+/clib/build/
+/clib/build-*/
+*.so
+bench/benchmark_*.json
