@@ -26,15 +26,24 @@ class QRCode
 
     private static function createDefaultEncoder(): EncoderInterface
     {
-        $libraryPath = dirname(__DIR__) . '/clib/build/libscanme_qr.so';
-        if (FfiEncoder::isAvailable($libraryPath)) {
-            return new FfiEncoder($libraryPath);
+        // Try FFI encoder with downloaded binary first
+        $downloadedBinary = dirname(__DIR__) . '/../ffi-binaries/' . PlatformDetector::getCurrentPlatformBinaryName();
+        if (FfiEncoder::isAvailable($downloadedBinary)) {
+            return new FfiEncoder($downloadedBinary);
         }
 
+        // Fallback to local build
+        $localBuild = dirname(__DIR__) . '/clib/build/libscanme_qr.so';
+        if (FfiEncoder::isAvailable($localBuild)) {
+            return new FfiEncoder($localBuild);
+        }
+
+        // Use FastEncoder on 64-bit PHP
         if (\PHP_INT_SIZE >= 8) {
             return new FastEncoder();
         }
 
+        // Final fallback to portable Encoder
         return new Encoder();
     }
 
