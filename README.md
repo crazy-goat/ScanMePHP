@@ -7,7 +7,7 @@ Pure PHP QR code generator. Zero dependencies, zero extensions. PHP 8.1+.
 - **Zero dependencies** — no external packages, no PHP extensions required
 - **8 built-in renderers** — SVG, PNG, HTML (div/table), ASCII (full/half/simple blocks)
 - **All QR versions** — v1–v40, all error correction levels (L/M/Q/H)
-- **High performance** — 3 encoder tiers: native C++ FFI (70–80× faster), FastEncoder (13–18×), portable Encoder
+- **High performance** — 3 encoder tiers: native C++ FFI (10–12× faster), FastEncoder (2×), portable Encoder
 - **Customizable** — module styles, colors, labels, dark mode, margins
 - **Type-safe** — strict types, enums, readonly properties, PHP 8.1+ idioms
 
@@ -242,8 +242,8 @@ ScanMePHP includes three encoder implementations. `QRCode` auto-selects the fast
 
 | Encoder | Versions | Requirements | Relative Speed |
 |---|---|---|---|
-| `FfiEncoder` | v1–v27 | 64-bit PHP + FFI + `libscanme_qr.so` | **70–80×** faster |
-| `FastEncoder` | v1–v27 | 64-bit PHP | **13–18×** faster |
+| `FfiEncoder` | v1–v27 | 64-bit PHP + FFI + `libscanme_qr.so` | **10–12×** faster |
+| `FastEncoder` | v1–v27 | 64-bit PHP | **~2×** faster |
 | `Encoder` | v1–v40 | any PHP 8.1+ | baseline |
 
 ### Benchmark Results
@@ -252,10 +252,10 @@ Measured on PHP 8.4, 200 iterations per case, median latency:
 
 | Test case | Encoder | FastEncoder | FfiEncoder | Speedup (Encoder/FFI) |
 |---|---|---|---|---|
-| v1 (21×21) L | 5.0 ms | 0.39 ms | 0.06 ms | **79×** |
-| v2 (25×25) M | 7.5 ms | 0.57 ms | 0.10 ms | **75×** |
-| v5 (37×37) M | 18.3 ms | 1.12 ms | 0.22 ms | **82×** |
-| v10 (57×57) M | 58.4 ms | 3.27 ms | 0.70 ms | **84×** |
+| v1 (21×21) L | 0.72 ms | 0.38 ms | 0.07 ms | **10×** |
+| v2 (25×25) M | 1.03 ms | 0.52 ms | 0.10 ms | **10×** |
+| v5 (37×37) M | 2.48 ms | 1.18 ms | 0.25 ms | **10×** |
+| v10 (57×57) M | 7.71 ms | 3.35 ms | 0.75 ms | **10×** |
 
 All three encoders produce identical, spec-compliant QR codes verified against [nayuki's reference implementation](https://www.nayuki.io/page/qr-code-generator-library).
 

@@ -14,8 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Native C++ QR encoder library (`clib/`) with SIMD acceleration (SSE2, SSE4.2, AVX2, AVX-512, NEON, scalar fallback)
 - `EncoderInterface` extracted from `Encoder` for dependency injection
 - `FfiEncoder` — PHP FFI bridge to the native C++ library, producing byte-for-byte identical output to `Encoder`
-- `QRCode::createDefaultEncoder()` — auto-selects `FfiEncoder` when available, falls back to `Encoder`
+- `FastEncoder` — 64-bit PHP encoder with int-pair packed matrix, ~2× faster than portable Encoder
+- `QRCode::createDefaultEncoder()` — auto-selects `FfiEncoder` when available, falls back to `FastEncoder`, then `Encoder`
 - `QRCode` constructor now accepts optional `EncoderInterface $encoder` parameter
+- `ReedSolomon::encodeWithInterleaving()` — multi-block RS interleaving for correct ECC across all QR versions
+- Reference test suite — 1772 test cases × 2 encoders (FastEncoder + FfiEncoder) verified against nayuki's QR Code generator
 
 ### Changed
 
@@ -25,6 +28,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `FullBlocksRenderer`, `HalfBlocksRenderer`, `SimpleRenderer`: Direct output instead of array buffering
   - `PngRenderer` + `PngEncoder`: Streaming scanline generation (major memory reduction)
 - Removed `docs/` directory from repository tracking and added to `.gitignore`
+- **Encoder performance improved 7–8× (5–58 ms → 0.7–7.7 ms)** by adopting nayuki's penalty algorithm
+
+### Fixed
+
+- Multi-block Reed-Solomon interleaving — all encoders were treating data as a single block instead of splitting into per-block slices per EC_BLOCKS table
+- Penalty Rule 3 (finder pattern detection) — replaced naive pattern matching with nayuki's run-history algorithm
+- Penalty Rule 4 (dark/light balance) — replaced floating-point formula with nayuki's integer formula
+- Reserved module masking — MaskSelector now only masks data modules, not finder patterns, timing, etc.
+- FastEncoder namespace corrected from `ScanMePHP` to `CrazyGoat\ScanMePHP`
+- 13 incorrect entries in C++ EC_TABLE corrected
+- C++ `place_version_info()` coordinate transposition fixed
+- C++ mask tile y-period fixed (`y % 12` instead of `y % 6`)
 
 ## [0.3.0] - 2026-03-16
 

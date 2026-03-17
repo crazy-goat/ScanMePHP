@@ -16,19 +16,20 @@ Benchmark comparing three encoder implementations across QR versions 1–27.
 
 | Version     | Encoder (portable) | FastEncoder (64-bit) | FfiEncoder (C++) | Fast/Encoder | FFI/Encoder |
 |-------------|--------------------| ---------------------|------------------|--------------|-------------|
-| v1 L        | 5.0 ms             | 0.39 ms              | 0.06 ms          | **13.0×**    | **79×**     |
-| v2 M        | 7.5 ms             | 0.57 ms              | 0.10 ms          | **13.0×**    | **75×**     |
-| v3 H        | 10.5 ms            | 0.69 ms              | 0.16 ms          | **15.2×**    | **67×**     |
-| v5 M        | 18.3 ms            | 1.12 ms              | 0.22 ms          | **16.3×**    | **82×**     |
-| v10 M       | 58.4 ms            | 3.27 ms              | 0.70 ms          | **17.9×**    | **84×**     |
-| v10 L       | 43.4 ms            | 2.58 ms              | 0.54 ms          | **16.9×**    | **80×**     |
+| v1 L        | 0.72 ms            | 0.38 ms              | 0.07 ms          | **1.9×**     | **10×**     |
+| v2 M        | 1.03 ms            | 0.52 ms              | 0.10 ms          | **2.0×**     | **10×**     |
+| v3 H        | 1.50 ms            | 0.74 ms              | 0.13 ms          | **2.0×**     | **12×**     |
+| v5 M        | 2.48 ms            | 1.18 ms              | 0.25 ms          | **2.1×**     | **10×**     |
+| v10 M       | 7.71 ms            | 3.35 ms              | 0.75 ms          | **2.3×**     | **10×**     |
+| v10 L       | 5.77 ms            | 2.51 ms              | 0.57 ms          | **2.3×**     | **10×**     |
 
 ## Key Takeaways
 
-- **FfiEncoder is 67–84× faster than the portable Encoder** — sub-millisecond for all tested versions
-- **FastEncoder is 13–18× faster than the portable Encoder** across all versions v1–v27
-- **FfiEncoder is 3–6× faster than FastEncoder** — native C++ eliminates PHP interpreter overhead entirely
-- All three encoders produce byte-for-byte identical output, verified against nayuki's reference implementation (1772 test cases)
+- **FfiEncoder is 10–12× faster than the portable Encoder** — sub-millisecond for all tested versions
+- **FastEncoder is ~2× faster than the portable Encoder** across all versions v1–v27
+- **FfiEncoder is 4–5× faster than FastEncoder** — native C++ eliminates PHP interpreter overhead entirely
+- The portable Encoder was significantly optimized (from 5–58 ms down to 0.7–7.7 ms) by adopting nayuki's penalty algorithm
+- All three encoders produce byte-for-byte identical output, verified against nayuki's reference implementation (1772 test cases × 3 encoders)
 
 ## Architecture
 
