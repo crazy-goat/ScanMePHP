@@ -37,7 +37,7 @@ class SvgRenderer implements RendererInterface
 
         $svg = $this->generateSvgHeader($totalSize);
         $svg .= $this->generateBackground($totalSize, $bgColor);
-        $svg .= $this->generateModules($matrix, $margin, $fgColor, $options->moduleStyle);
+        $svg .= $this->generateModules($matrix, $margin, $fgColor, $options->moduleStyle, $options->invert);
 
         if ($options->label !== null && $options->label !== '') {
             $svg .= $this->generateLabel($options->label, $totalSize, $size, $margin);
@@ -66,7 +66,7 @@ class SvgRenderer implements RendererInterface
         );
     }
 
-    private function generateModules(Matrix $matrix, int $margin, string $color, ModuleStyle $style): string
+    private function generateModules(Matrix $matrix, int $margin, string $color, ModuleStyle $style, bool $invert): string
     {
         $size = $matrix->getSize();
         $escapedColor = $this->escapeColor($color);
@@ -75,7 +75,10 @@ class SvgRenderer implements RendererInterface
 
         for ($y = 0; $y < $size; $y++) {
             for ($x = 0; $x < $size; $x++) {
-                if ($matrix->get($x, $y)) {
+                $isDark = $matrix->get($x, $y);
+                // When inverted, draw light modules (false) instead of dark (true)
+                $shouldDraw = $invert ? !$isDark : $isDark;
+                if ($shouldDraw) {
                     $result .= $this->generateModule(
                         $x + $margin,
                         $y + $margin,
