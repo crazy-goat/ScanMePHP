@@ -231,4 +231,60 @@ class PngRendererTest extends TestCase
 
         imagedestroy($image);
     }
+
+    public function testInvertProducesDifferentOutputThanNormal(): void
+    {
+        $config = new QRCodeConfig(engine: new PngRenderer());
+        $qr = new QRCode('https://example.com', $config);
+        $normal = $qr->render();
+
+        $configInverted = new QRCodeConfig(engine: new PngRenderer(), invert: true);
+        $qrInverted = new QRCode('https://example.com', $configInverted);
+        $inverted = $qrInverted->render();
+
+        $this->assertNotEquals($normal, $inverted, 'Inverted PNG should differ from normal PNG');
+    }
+
+    public function testInvertSwapsPixelColors(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD extension not available for validation');
+        }
+
+        $config = new QRCodeConfig(engine: new PngRenderer(moduleSize: 1), margin: 0);
+        $qr = new QRCode('https://example.com', $config);
+
+        $configInverted = new QRCodeConfig(engine: new PngRenderer(moduleSize: 1), margin: 0, invert: true);
+        $qrInverted = new QRCode('https://example.com', $configInverted);
+
+        $image = imagecreatefromstring($qr->render());
+        $imageInverted = imagecreatefromstring($qrInverted->render());
+
+        $this->assertNotFalse($image);
+        $this->assertNotFalse($imageInverted);
+
+        $matrix = $qr->getMatrix();
+        $size = $matrix->getSize();
+
+        for ($y = 0; $y < $size; $y += 5) {
+            for ($x = 0; $x < $size; $x += 5) {
+                $isDark = $matrix->get($x, $y);
+
+                $colorNormal = imagecolorsforindex($image, imagecolorat($image, $x, $y));
+                $colorInverted = imagecolorsforindex($imageInverted, imagecolorat($imageInverted, $x, $y));
+
+                $isNormalDark = $colorNormal['red'] <= 128;
+                $isInvertedDark = $colorInverted['red'] <= 128;
+
+                $this->assertNotEquals(
+                    $isNormalDark,
+                    $isInvertedDark,
+                    "Pixel ($x,$y) should be inverted: normal=" . ($isNormalDark ? 'dark' : 'light') . ", inverted=" . ($isInvertedDark ? 'dark' : 'light')
+                );
+            }
+        }
+
+        imagedestroy($image);
+        imagedestroy($imageInverted);
+    }
 }

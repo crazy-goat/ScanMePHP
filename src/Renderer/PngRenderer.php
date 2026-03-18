@@ -36,10 +36,11 @@ class PngRenderer implements RendererInterface
         $margin = $options->margin;
         $totalModules = $size + (2 * $margin);
         $totalPixels = $totalModules * $this->moduleSize;
+        $invert = $options->invert;
 
         return $this->encoder->encodeStreaming(
-            function (int $y) use ($matrix, $size, $margin, $totalModules): array {
-                return $this->buildScanline($matrix, $size, $margin, $totalModules, $y);
+            function (int $y) use ($matrix, $size, $margin, $totalModules, $invert): array {
+                return $this->buildScanline($matrix, $size, $margin, $totalModules, $y, $invert);
             },
             $totalPixels,
             $totalPixels
@@ -52,7 +53,7 @@ class PngRenderer implements RendererInterface
      *
      * @return bool[] Array of boolean pixel values for this row
      */
-    private function buildScanline(Matrix $matrix, int $size, int $margin, int $totalModules, int $pixelY): array
+    private function buildScanline(Matrix $matrix, int $size, int $margin, int $totalModules, int $pixelY, bool $invert): array
     {
         $mod = $this->moduleSize;
         $moduleY = (int) ($pixelY / $mod);
@@ -64,6 +65,10 @@ class PngRenderer implements RendererInterface
             $isDark = ($dataX >= 0 && $dataX < $size && $dataY >= 0 && $dataY < $size)
                 ? $matrix->get($dataX, $dataY)
                 : false;
+
+            if ($invert) {
+                $isDark = !$isDark;
+            }
 
             // Expand this module to moduleSize pixels
             for ($px = 0; $px < $mod; $px++) {
