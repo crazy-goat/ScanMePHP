@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.11] - 2026-03-18
+
+### Fixed
+
+- `PngRenderer` now correctly respects `invert` option (#32)
+
 ## [0.4.10] - 2026-03-17
 
 ### Added
@@ -100,43 +106,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Test assertion in `InstallScriptTest::testGetPackageVersionFromComposer` to match normalized version format
 
-## [Unreleased]
-
-### Added
-
-- `InvalidConfigurationException` for configuration validation errors
-- Native C++ QR encoder library (`clib/`) with SIMD acceleration (SSE2, SSE4.2, AVX2, AVX-512, NEON, scalar fallback)
-- `EncoderInterface` extracted from `Encoder` for dependency injection
-- `FfiEncoder` — PHP FFI bridge to the native C++ library, producing byte-for-byte identical output to `Encoder`
-- `FastEncoder` — 64-bit PHP encoder with int-pair packed matrix, ~2× faster than portable Encoder
-- `QRCode::createDefaultEncoder()` — auto-selects `FfiEncoder` when available, falls back to `FastEncoder`, then `Encoder`
-- `QRCode` constructor now accepts optional `EncoderInterface $encoder` parameter
-- `ReedSolomon::encodeWithInterleaving()` — multi-block RS interleaving for correct ECC across all QR versions
-- Reference test suite — 1772 test cases × 2 encoders (FastEncoder + FfiEncoder) verified against nayuki's QR Code generator
-- CI workflow to automatically build and release FFI library binaries for Linux (glibc/musl) and macOS (x86_64/ARM64) on version tag push (#22)
-- PHP extension (`php-ext/`) with 13–21× performance improvement over pure PHP encoder
-
-### Changed
-
-- **Performance optimizations across all renderers (20-40% improvement):**
-  - `SvgRenderer`: Direct string concatenation instead of array+implode
-  - `HtmlDivRenderer` & `HtmlTableRenderer`: Eliminated sprintf() in tight loops
-  - `FullBlocksRenderer`, `HalfBlocksRenderer`, `SimpleRenderer`: Direct output instead of array buffering
-  - `PngRenderer` + `PngEncoder`: Streaming scanline generation (major memory reduction)
-- Removed `docs/` directory from repository tracking and added to `.gitignore`
-- **Encoder performance improved 7–8× (5–58 ms → 0.7–7.7 ms)** by adopting nayuki's penalty algorithm
-
-### Fixed
-
-- Multi-block Reed-Solomon interleaving — all encoders were treating data as a single block instead of splitting into per-block slices per EC_BLOCKS table
-- Penalty Rule 3 (finder pattern detection) — replaced naive pattern matching with nayuki's run-history algorithm
-- Penalty Rule 4 (dark/light balance) — replaced floating-point formula with nayuki's integer formula
-- Reserved module masking — MaskSelector now only masks data modules, not finder patterns, timing, etc.
-- FastEncoder namespace corrected from `ScanMePHP` to `CrazyGoat\ScanMePHP`
-- 13 incorrect entries in C++ EC_TABLE corrected
-- C++ `place_version_info()` coordinate transposition fixed
-- C++ mask tile y-period fixed (`y % 12` instead of `y % 6`)
-
 ## [0.3.0] - 2026-03-16
 
 ### Added
@@ -191,7 +160,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive test suite with PHPUnit
 - Full documentation and usage examples
 
-[Unreleased]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.9...HEAD
+[Unreleased]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.11...HEAD
+[0.4.11]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.10...v0.4.11
+[0.4.10]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.9...v0.4.10
 [0.4.9]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.8...v0.4.9
 [0.4.8]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.7...v0.4.8
 [0.4.7]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.6...v0.4.7
