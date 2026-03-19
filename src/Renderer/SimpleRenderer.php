@@ -39,6 +39,11 @@ class SimpleRenderer extends AbstractAsciiRenderer
             $result .= $this->centerText(' ' . $options->label . ' ', $totalWidth, $bgChar) . "\n";
         }
 
+        // Add bottom margin (quiet zone) - fixes issue #35
+        for ($i = 0; $i < $margin; $i++) {
+            $result .= $this->createMarginLine($size, $sideMargin, $bgChar) . "\n";
+        }
+
         return rtrim($result, "\n");
     }
 }
