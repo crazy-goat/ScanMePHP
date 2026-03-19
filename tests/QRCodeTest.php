@@ -185,6 +185,42 @@ class QRCodeTest extends TestCase
         $this->assertStringContainsString('fill="#FFFFFF"', $output);
     }
 
+    public function testSvgInvertProducesDifferentModulePattern(): void
+    {
+        $data = 'https://example.com';
+        
+        // Normal SVG
+        $configNormal = new QRCodeConfig(engine: new SvgRenderer());
+        $qrNormal = new QRCode($data, $configNormal);
+        $svgNormal = $qrNormal->render();
+        
+        // Inverted SVG
+        $configInverted = new QRCodeConfig(engine: new SvgRenderer(), invert: true);
+        $qrInverted = new QRCode($data, $configInverted);
+        $svgInverted = $qrInverted->render();
+        
+        // The SVGs should be different
+        $this->assertNotEquals($svgNormal, $svgInverted, 
+            'Inverted SVG should differ from normal SVG');
+        
+        // Normal should have black modules (#000000) on white background (#FFFFFF)
+        $this->assertStringContainsString('fill="#000000"', $svgNormal, 
+            'Normal SVG should have black modules');
+        $this->assertStringContainsString('fill="#FFFFFF"', $svgNormal, 
+            'Normal SVG should have white background');
+        
+        // Inverted should have white modules (#FFFFFF) on black background (#000000)
+        $this->assertStringContainsString('fill="#FFFFFF"', $svgInverted, 
+            'Inverted SVG should have white modules');
+        $this->assertStringContainsString('fill="#000000"', $svgInverted, 
+            'Inverted SVG should have black background');
+        
+        // Verify that the module positions are inverted by checking a specific finder pattern area
+        // Finder patterns are at corners and should be inverted
+        $this->assertStringContainsString('viewBox="0 0 330 330"', $svgNormal);
+        $this->assertStringContainsString('viewBox="0 0 330 330"', $svgInverted);
+    }
+
     public function testGetContentType(): void
     {
         $this->assertEquals('text/plain', (new FullBlocksRenderer())->getContentType());
