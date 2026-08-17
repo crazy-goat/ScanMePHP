@@ -10,3 +10,6 @@ composer.lock
 *.so
 bench/benchmark_*.json
 /test-install/
+
+/.php-cs-fixer.cache
+/.phpstan-baseline.neon.tmp

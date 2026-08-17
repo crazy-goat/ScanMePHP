@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-use PHPUnit\Framework\TestCase;
+use CrazyGoat\ScanMePHP\Exception\RenderException;
 use CrazyGoat\ScanMePHP\QRCode;
 use CrazyGoat\ScanMePHP\QRCodeConfig;
 use CrazyGoat\ScanMePHP\Renderer\PngRenderer;
-use CrazyGoat\ScanMePHP\Exception\RenderException;
+use PHPUnit\Framework\TestCase;
 
 class PngRendererTest extends TestCase
 {
@@ -124,7 +124,6 @@ class PngRendererTest extends TestCase
     {
         $config = new QRCodeConfig(
             engine: new PngRenderer(),
-            label: null,
         );
         $qr = new QRCode('https://example.com', $config);
         $output = $qr->render();
@@ -279,7 +278,7 @@ class PngRendererTest extends TestCase
                 $this->assertNotEquals(
                     $isNormalDark,
                     $isInvertedDark,
-                    "Pixel ($x,$y) should be inverted: normal=" . ($isNormalDark ? 'dark' : 'light') . ", inverted=" . ($isInvertedDark ? 'dark' : 'light')
+                    "Pixel ($x,$y) should be inverted: normal=" . ($isNormalDark ? 'dark' : 'light') . ', inverted=' . ($isInvertedDark ? 'dark' : 'light')
                 );
             }
         }

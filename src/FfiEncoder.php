@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP;
@@ -9,9 +10,9 @@ use FFI;
 
 class FfiEncoder implements EncoderInterface
 {
-    private FFI $ffi;
+    private readonly FFI $ffi;
 
-    public function __construct(private readonly string $libraryPath)
+    public function __construct(string $libraryPath)
     {
         if (!extension_loaded('ffi')) {
             throw new \RuntimeException('ext-ffi is required for FfiEncoder');
@@ -59,8 +60,8 @@ class FfiEncoder implements EncoderInterface
         $matrix = new Matrix($version);
         $matrix->setData(
             array_map(
-                static fn(array $row): array => array_map(
-                    static fn(int $v): bool => $v !== 0,
+                static fn (array $row): array => array_map(
+                    static fn (int $v): bool => $v !== 0,
                     $row
                 ),
                 array_chunk($bytes, $size)

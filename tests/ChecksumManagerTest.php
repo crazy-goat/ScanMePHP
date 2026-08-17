@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP\Tests;
@@ -12,7 +13,7 @@ class ChecksumManagerTest extends TestCase
     {
         $tempDir = sys_get_temp_dir() . '/scanme_checksum_test_' . uniqid();
         mkdir($tempDir, 0777, true);
-        
+
         try {
             // Create mock composer.json with checksums
             $composerJson = [
@@ -27,15 +28,15 @@ class ChecksumManagerTest extends TestCase
                     ],
                 ],
             ];
-            
+
             file_put_contents(
                 $tempDir . '/composer.json',
                 json_encode($composerJson, JSON_PRETTY_PRINT)
             );
-            
+
             $manager = new ChecksumManager($tempDir);
             $checksum = $manager->getChecksum('v0.4.4', 'libscanme_qr-linux-glibc-x86_64.so');
-            
+
             $this->assertEquals('abc123def456', $checksum);
         } finally {
             if (is_dir($tempDir)) {
@@ -49,17 +50,17 @@ class ChecksumManagerTest extends TestCase
     {
         $tempDir = sys_get_temp_dir() . '/scanme_checksum_test_' . uniqid();
         mkdir($tempDir, 0777, true);
-        
+
         try {
             $composerJson = ['name' => 'test/project'];
             file_put_contents(
                 $tempDir . '/composer.json',
                 json_encode($composerJson, JSON_PRETTY_PRINT)
             );
-            
+
             $manager = new ChecksumManager($tempDir);
             $checksum = $manager->getChecksum('v0.4.4', 'nonexistent.so');
-            
+
             $this->assertNull($checksum);
         } finally {
             if (is_dir($tempDir)) {

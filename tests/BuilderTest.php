@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP\Tests;
@@ -24,7 +25,7 @@ class BuilderTest extends TestCase
                 new \RecursiveDirectoryIterator($this->tempDir, \RecursiveDirectoryIterator::SKIP_DOTS),
                 \RecursiveIteratorIterator::CHILD_FIRST
             );
-            
+
             foreach ($iterator as $file) {
                 if ($file->isDir()) {
                     rmdir($file->getPathname());
@@ -32,7 +33,7 @@ class BuilderTest extends TestCase
                     unlink($file->getPathname());
                 }
             }
-            
+
             rmdir($this->tempDir);
         }
     }
@@ -40,7 +41,7 @@ class BuilderTest extends TestCase
     public function testDetectsBuildTools(): void
     {
         $builder = new Builder($this->tempDir);
-        
+
         // Just test that it doesn't throw
         $available = $builder->isBuildAvailable();
         $this->assertIsBool($available);
@@ -51,10 +52,10 @@ class BuilderTest extends TestCase
         // Create mock clib structure
         mkdir($this->tempDir . '/clib', 0777, true);
         mkdir($this->tempDir . '/clib/build', 0777, true);
-        
+
         $builder = new Builder($this->tempDir);
         $clibPath = $builder->getClibPath();
-        
+
         $this->assertEquals($this->tempDir . '/clib', $clibPath);
     }
 }

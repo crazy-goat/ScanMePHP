@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP\Tests\Integration;
@@ -20,7 +21,7 @@ class BinaryDownloadIntegrationTest extends TestCase
     protected function tearDown(): void
     {
         if (is_dir($this->tempDir)) {
-            array_map('unlink', glob($this->tempDir . '/*'));
+            array_map(unlink(...), glob($this->tempDir . '/*'));
             rmdir($this->tempDir);
         }
     }
@@ -32,10 +33,10 @@ class BinaryDownloadIntegrationTest extends TestCase
             'v0.4.4',
             $this->tempDir
         );
-        
+
         $binaryName = PlatformDetector::getCurrentPlatformBinaryName();
         $url = $downloader->getDownloadUrl($binaryName);
-        
+
         $this->assertStringStartsWith('https://github.com/', $url);
         $this->assertStringContainsString($binaryName, $url);
     }
@@ -43,7 +44,7 @@ class BinaryDownloadIntegrationTest extends TestCase
     public function testPlatformDetectorReturnsValidBinaryName(): void
     {
         $binaryName = PlatformDetector::getCurrentPlatformBinaryName();
-        
+
         $this->assertIsString($binaryName);
         $this->assertMatchesRegularExpression(
             '/^(libscanme_qr|scanme_qr)/',

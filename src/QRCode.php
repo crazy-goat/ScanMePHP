@@ -7,24 +7,23 @@ namespace CrazyGoat\ScanMePHP;
 use CrazyGoat\ScanMePHP\Encoding\Mode;
 use CrazyGoat\ScanMePHP\Exception\FileWriteException;
 use CrazyGoat\ScanMePHP\Exception\InvalidDataException;
-use CrazyGoat\ScanMePHP\Exception\RenderException;
 
 class QRCode
 {
-    private string $url;
-    private QRCodeConfig $config;
+    private readonly string $url;
+    private readonly QRCodeConfig $config;
     private ?Matrix $matrix = null;
-    private EncoderInterface $encoder;
+    private readonly EncoderInterface $encoder;
 
     public function __construct(string $url, ?QRCodeConfig $config = null, ?EncoderInterface $encoder = null)
     {
         $this->validateUrl($url);
         $this->url = $url;
         $this->config = $config ?? new QRCodeConfig();
-        $this->encoder = $encoder ?? self::createDefaultEncoder();
+        $this->encoder = $encoder ?? $this->createDefaultEncoder();
     }
 
-    private static function createDefaultEncoder(): EncoderInterface
+    private function createDefaultEncoder(): EncoderInterface
     {
         // Try NativeEncoder (PHP extension) first - fastest option
         if (extension_loaded('scanme_qr') && class_exists('CrazyGoat\\ScanMePHP\\NativeEncoder')) {
@@ -66,7 +65,7 @@ class QRCode
 
     private function ensureMatrix(): Matrix
     {
-        if ($this->matrix === null) {
+        if (!$this->matrix instanceof \CrazyGoat\ScanMePHP\Matrix) {
             $encoder = $this->encoder;
 
             // If a specific version is requested and we're using FastEncoder,

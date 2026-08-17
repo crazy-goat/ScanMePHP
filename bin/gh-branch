@@ -1,0 +1,210 @@
+<?php
+/**
+ * bin/gh-branch — create/switch to a feature branch derived from a GitHub issue.
+ *
+ * Usage:
+ *   bin/gh-branch <issue-number> [type] [--push] [--force] [--dry-run]
+ *
+ * The branch name is derived from the issue title and an optional type
+ * (fix|feat|docs|perf|refactor|chore|test|build|ci|process). The type is
+ * inferred from a [Type] title prefix, falling back to issue labels, then to
+ * "fix". The branch is created from the fresh remote default branch.
+ *
+ * Exit codes: 0 success, 1 usage/error, 2 git dirty/non-default abort.
+ */
+declare(strict_types=1);
+
+$opts = getopt('', ['push', 'force', 'dry-run'], $optIndex);
+$positional = array_slice($argv, 1, $optIndex - 1 >= 0 ? $optIndex - 1 : 0);
+// Re-parse positional excluding already-consumed getopt args.
+$rawArgs = array_values(array_filter(
+    array_slice($argv, 1),
+    static fn (string $a): bool => !str_starts_with($a, '--'),
+));
+
+$issue = $rawArgs[0] ?? null;
+$forcedType = $rawArgs[1] ?? null;
+
+if ($issue === null || !ctype_digit($issue)) {
+    fwrite(STDERR, "Usage: bin/gh-branch <issue-number> [type] [--push] [--force] [--dry-run]\n");
+    fwrite(STDERR, "  type: fix|feat|docs|perf|refactor|chore|test|build|ci|process\n");
+    exit(1);
+}
+
+$dryRun = isset($opts['dry-run']);
+$force = isset($opts['force']);
+$push = isset($opts['push']);
+
+/** Run a command, return [exitCode, stdout, stderr]. */
+function run(string $cmd): array
+{
+    $out = [];
+    $exit = 0;
+    exec($cmd . ' 2>&1', $out, $exit);
+    return [$exit, implode("\n", $out), ''];
+}
+
+/** Fetch the default branch of the repo via gh. */
+function defaultBranch(): string
+{
+    [$exit, $out] = run('gh repo view --json defaultBranchRef --jq .defaultBranchRef.name');
+    if ($exit !== 0 || $out === '') {
+        // fallback to git
+        [$exit2, $out2] = run('git remote show origin | grep "HEAD branch" | cut -d: -f2 | xargs');
+        if ($exit2 !== 0 || $out2 === '') {
+            return 'main';
+        }
+        return trim($out2);
+    }
+    return trim($out);
+}
+
+/** Fetch issue title + labels via gh. */
+function fetchIssue(string $issue): array
+{
+    [$exit, $out] = run(sprintf('gh issue view %s --json title,labels', escapeshellarg($issue)));
+    if ($exit !== 0) {
+        fwrite(STDERR, "Failed to fetch issue #{$issue}: {$out}\n");
+        exit(1);
+    }
+    $data = json_decode($out, true, 512, JSON_THROW_ON_ERROR);
+    $labels = array_map(static fn (array $l): string => $l['name'] ?? '', $data['labels'] ?? []);
+    return [$data['title'] ?? '', array_filter($labels)];
+}
+
+/** Infer the branch type from a [Type] prefix, then labels, then default. */
+function inferType(string $title, array $labels, ?string $forced): string
+{
+    $valid = ['fix', 'feat', 'docs', 'perf', 'refactor', 'chore', 'test', 'build', 'ci', 'process'];
+    if ($forced !== null) {
+        $forced = strtolower($forced);
+        if (!in_array($forced, $valid, true)) {
+            fwrite(STDERR, "Invalid type '{$forced}'. Valid: " . implode(', ', $valid) . "\n");
+            exit(1);
+        }
+        return $forced;
+    }
+
+    // [Type] prefix
+    if (preg_match('/^\[(Bug|Feat|Fix|Docs|Perf|Refactor|Chore|Test|Build|CI|Process|Enhancement)\]/i', $title, $m)) {
+        $map = ['bug' => 'fix', 'fix' => 'fix', 'feat' => 'feat', 'enhancement' => 'feat',
+            'docs' => 'docs', 'perf' => 'perf', 'refactor' => 'refactor', 'chore' => 'chore',
+            'test' => 'test', 'build' => 'build', 'ci' => 'ci', 'process' => 'process'];
+        return $map[strtolower($m[1])] ?? 'fix';
+    }
+
+    // labels
+    foreach ($labels as $label) {
+        $l = strtolower($label);
+        if ($l === 'bug' || $l === 'security') {
+            return 'fix';
+        }
+        if ($l === 'enhancement') {
+            return 'feat';
+        }
+        if ($l === 'documentation' || $l === 'docs') {
+            return 'docs';
+        }
+        if ($l === 'process') {
+            return 'process';
+        }
+        if ($l === 'good-first-issue') {
+            return 'feat';
+        }
+    }
+
+    return 'fix';
+}
+
+/** Slugify a title into a short kebab-case description. */
+function slugify(string $title, int $max = 40): string
+{
+    $s = preg_replace('/^\[[^\]]+\]\s*/', '', $title); // drop [Type]
+    $s = strtolower($s);
+    $s = preg_replace('/[^a-z0-9\s-]/', '', $s);
+    $s = preg_replace('/[\s-]+/', '-', $s);
+    $s = trim($s, '-');
+    $parts = explode('-', $s);
+    $out = [];
+    $len = 0;
+    foreach ($parts as $p) {
+        if ($p === '') {
+            continue;
+        }
+        if ($len + strlen($p) + 1 > $max) {
+            break;
+        }
+        $out[] = $p;
+        $len += strlen($p) + 1;
+    }
+    return implode('-', $out) ?: 'change';
+}
+
+[$title, $labels] = fetchIssue($issue);
+$type = inferType($title, $labels, $forcedType);
+$slug = slugify($title);
+$branch = sprintf('%s/issue-%s-%s', $type, $issue, $slug);
+
+if ($dryRun) {
+    echo $branch . "\n";
+    exit(0);
+}
+
+// Print branch name to stdout for capture, then create.
+$default = defaultBranch();
+
+// Fetch latest default.
+run('git fetch origin ' . escapeshellarg($default));
+
+// Check current branch + dirty tree.
+[$_, $current] = run('git rev-parse --abbrev-ref HEAD');
+$current = trim($current);
+[$exitDirty, $dirtyOut] = run('git status --porcelain');
+$dirty = trim($dirtyOut) !== '';
+
+if (!$force) {
+    if ($current !== $default && $current !== $branch) {
+        fwrite(STDERR, "Aborting: on branch '{$current}', not '{$default}'. Use --force to proceed.\n");
+        exit(2);
+    }
+    if ($dirty && $current === $default) {
+        fwrite(STDERR, "Aborting: working tree dirty on {$default}. Use --force to carry changes.\n");
+        exit(2);
+    }
+}
+
+// Does the branch exist locally or remotely?
+[$exitLocal] = run('git rev-parse --verify --quiet ' . escapeshellarg($branch));
+$existsLocal = $exitLocal === 0;
+[$exitRemote] = run('git rev-parse --verify --quiet origin/' . escapeshellarg($branch));
+$existsRemote = $exitRemote === 0;
+
+if ($existsLocal || $existsRemote) {
+    if ($existsLocal) {
+        run('git switch ' . escapeshellarg($branch));
+    } else {
+        run('git switch --track origin/' . escapeshellarg($branch));
+    }
+    fwrite(STDERR, "Switched to existing branch '{$branch}'.\n");
+} else {
+    $createCmd = 'git switch -c ' . escapeshellarg($branch) . ' origin/' . escapeshellarg($default);
+    [$exit, $out] = run($createCmd);
+    if ($exit !== 0) {
+        fwrite(STDERR, "Failed to create branch: {$out}\n");
+        exit(1);
+    }
+    fwrite(STDERR, "Created branch '{$branch}' from origin/{$default}.\n");
+}
+
+if ($push) {
+    [$exit, $out] = run('git push -u origin ' . escapeshellarg($branch));
+    if ($exit !== 0) {
+        fwrite(STDERR, "Push failed: {$out}\n");
+        exit(1);
+    }
+    fwrite(STDERR, "Pushed and set upstream.\n");
+}
+
+// Branch name to stdout for capture.
+echo $branch . "\n";
+exit(0);

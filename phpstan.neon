@@ -1,0 +1,18 @@
+includes:
+    - phpstan-baseline.neon
+
+parameters:
+    level: 4
+    paths:
+        - src/
+        - tests/
+        - bin/
+    excludePaths:
+        analyseAndScan:
+            - clib/*
+            - vendor/*
+            - php-ext/*
+            # FFI boundary: conditional if/else class swap + dynamic C struct/methods
+            # via FFI::cdef — PHPStan cannot resolve these statically.
+            - src/NativeEncoder.php
+            - src/FfiEncoder.php

@@ -11,7 +11,7 @@ QR encoding algorithms are based on [Nayuki's QR Code generator](https://www.nay
 **🚀 Blazing Fast — 3-Tier Performance**
 - **Native C++ via FFI**: 10–12× faster than pure PHP (sub-millisecond generation)
 - **64-bit Optimized**: 2× faster with int-pair bit packing (no extensions needed)
-- **Portable Fallback**: Works on any PHP 8.1+, 32-bit or 64-bit
+- **Portable Fallback**: Works on any PHP 8.2+, 32-bit or 64-bit
 
 Auto-selects the fastest encoder available — no configuration needed.
 
@@ -35,7 +35,7 @@ SVG, PNG (pure PHP, 1-bit), HTML (div/table), ASCII (3 styles). Works in termina
 - **All QR versions** — v1–v40, all error correction levels (L/M/Q/H)
 - **High performance** — 3 encoder tiers: native C++ FFI (10–12× faster), FastEncoder (2×), portable Encoder
 - **Customizable** — module styles, colors, labels, dark mode, margins
-- **Type-safe** — strict types, enums, readonly properties, PHP 8.1+ idioms
+- **Type-safe** — strict types, enums, readonly properties, PHP 8.2+ idioms
 
 ## Installation
 
@@ -102,7 +102,7 @@ During `composer install` or `composer update`, the plugin will:
 #### Building from Source
 
 Requirements:
-- PHP 8.1+ with `php-dev`/`phpize`
+- PHP 8.2+ with `php-dev`/`phpize`
 - CMake 3.10+
 - C++ compiler (g++ or clang++)
 - Make
@@ -393,7 +393,7 @@ ScanMePHP includes four encoder implementations. `QRCode` auto-selects the faste
 | `NativeEncoderExt` | v1–v27 | 64-bit PHP + `scanmeqr` extension | **13–21×** faster |
 | `FfiEncoder` | v1–v40 | 64-bit PHP + FFI + `libscanme_qr.so` | **10–12×** faster |
 | `FastEncoder` | v1–v27 | 64-bit PHP | **~2×** faster |
-| `Encoder` | v1–v40 | any PHP 8.1+ | baseline |
+| `Encoder` | v1–v40 | any PHP 8.2+ | baseline |
 
 ### Capacity (Byte Mode)
 
@@ -478,7 +478,7 @@ Place the downloaded binary in your project directory. The `FfiEncoder` will aut
 
 ## Requirements
 
-- PHP >= 8.1
+- PHP >= 8.2
 - No extensions required
 - No external dependencies
 - Optional: C++20 compiler + CMake for native FFI encoder

@@ -12,13 +12,17 @@
         }
     ],
     "require": {
-        "php": ">=8.1",
+        "php": "^8.2",
         "composer-plugin-api": "^2.0"
     },
     "require-dev": {
-        "phpunit/phpunit": "^10.0",
-        "brianium/paratest": "^7.0",
-        "ext-gd": "*"
+        "ext-gd": "*",
+        "brianium/paratest": "^7.6",
+        "composer/composer": "^2",
+        "friendsofphp/php-cs-fixer": "^3",
+        "phpstan/phpstan": "^2",
+        "phpunit/phpunit": "^11.5",
+        "rector/rector": "^2"
     },
     "autoload": {
         "psr-4": {
@@ -36,7 +40,25 @@
     "scripts": {
         "test": "phpunit",
         "test:fast": "php -d xdebug.mode=off vendor/bin/phpunit",
-        "test:parallel": "paratest --processes=4 --colors --testdox"
+        "test:parallel": "paratest --processes=4 --colors --testdox",
+        "lint": [
+            "@lint:cs",
+            "@lint:phpstan",
+            "@lint:rector",
+            "@lint:kb"
+        ],
+        "lint-fix": [
+            "@lint:cs-fix",
+            "@lint:rector-fix",
+            "@lint:kb-fix"
+        ],
+        "lint:cs": "php-cs-fixer fix --dry-run --diff --allow-risky=yes",
+        "lint:cs-fix": "php-cs-fixer fix --allow-risky=yes",
+        "lint:phpstan": "phpstan analyse",
+        "lint:rector": "rector process --dry-run",
+        "lint:rector-fix": "rector process",
+        "lint:kb": "php bin/kb-lint.php",
+        "lint:kb-fix": "php bin/kb-lint.php --fix"
     },
     "minimum-stability": "stable",
     "prefer-stable": true

@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP\Composer;
@@ -43,7 +44,11 @@ class Plugin implements PluginInterface, EventSubscriberInterface
 
     public function onPackageInstall(PackageEvent $event): void
     {
-        $package = $event->getOperation()->getPackage();
+        $operation = $event->getOperation();
+        if (!$operation instanceof \Composer\DependencyResolver\Operation\InstallOperation) {
+            return;
+        }
+        $package = $operation->getPackage();
         if ($package->getName() === self::PACKAGE_NAME) {
             $this->installBinaries($event->getComposer(), $package);
         }
@@ -51,13 +56,17 @@ class Plugin implements PluginInterface, EventSubscriberInterface
 
     public function onPackageUpdate(PackageEvent $event): void
     {
-        $package = $event->getOperation()->getTargetPackage();
+        $operation = $event->getOperation();
+        if (!$operation instanceof \Composer\DependencyResolver\Operation\UpdateOperation) {
+            return;
+        }
+        $package = $operation->getTargetPackage();
         if ($package->getName() === self::PACKAGE_NAME) {
             $this->installBinaries($event->getComposer(), $package);
         }
     }
 
-    private function installBinaries(Composer $composer, $package): void
+    private function installBinaries(Composer $composer, \Composer\Package\PackageInterface $package): void
     {
         $this->io->write('ScanMePHP Binary Installer (Plugin)');
         $this->io->write('====================================');
@@ -83,7 +92,8 @@ class Plugin implements PluginInterface, EventSubscriberInterface
             $arch = $this->getArchitecture();
             $variant = $os === 'linux' ? $this->getLinuxVariant() : null;
 
-            $this->io->write(sprintf('✓ Detected platform: %s %s%s',
+            $this->io->write(sprintf(
+                '✓ Detected platform: %s %s%s',
                 $os,
                 $variant ? $variant . ' ' : '',
                 $arch

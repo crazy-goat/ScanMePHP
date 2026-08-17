@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace CrazyGoat\ScanMePHP\Renderer;
 
 use CrazyGoat\ScanMePHP\Matrix;
-use CrazyGoat\ScanMePHP\RenderOptions;
 use CrazyGoat\ScanMePHP\RendererInterface;
+use CrazyGoat\ScanMePHP\RenderOptions;
 
 class HtmlDivRenderer implements RendererInterface
 {
     public function __construct(
-        private int $moduleSize = 10,
-        private bool $fullHtml = false,
+        private readonly int $moduleSize = 10,
+        private readonly bool $fullHtml = false,
     ) {
     }
 
@@ -39,9 +39,7 @@ class HtmlDivRenderer implements RendererInterface
             $html .= '<div style="display:flex">';
             for ($x = 0; $x < $totalModules; $x++) {
                 $dataX = $x - $margin;
-                $isDark = ($dataX >= 0 && $dataX < $size && $dataY >= 0 && $dataY < $size)
-                    ? $matrix->fastGet($dataX, $dataY)
-                    : false;
+                $isDark = $dataX >= 0 && $dataX < $size && $dataY >= 0 && $dataY < $size && $matrix->fastGet($dataX, $dataY);
                 $color = $isDark ? $escFg : $escBg;
                 $html .= '<div style="width:' . $mod . 'px;height:' . $mod . 'px;background:' . $color . '"></div>';
             }
@@ -56,7 +54,7 @@ class HtmlDivRenderer implements RendererInterface
         $html .= '</div>';
 
         if ($this->fullHtml) {
-            $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>QR Code</title></head><body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f0f0f0">' . $html . '</body></html>';
+            return '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>QR Code</title></head><body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f0f0f0">' . $html . '</body></html>';
         }
 
         return $html;

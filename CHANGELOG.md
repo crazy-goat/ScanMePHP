@@ -9,7 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Agent workflow (`.workflow/workflow.md`) adapted from the workerman-bundle
+  workflow: issue → feature branch → subagent implementation → review rounds
+  → PR → CI → merge, with proof-of-work files under `.workflow/proof_of_work/`
+  and a knowledge base under `.workflow/helpers/` (`faq.md`, `decisions.md`)
+- Workflow helper scripts in `bin/`: `gh-branch` (derive a feature branch
+  from an issue), `pick-issue.php` (rank open issues by labels/age/comments),
+  `kb-lint.php` (validate the knowledge base and regenerate its tag index)
+- Dev tooling via `composer lint` / `composer lint-fix`: PHPStan (level 4
+  with a baseline), php-cs-fixer (PSR-12), Rector (PHP 8.2+ modernizing rules)
+- `composer/composer` as a dev dependency so PHPStan can resolve the
+  Composer plugin interfaces in `src/Composer/`
 - Docker test image (`docker/Dockerfile`) and wrapper script (`docker/test.sh`) to run the test suite on a supported PHP version (8.4 by default) without changing the system PHP; mirrors the CI environment (ffi + gd extensions, composer, C++ build tools for `clib/`)
+
+### Changed
+
+- Minimum PHP raised from 8.1 to 8.2 (`composer.json`, CI matrix). The
+  precompiled extension binaries are still built for 8.1 in `release-build.yml`
+- CI test matrix is now PHP 8.2, 8.3, 8.4 (8.1 dropped)
+
+### Fixed
+
+- Applied `php-cs-fixer` and `rector` to the whole codebase: PSR-12
+  formatting, `readonly` properties, removed unused promoted property in
+  `FfiEncoder`
+
+### Removed
+
+- PHP 8.1 from the supported PHP range for the library code
 
 ## [0.4.11] - 2026-03-18
 

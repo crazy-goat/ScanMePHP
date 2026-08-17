@@ -14,10 +14,10 @@ use CrazyGoat\ScanMePHP\Exception\InvalidDataException;
 
 class Encoder implements EncoderInterface
 {
-    private DataEncoder $dataEncoder;
-    private ReedSolomon $reedSolomon;
-    private MatrixBuilder $matrixBuilder;
-    private MaskSelector $maskSelector;
+    private readonly DataEncoder $dataEncoder;
+    private readonly ReedSolomon $reedSolomon;
+    private readonly MatrixBuilder $matrixBuilder;
+    private readonly MaskSelector $maskSelector;
 
     // Character capacity table for each version and error correction level
     // [version-1][errorCorrectionLevel][mode] = capacity
@@ -92,10 +92,10 @@ class Encoder implements EncoderInterface
 
         // Encode data
         $encodedData = $this->dataEncoder->encode($data, $mode, $version);
-        
+
         // Calculate total capacity
         $totalCapacity = $this->getTotalDataCodewords($version, $errorCorrectionLevel);
-        
+
         // Add terminator and padding
         $encodedData = $this->dataEncoder->addTerminatorAndPadding($encodedData, $totalCapacity);
 

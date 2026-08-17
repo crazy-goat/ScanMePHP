@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP\Tests\Composer;
@@ -29,7 +30,7 @@ class InstallScriptTest extends TestCase
             new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS),
             \RecursiveIteratorIterator::CHILD_FIRST
         );
-        
+
         foreach ($iterator as $file) {
             if ($file->isDir()) {
                 rmdir($file->getPathname());
@@ -37,7 +38,7 @@ class InstallScriptTest extends TestCase
                 unlink($file->getPathname());
             }
         }
-        
+
         rmdir($dir);
     }
 
@@ -56,12 +57,12 @@ class InstallScriptTest extends TestCase
                 'crazy-goat/scanmephp' => '^0.4.0',
             ],
         ];
-        
+
         file_put_contents(
             $this->tempDir . '/composer.json',
             json_encode($composerJson, JSON_PRETTY_PRINT)
         );
-        
+
         // Create vendor directory with installed.json
         mkdir($this->tempDir . '/vendor/composer', 0777, true);
         $installedJson = [

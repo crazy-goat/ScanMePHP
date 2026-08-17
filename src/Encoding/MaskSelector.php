@@ -46,7 +46,13 @@ class MaskSelector
             $rowOffset = $y * $size;
             $runColor = 0;
             $runLen = 0;
-            $h0 = 0; $h1 = 0; $h2 = 0; $h3 = 0; $h4 = 0; $h5 = 0; $h6 = 0;
+            $h0 = 0;
+            $h1 = 0;
+            $h2 = 0;
+            $h3 = 0;
+            $h4 = 0;
+            $h5 = 0;
+            $h6 = 0;
 
             for ($x = 0; $x < $size; $x++) {
                 $c = $modules[$rowOffset + $x];
@@ -64,7 +70,13 @@ class MaskSelector
                     if ($h0 === 0) {
                         $runLen += $size;
                     }
-                    $h6 = $h5; $h5 = $h4; $h4 = $h3; $h3 = $h2; $h2 = $h1; $h1 = $h0; $h0 = $runLen;
+                    $h6 = $h5;
+                    $h5 = $h4;
+                    $h4 = $h3;
+                    $h3 = $h2;
+                    $h2 = $h1;
+                    $h1 = $h0;
+                    $h0 = $runLen;
 
                     // finderPenaltyCountPatterns inline (only when previous color was white/0)
                     if (!$runColor) {
@@ -88,14 +100,26 @@ class MaskSelector
                 if ($h0 === 0) {
                     $runLen += $size;
                 }
-                $h6 = $h5; $h5 = $h4; $h4 = $h3; $h3 = $h2; $h2 = $h1; $h1 = $h0; $h0 = $runLen;
+                $h6 = $h5;
+                $h5 = $h4;
+                $h4 = $h3;
+                $h3 = $h2;
+                $h2 = $h1;
+                $h1 = $h0;
+                $h0 = $runLen;
                 $runLen = 0;
             }
             $runLen += $size;
             if ($h0 === 0) {
                 $runLen += $size;
             }
-            $h6 = $h5; $h5 = $h4; $h4 = $h3; $h3 = $h2; $h2 = $h1; $h1 = $h0; $h0 = $runLen;
+            $h6 = $h5;
+            $h5 = $h4;
+            $h4 = $h3;
+            $h3 = $h2;
+            $h2 = $h1;
+            $h1 = $h0;
+            $h0 = $runLen;
             if ($h1 > 0 && $h2 === $h1 && $h3 === $h1 * 3 && $h4 === $h1 && $h5 === $h1) {
                 if ($h0 >= $h1 * 4 && $h6 >= $h1) {
                     $penalty += 40;
@@ -110,7 +134,13 @@ class MaskSelector
         for ($x = 0; $x < $size; $x++) {
             $runColor = 0;
             $runLen = 0;
-            $h0 = 0; $h1 = 0; $h2 = 0; $h3 = 0; $h4 = 0; $h5 = 0; $h6 = 0;
+            $h0 = 0;
+            $h1 = 0;
+            $h2 = 0;
+            $h3 = 0;
+            $h4 = 0;
+            $h5 = 0;
+            $h6 = 0;
 
             for ($y = 0; $y < $size; $y++) {
                 $c = $modules[$y * $size + $x];
@@ -126,7 +156,13 @@ class MaskSelector
                     if ($h0 === 0) {
                         $runLen += $size;
                     }
-                    $h6 = $h5; $h5 = $h4; $h4 = $h3; $h3 = $h2; $h2 = $h1; $h1 = $h0; $h0 = $runLen;
+                    $h6 = $h5;
+                    $h5 = $h4;
+                    $h4 = $h3;
+                    $h3 = $h2;
+                    $h2 = $h1;
+                    $h1 = $h0;
+                    $h0 = $runLen;
 
                     if (!$runColor) {
                         if ($h1 > 0 && $h2 === $h1 && $h3 === $h1 * 3 && $h4 === $h1 && $h5 === $h1) {
@@ -149,14 +185,26 @@ class MaskSelector
                 if ($h0 === 0) {
                     $runLen += $size;
                 }
-                $h6 = $h5; $h5 = $h4; $h4 = $h3; $h3 = $h2; $h2 = $h1; $h1 = $h0; $h0 = $runLen;
+                $h6 = $h5;
+                $h5 = $h4;
+                $h4 = $h3;
+                $h3 = $h2;
+                $h2 = $h1;
+                $h1 = $h0;
+                $h0 = $runLen;
                 $runLen = 0;
             }
             $runLen += $size;
             if ($h0 === 0) {
                 $runLen += $size;
             }
-            $h6 = $h5; $h5 = $h4; $h4 = $h3; $h3 = $h2; $h2 = $h1; $h1 = $h0; $h0 = $runLen;
+            $h6 = $h5;
+            $h5 = $h4;
+            $h4 = $h3;
+            $h3 = $h2;
+            $h2 = $h1;
+            $h1 = $h0;
+            $h0 = $runLen;
             if ($h1 > 0 && $h2 === $h1 && $h3 === $h1 * 3 && $h4 === $h1 && $h5 === $h1) {
                 if ($h0 >= $h1 * 4 && $h6 >= $h1) {
                     $penalty += 40;
@@ -185,9 +233,8 @@ class MaskSelector
         // === Rule 4: Dark/light balance (nayuki integer formula) ===
         $totalModules = $size * $size;
         $k = intdiv(abs($darkCount * 20 - $totalModules * 10) + $totalModules - 1, $totalModules) - 1;
-        $penalty += max($k, 0) * 10;
 
-        return $penalty;
+        return $penalty + max($k, 0) * 10;
     }
 
     private function buildMaskedGrid(Matrix $matrix, int $size, int $maskPattern, array $reserved, ErrorCorrectionLevel $ecl): array
@@ -235,7 +282,7 @@ class MaskSelector
         $formatBits = $this->computeFormatBits($ecl, $maskPattern);
 
         $grid[0 * $size + 8] = ($formatBits >> 0) & 1;
-        $grid[1 * $size + 8] = ($formatBits >> 1) & 1;
+        $grid[$size + 8] = ($formatBits >> 1) & 1;
         $grid[2 * $size + 8] = ($formatBits >> 2) & 1;
         $grid[3 * $size + 8] = ($formatBits >> 3) & 1;
         $grid[4 * $size + 8] = ($formatBits >> 4) & 1;
@@ -248,7 +295,7 @@ class MaskSelector
         $grid[8 * $size + 3] = ($formatBits >> 11) & 1;
         $grid[8 * $size + 2] = ($formatBits >> 12) & 1;
         $grid[8 * $size + 1] = ($formatBits >> 13) & 1;
-        $grid[8 * $size + 0] = ($formatBits >> 14) & 1;
+        $grid[8 * $size] = ($formatBits >> 14) & 1;
 
         for ($i = 0; $i < 8; $i++) {
             $grid[8 * $size + ($size - 1 - $i)] = ($formatBits >> $i) & 1;

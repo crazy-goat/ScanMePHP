@@ -1,0 +1,127 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Comparison operation "\>\=" between 0 and \*NEVER\* results in an error\.$#'
+			identifier: greaterOrEqual.invalid
+			count: 4
+			path: src/Encoding/MaskSelector.php
+
+		-
+			message: '#^Comparison operation "\>\=" between 0 and int\<1, max\> is always false\.$#'
+			identifier: greaterOrEqual.alwaysFalse
+			count: 2
+			path: src/Encoding/MaskSelector.php
+
+		-
+			message: '#^Comparison operation "\>\=" between 0 and int\<4, max\> is always false\.$#'
+			identifier: greaterOrEqual.alwaysFalse
+			count: 2
+			path: src/Encoding/MaskSelector.php
+
+		-
+			message: '#^Comparison operation "\>\=" between int\<0, max\> and \*NEVER\* results in an error\.$#'
+			identifier: greaterOrEqual.invalid
+			count: 4
+			path: src/Encoding/MaskSelector.php
+
+		-
+			message: '#^Result of && is always false\.$#'
+			identifier: booleanAnd.alwaysFalse
+			count: 8
+			path: src/Encoding/MaskSelector.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between 0 and \*NEVER\* will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 2
+			path: src/Encoding/MaskSelector.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between 0 and int\<1, max\> will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 2
+			path: src/Encoding/MaskSelector.php
+
+		-
+			message: '#^Comparison operation "\>\=" between 0 and \*NEVER\* results in an error\.$#'
+			identifier: greaterOrEqual.invalid
+			count: 6
+			path: src/FastEncoder.php
+
+		-
+			message: '#^Comparison operation "\>\=" between 0 and int\<21, 125\> is always false\.$#'
+			identifier: greaterOrEqual.alwaysFalse
+			count: 2
+			path: src/FastEncoder.php
+
+		-
+			message: '#^Comparison operation "\>\=" between 0 and int\<84, 500\> is always false\.$#'
+			identifier: greaterOrEqual.alwaysFalse
+			count: 2
+			path: src/FastEncoder.php
+
+		-
+			message: '#^Comparison operation "\>\=" between int\<0, max\> and \*NEVER\* results in an error\.$#'
+			identifier: greaterOrEqual.invalid
+			count: 6
+			path: src/FastEncoder.php
+
+		-
+			message: '#^Result of && is always false\.$#'
+			identifier: booleanAnd.alwaysFalse
+			count: 10
+			path: src/FastEncoder.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between 0 and \*NEVER\* will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 3
+			path: src/FastEncoder.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between 0 and int\<1, max\> will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 3
+			path: src/FastEncoder.php
+
+		-
+			message: '#^Call to method PHPUnit\\Framework\\Assert\:\:assertIsBool\(\) with bool will always evaluate to true\.$#'
+			identifier: method.alreadyNarrowedType
+			count: 1
+			path: tests/BuilderTest.php
+
+		-
+			message: '#^Call to method PHPUnit\\Framework\\Assert\:\:assertIsBool\(\) with bool will always evaluate to true\.$#'
+			identifier: method.alreadyNarrowedType
+			count: 1
+			path: tests/FfiEncoderTest.php
+
+		-
+			message: '#^Call to method PHPUnit\\Framework\\Assert\:\:assertIsString\(\) with string will always evaluate to true\.$#'
+			identifier: method.alreadyNarrowedType
+			count: 1
+			path: tests/FfiEncoderTest.php
+
+		-
+			message: '#^Call to method PHPUnit\\Framework\\Assert\:\:assertIsString\(\) with string will always evaluate to true\.$#'
+			identifier: method.alreadyNarrowedType
+			count: 1
+			path: tests/Integration/BinaryDownloadIntegrationTest.php
+
+		-
+			message: '#^Call to method PHPUnit\\Framework\\Assert\:\:assertIsString\(\) with string will always evaluate to true\.$#'
+			identifier: method.alreadyNarrowedType
+			count: 3
+			path: tests/PlatformDetectorTest.php
+
+		-
+			message: '#^Call to method PHPUnit\\Framework\\Assert\:\:assertIsInt\(\) with int will always evaluate to true\.$#'
+			identifier: method.alreadyNarrowedType
+			count: 1
+			path: tests/QRCodeTest.php
+
+		-
+			message: '#^Call to method PHPUnit\\Framework\\Assert\:\:assertIsString\(\) with string will always evaluate to true\.$#'
+			identifier: method.alreadyNarrowedType
+			count: 12
+			path: tests/QRCodeTest.php

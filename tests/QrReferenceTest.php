@@ -13,17 +13,18 @@ use PHPUnit\Framework\TestCase;
 
 class QrReferenceTest extends TestCase
 {
-    private static function eclFromString(string $ecl): ErrorCorrectionLevel
+    private function eclFromString(string $ecl): ErrorCorrectionLevel
     {
         return match ($ecl) {
             'L' => ErrorCorrectionLevel::Low,
             'M' => ErrorCorrectionLevel::Medium,
             'Q' => ErrorCorrectionLevel::Quartile,
             'H' => ErrorCorrectionLevel::High,
+            default => throw new \InvalidArgumentException(sprintf('Unknown error correction level: %s', $ecl)),
         };
     }
 
-    private static function matrixToBits(array $data, int $size): string
+    private function matrixToBits(array $data, int $size): string
     {
         $bits = '';
         for ($y = 0; $y < $size; $y++) {
@@ -57,10 +58,10 @@ class QrReferenceTest extends TestCase
     public function testEncoderMatchesReference(string $url, string $ecl, int $version, int $size, string $expectedBits): void
     {
         $encoder = new Encoder();
-        $matrix = $encoder->encode($url, self::eclFromString($ecl));
+        $matrix = $encoder->encode($url, $this->eclFromString($ecl));
 
         $this->assertSame($size, $matrix->getSize(), 'Size mismatch');
-        $bits = self::matrixToBits($matrix->getData(), $size);
+        $bits = $this->matrixToBits($matrix->getData(), $size);
         $this->assertSame($expectedBits, $bits);
     }
 
@@ -68,10 +69,10 @@ class QrReferenceTest extends TestCase
     public function testFastEncoderMatchesReference(string $url, string $ecl, int $version, int $size, string $expectedBits): void
     {
         $encoder = new FastEncoder();
-        $matrix = $encoder->encode($url, self::eclFromString($ecl));
+        $matrix = $encoder->encode($url, $this->eclFromString($ecl));
 
         $this->assertSame($size, $matrix->getSize(), 'Size mismatch');
-        $bits = self::matrixToBits($matrix->getData(), $size);
+        $bits = $this->matrixToBits($matrix->getData(), $size);
         $this->assertSame($expectedBits, $bits);
     }
 
@@ -84,10 +85,10 @@ class QrReferenceTest extends TestCase
         }
 
         $encoder = new FfiEncoder($libPath);
-        $matrix = $encoder->encode($url, self::eclFromString($ecl));
+        $matrix = $encoder->encode($url, $this->eclFromString($ecl));
 
         $this->assertSame($size, $matrix->getSize(), 'Size mismatch');
-        $bits = self::matrixToBits($matrix->getData(), $size);
+        $bits = $this->matrixToBits($matrix->getData(), $size);
         $this->assertSame($expectedBits, $bits);
     }
 }

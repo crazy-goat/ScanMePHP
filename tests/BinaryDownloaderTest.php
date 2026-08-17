@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP\Tests;
@@ -20,7 +21,7 @@ class BinaryDownloaderTest extends TestCase
     protected function tearDown(): void
     {
         if (is_dir($this->tempDir)) {
-            array_map('unlink', glob($this->tempDir . '/*'));
+            array_map(unlink(...), glob($this->tempDir . '/*'));
             rmdir($this->tempDir);
         }
     }
@@ -32,7 +33,7 @@ class BinaryDownloaderTest extends TestCase
             'v0.4.4',
             $this->tempDir
         );
-        
+
         $this->assertInstanceOf(BinaryDownloader::class, $downloader);
     }
 
@@ -43,7 +44,7 @@ class BinaryDownloaderTest extends TestCase
             'v0.4.4',
             $this->tempDir
         );
-        
+
         $url = $downloader->getDownloadUrl('libscanme_qr-linux-glibc-x86_64.so');
         $this->assertEquals(
             'https://github.com/crazy-goat/scanmephp/releases/download/v0.4.4/libscanme_qr-linux-glibc-x86_64.so',
@@ -55,7 +56,7 @@ class BinaryDownloaderTest extends TestCase
     {
         $this->expectException(DownloadException::class);
         $this->expectExceptionMessage('Invalid version format');
-        
+
         new BinaryDownloader(
             'crazy-goat/scanmephp',
             'invalid',

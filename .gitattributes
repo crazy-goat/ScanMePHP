@@ -1,0 +1,16 @@
+# Exclude development/workflow artifacts from distributed archives.
+/.workflow/proof_of_work/ export-ignore
+/.workflow/helpers/ export-ignore
+/.workflow/ export-ignore
+/bin/ export-ignore
+/bench/ export-ignore
+/clib/build/ export-ignore
+/tests/ export-ignore
+/.github/ export-ignore
+/.phpunit.cache/ export-ignore
+/docker/ export-ignore
+/phpstan.neon export-ignore
+/.php-cs-fixer.php export-ignore
+/rector.php export-ignore
+BENCHMARK.md export-ignore
+OPTIMIZATION_RESULTS.md export-ignore
