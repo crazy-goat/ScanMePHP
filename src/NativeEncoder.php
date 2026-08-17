@@ -29,7 +29,14 @@ if (extension_loaded('scanmeqr')) {
             string $url,
             ErrorCorrectionLevel $errorCorrectionLevel,
         ): Matrix {
-            return (new FfiEncoder())->encode($url, $errorCorrectionLevel);
+            $libraryPath = FfiEncoder::resolveLibraryPath()
+                ?? throw new \RuntimeException(
+                    'No native ScanMePHP library available: build the FFI library '
+                    . '(cmake -S clib -B clib/build && cmake --build clib/build), '
+                    . 'enable the ext-ffi extension, or install the scanmeqr PHP extension.'
+                );
+
+            return (new FfiEncoder($libraryPath))->encode($url, $errorCorrectionLevel);
         }
     }
 }

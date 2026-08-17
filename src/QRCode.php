@@ -26,20 +26,15 @@ class QRCode
     private function createDefaultEncoder(): EncoderInterface
     {
         // Try NativeEncoder (PHP extension) first - fastest option
-        if (extension_loaded('scanme_qr') && class_exists('CrazyGoat\\ScanMePHP\\NativeEncoder')) {
+        if (extension_loaded('scanmeqr') && class_exists('CrazyGoat\\ScanMePHP\\NativeEncoder')) {
             return new NativeEncoder();
         }
 
-        // Try FFI encoder with downloaded binary first (vendor location)
-        $vendorBinary = dirname(__DIR__) . '/../../crazy-goat/scanmephp/ffi-binaries/' . PlatformDetector::getCurrentPlatformBinaryName();
-        if (FfiEncoder::isAvailable($vendorBinary)) {
-            return new FfiEncoder($vendorBinary);
-        }
-
-        // Fallback to local build
-        $localBuild = dirname(__DIR__) . '/clib/build/libscanme_qr.so';
-        if (FfiEncoder::isAvailable($localBuild)) {
-            return new FfiEncoder($localBuild);
+        // Try FFI encoder: vendor binary first, then local build (single source
+        // of truth in FfiEncoder::resolveLibraryPath()).
+        $ffiLibrary = FfiEncoder::resolveLibraryPath();
+        if ($ffiLibrary !== null) {
+            return new FfiEncoder($ffiLibrary);
         }
 
         // Use FastEncoder on 64-bit PHP
