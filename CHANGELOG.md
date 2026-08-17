@@ -30,6 +30,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `QRCode::createDefaultEncoder()` now checks `extension_loaded('scanmeqr')`
+  (the correct module name per `php-ext/scanme_qr.c`) instead of the misspelled
+  `scanme_qr`, so the native C extension is actually selected when loaded (#39)
+- `NativeEncoder` no-extension fallback no longer throws `ArgumentCountError`
+  (`new FfiEncoder()` required a library path); it now resolves the FFI library
+  via the shared `FfiEncoder::resolveLibraryPath()` and throws a clear
+  `RuntimeException` when no library is available (#39)
+- Centralized FFI library path resolution into `FfiEncoder::resolveLibraryPath()`
+  as the single source of truth used by both `QRCode` and `NativeEncoder`, with
+  a consistency test pinning all `extension_loaded('scanmeqr')` call sites (#39)
 - Applied `php-cs-fixer` and `rector` to the whole codebase: PSR-12
   formatting, `readonly` properties, removed unused promoted property in
   `FfiEncoder`
