@@ -20,3 +20,13 @@ Round 1 findings. Status legend: open / fixed / not-a-finding.
 - **what:** The reflection test `testDefaultEncoderIsNotNativeEncoderWhenExtensionIsMissing` does not exercise the #39 bug. It asserts NativeEncoder is not returned when the extension is absent — which was true both before and after the fix (the misspelled `scanme_qr` also evaluated to false). The consistency test (`testAllEncoderSelectionPathsUseTheSameExtensionName`) is the actual regression test for #39. A comment clarifying this distinction would help future maintainers.
 - **severity:** low
 - **status:** fixed (round 1) — added a comment block above the test explaining it is a future-guard, not the #39 regression test, and pointing to `testAllEncoderSelectionPathsUseTheSameExtensionName` as the real guard.
+
+---
+
+## Round 2 verification
+
+- **R1-1 Round 2 verification: fixed.** `src/FfiEncoder.php:80-100` defines `resolveLibraryPath(): ?string` (vendor binary first, then local build, else null); `src/QRCode.php:39-42` and `src/NativeEncoder.php:38-44` both route through it. grep confirms the literal `'/clib/build/libscanme_qr.so'` appears only in `src/FfiEncoder.php:92`, not in either call site. Resolution order byte-identical to the old per-call-site code.
+- **R1-2 Round 2 verification: fixed.** `src/NativeEncoder.php:39-43` message now reads "... build the FFI library ..., enable the ext-ffi extension, or install the scanmeqr PHP extension." — covers the ext-ffi-absent case.
+- **R1-3 Round 2 verification: fixed.** `tests/ExtensionNameConsistencyTest.php:83-87` has a `// NOTE:` block above `testDefaultEncoderIsNotNativeEncoderWhenExtensionIsMissing` clarifying it is a future-guard, not the #39 regression test.
+
+No new findings (R2-*): none.
