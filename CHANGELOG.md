@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Bumped `phpunit/phpunit` to `^11.5 || ^12.5 || ^13.0` and `brianium/paratest` to `^7.24` to support PHP 8.5
+
 ## [0.4.11] - 2026-03-18
 
 ### Fixed
