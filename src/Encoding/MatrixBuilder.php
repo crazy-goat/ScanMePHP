@@ -9,26 +9,6 @@ use CrazyGoat\ScanMePHP\Matrix;
 
 class MatrixBuilder
 {
-    private array $formatInfoBits = [
-        // Error correction level L (0): 01
-        // Error correction level M (1): 00
-        // Error correction level Q (2): 11
-        // Error correction level H (3): 10
-        
-        // Mask patterns 0-7 combined with error correction levels
-        // Format: [ECC_L, ECC_M, ECC_Q, ECC_H] for each mask
-        [
-            [0x77c4, 0x5412, 0x5f74, 0x5d24],
-            [0x72f3, 0x50d8, 0x57c0, 0x55a0],
-            [0x7a89, 0x58f9, 0x5f04, 0x5d04],
-            [0x759b, 0x53e5, 0x54b0, 0x5290],
-            [0x7685, 0x5686, 0x5d10, 0x5b10],
-            [0x71f1, 0x51d1, 0x56e0, 0x54c0],
-            [0x79e9, 0x59c9, 0x5e80, 0x5c80],
-            [0x74d8, 0x54b8, 0x5350, 0x5150],
-        ],
-    ];
-
     public function build(
         int $version,
         array $dataCodewords,
@@ -103,7 +83,7 @@ class MatrixBuilder
     {
         $size = $matrix->getSize();
         $finderSize = 7;
-        
+
         // Finder pattern pattern (7x7)
         $pattern = [
             [1, 1, 1, 1, 1, 1, 1],
@@ -114,21 +94,21 @@ class MatrixBuilder
             [1, 0, 0, 0, 0, 0, 1],
             [1, 1, 1, 1, 1, 1, 1],
         ];
-        
+
         // Top-left
         for ($y = 0; $y < $finderSize; $y++) {
             for ($x = 0; $x < $finderSize; $x++) {
                 $matrix->set($x, $y, (bool) $pattern[$y][$x]);
             }
         }
-        
+
         // Top-right
         for ($y = 0; $y < $finderSize; $y++) {
             for ($x = 0; $x < $finderSize; $x++) {
                 $matrix->set($size - $finderSize + $x, $y, (bool) $pattern[$y][$x]);
             }
         }
-        
+
         // Bottom-left
         for ($y = 0; $y < $finderSize; $y++) {
             for ($x = 0; $x < $finderSize; $x++) {
@@ -140,19 +120,19 @@ class MatrixBuilder
     private function addSeparators(Matrix $matrix): void
     {
         $size = $matrix->getSize();
-        
+
         // Top-left separator
         for ($i = 0; $i < 8; $i++) {
             $matrix->set($i, 7, false);
             $matrix->set(7, $i, false);
         }
-        
+
         // Top-right separator
         for ($i = 0; $i < 8; $i++) {
             $matrix->set($size - 8 + $i, 7, false);
             $matrix->set($size - 8, $i, false);
         }
-        
+
         // Bottom-left separator
         for ($i = 0; $i < 8; $i++) {
             $matrix->set($i, $size - 8, false);
@@ -236,21 +216,24 @@ class MatrixBuilder
 
     private function overlapsFinderPattern(int $cx, int $cy, int $size): bool
     {
-        if ($cx <= 8 && $cy <= 8) return true;
-        if ($cx >= $size - 8 && $cy <= 8) return true;
-        if ($cx <= 8 && $cy >= $size - 8) return true;
-        return false;
+        if ($cx <= 8 && $cy <= 8) {
+            return true;
+        }
+        if ($cx >= $size - 8 && $cy <= 8) {
+            return true;
+        }
+        return $cx <= 8 && $cy >= $size - 8;
     }
 
     private function addTimingPatterns(Matrix $matrix): void
     {
         $size = $matrix->getSize();
-        
+
         // Horizontal timing pattern
         for ($x = 8; $x < $size - 8; $x++) {
             $matrix->set($x, 6, $x % 2 === 0);
         }
-        
+
         // Vertical timing pattern
         for ($y = 8; $y < $size - 8; $y++) {
             $matrix->set(6, $y, $y % 2 === 0);
@@ -267,7 +250,7 @@ class MatrixBuilder
     {
         $size = $matrix->getSize();
         $formatBits = $this->getFormatBits($level, $maskPattern);
-        
+
         // Top-left format info (along column 8, bottom to top, then along row 8, right to left)
         $matrix->set(8, 0, (bool) (($formatBits >> 0) & 1));
         $matrix->set(8, 1, (bool) (($formatBits >> 1) & 1));
@@ -284,7 +267,7 @@ class MatrixBuilder
         $matrix->set(2, 8, (bool) (($formatBits >> 12) & 1));
         $matrix->set(1, 8, (bool) (($formatBits >> 13) & 1));
         $matrix->set(0, 8, (bool) (($formatBits >> 14) & 1));
-        
+
         // Top-right and bottom-left format info
         for ($i = 0; $i < 8; $i++) {
             $matrix->set($size - 1 - $i, 8, (bool) (($formatBits >> $i) & 1));
@@ -302,19 +285,19 @@ class MatrixBuilder
             ErrorCorrectionLevel::Quartile => 0b11,
             ErrorCorrectionLevel::High => 0b10,
         };
-        
+
         $data = ($eccBits << 3) | $maskPattern;
-        
+
         // Calculate BCH error correction
         $generator = 0x537; // BCH(15,5) generator polynomial
         $format = $data << 10;
-        
+
         for ($i = 14; $i >= 10; $i--) {
             if (($format >> $i) & 1) {
                 $format ^= $generator << ($i - 10);
             }
         }
-        
+
         $result = ($data << 10) | $format;
         return $result ^ 0x5412;
     }
@@ -323,10 +306,10 @@ class MatrixBuilder
     {
         $version = $matrix->getVersion();
         $size = $matrix->getSize();
-        
+
         // Calculate version info bits
         $versionBits = $this->getVersionBits($version);
-        
+
         // Place version info
         for ($i = 0; $i < 18; $i++) {
             $bit = (bool) (($versionBits >> $i) & 1);
@@ -340,13 +323,13 @@ class MatrixBuilder
         $data = $version;
         $generator = 0x1f25; // BCH(18,6) generator polynomial
         $versionInfo = $data << 12;
-        
+
         for ($i = 17; $i >= 12; $i--) {
             if (($versionInfo >> $i) & 1) {
                 $versionInfo ^= $generator << ($i - 12);
             }
         }
-        
+
         return ($data << 12) | $versionInfo;
     }
 

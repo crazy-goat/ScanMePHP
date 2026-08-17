@@ -1,0 +1,14 @@
+includes:
+    - phpstan-baseline.neon
+
+parameters:
+    level: 4
+    paths:
+        - src/
+        - tests/
+        - bin/
+    excludePaths:
+        - clib/*
+        - vendor/*
+        - php-ext/*
+        - src/NativeEncoder.php

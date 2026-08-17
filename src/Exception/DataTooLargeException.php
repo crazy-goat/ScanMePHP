@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP\Exception;
 
-use Exception;
 use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
+use Exception;
 
 class DataTooLargeException extends Exception
 {

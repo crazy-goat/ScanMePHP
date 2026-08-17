@@ -6,8 +6,8 @@ namespace CrazyGoat\ScanMePHP\Renderer;
 
 use CrazyGoat\ScanMePHP\Exception\RenderException;
 use CrazyGoat\ScanMePHP\Matrix;
-use CrazyGoat\ScanMePHP\RenderOptions;
 use CrazyGoat\ScanMePHP\RendererInterface;
+use CrazyGoat\ScanMePHP\RenderOptions;
 
 class PngRenderer implements RendererInterface
 {
@@ -62,9 +62,7 @@ class PngRenderer implements RendererInterface
 
         for ($moduleX = 0; $moduleX < $totalModules; $moduleX++) {
             $dataX = $moduleX - $margin;
-            $isDark = ($dataX >= 0 && $dataX < $size && $dataY >= 0 && $dataY < $size)
-                ? $matrix->get($dataX, $dataY)
-                : false;
+            $isDark = $dataX >= 0 && $dataX < $size && $dataY >= 0 && $dataY < $size && $matrix->get($dataX, $dataY);
 
             if ($invert) {
                 $isDark = !$isDark;

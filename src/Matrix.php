@@ -8,8 +8,8 @@ class Matrix
 {
     /** @var bool[] Flat array of size*size, indexed as [y * size + x] */
     private array $data;
-    private int $version;
-    private int $size;
+    private readonly int $version;
+    private readonly int $size;
 
     /** @var bool[]|null Lazily computed reserved bitmap (flat) */
     private ?array $reserved = null;
@@ -296,9 +296,15 @@ class Matrix
             foreach ($positions as $cy) {
                 foreach ($positions as $cx) {
                     // Skip if overlaps finder pattern
-                    if ($cx <= 8 && $cy <= 8) continue;
-                    if ($cx >= $sizeM8 && $cy <= 8) continue;
-                    if ($cx <= 8 && $cy >= $sizeM8) continue;
+                    if ($cx <= 8 && $cy <= 8) {
+                        continue;
+                    }
+                    if ($cx >= $sizeM8 && $cy <= 8) {
+                        continue;
+                    }
+                    if ($cx <= 8 && $cy >= $sizeM8) {
+                        continue;
+                    }
 
                     for ($dy = -2; $dy <= 2; $dy++) {
                         $rowOffset = ($cy + $dy) * $size;

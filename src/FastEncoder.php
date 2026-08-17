@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP;
 
-use CrazyGoat\ScanMePHP\Exception\DataTooLargeException;
 use CrazyGoat\ScanMePHP\Exception\InvalidDataException;
 
 /**
@@ -197,7 +196,7 @@ class FastEncoder implements EncoderInterface
 
         // === Initialize static tables on first use ===
         if (self::$exp === []) {
-            self::initTables();
+            $this->initTables();
         }
 
         $size = 17 + ($version << 2);
@@ -208,14 +207,14 @@ class FastEncoder implements EncoderInterface
 
         // === Ensure version cache ===
         if (!isset(self::$versionCache[$version])) {
-            self::buildVersionCache($version, $size);
+            $this->buildVersionCache($version, $size);
         }
         $vc = self::$versionCache[$version];
 
         // === Ensure format info cache ===
         $fmtKey = $version . ':' . $eclVal;
         if (!isset(self::$formatCache[$fmtKey])) {
-            self::buildFormatCache($version, $errorCorrectionLevel, $size);
+            $this->buildFormatCache($version, $errorCorrectionLevel, $size);
         }
         $fc = self::$formatCache[$fmtKey];
 
@@ -223,7 +222,7 @@ class FastEncoder implements EncoderInterface
         $ecBlock = self::EC_BLOCKS[$version - 1][$eclVal];
         $eccPerBlock = $ecBlock[2];
         if (!isset(self::$rsCache[$eccPerBlock])) {
-            self::buildRsCache($eccPerBlock);
+            $this->buildRsCache($eccPerBlock);
         }
         $factorTable = self::$rsCache[$eccPerBlock];
 
@@ -365,13 +364,20 @@ class FastEncoder implements EncoderInterface
         $bestScore = \PHP_INT_MAX;
 
         for ($mask = 0; $mask < 8; $mask++) {
-            $xrHi = $maskRowsHi[$mask]; $xrLo = $maskRowsLo[$mask];
-            $xcHi = $maskColsHi[$mask]; $xcLo = $maskColsLo[$mask];
-            $frHi = $fmtRowsHi[$mask]; $frLo = $fmtRowsLo[$mask];
-            $fcHi = $fmtColsHi[$mask]; $fcLo = $fmtColsLo[$mask];
+            $xrHi = $maskRowsHi[$mask];
+            $xrLo = $maskRowsLo[$mask];
+            $xcHi = $maskColsHi[$mask];
+            $xcLo = $maskColsLo[$mask];
+            $frHi = $fmtRowsHi[$mask];
+            $frLo = $fmtRowsLo[$mask];
+            $fcHi = $fmtColsHi[$mask];
+            $fcLo = $fmtColsLo[$mask];
 
             // Apply mask XOR + format info
-            $mrHi = []; $mrLo = []; $mcHi = []; $mcLo = [];
+            $mrHi = [];
+            $mrLo = [];
+            $mcHi = [];
+            $mcLo = [];
             for ($i = 0; $i < $size; $i++) {
                 $mrHi[$i] = $rowsHi[$i] ^ $xrHi[$i] ^ $frHi[$i];
                 $mrLo[$i] = $rowsLo[$i] ^ $xrLo[$i] ^ $frLo[$i];
@@ -383,7 +389,8 @@ class FastEncoder implements EncoderInterface
             $darkCount = 0;
 
             for ($y = 0; $y < $size; $y++) {
-                $lo = $mrLo[$y]; $hi = $mrHi[$y];
+                $lo = $mrLo[$y];
+                $hi = $mrHi[$y];
 
                 $darkCount += $pop[$lo & 0xff] + $pop[($lo >> 8) & 0xff]
                     + $pop[($lo >> 16) & 0xff] + $pop[($lo >> 24) & 0xff]
@@ -392,61 +399,127 @@ class FastEncoder implements EncoderInterface
                     + $pop[$hi & 0xff] + $pop[($hi >> 8) & 0xff]
                     + $pop[($hi >> 16) & 0xff] + $pop[($hi >> 24) & 0xff];
 
-                $runColor = 0; $runLen = 0;
-                $h0 = 0; $h1 = 0; $h2 = 0; $h3 = 0; $h4 = 0; $h5 = 0; $h6 = 0;
+                $runColor = 0;
+                $runLen = 0;
+                $h0 = 0;
+                $h1 = 0;
+                $h2 = 0;
+                $h3 = 0;
+                $h4 = 0;
+                $h5 = 0;
+                $h6 = 0;
                 for ($x = 0; $x < $size; $x++) {
                     $c = ($x < 64) ? (($lo >> $x) & 1) : (($hi >> ($x - 64)) & 1);
                     if ($c === $runColor) {
                         $runLen++;
-                        if ($runLen === 5) $penalty += 3;
-                        elseif ($runLen > 5) $penalty++;
+                        if ($runLen === 5) {
+                            $penalty += 3;
+                        } elseif ($runLen > 5) {
+                            $penalty++;
+                        }
                     } else {
-                        if ($h0 === 0) $runLen += $size;
-                        $h6=$h5;$h5=$h4;$h4=$h3;$h3=$h2;$h2=$h1;$h1=$h0;$h0=$runLen;
+                        if ($h0 === 0) {
+                            $runLen += $size;
+                        }
+                        $h6 = $h5;
+                        $h5 = $h4;
+                        $h4 = $h3;
+                        $h3 = $h2;
+                        $h2 = $h1;
+                        $h1 = $h0;
+                        $h0 = $runLen;
                         if (!$runColor) {
-                            if ($h1>0&&$h2===$h1&&$h3===$h1*3&&$h4===$h1&&$h5===$h1) {
-                                if ($h0>=$h1*4&&$h6>=$h1) $penalty+=40;
-                                if ($h6>=$h1*4&&$h0>=$h1) $penalty+=40;
+                            if ($h1 > 0 && $h2 === $h1 && $h3 === $h1 * 3 && $h4 === $h1 && $h5 === $h1) {
+                                if ($h0 >= $h1 * 4 && $h6 >= $h1) {
+                                    $penalty += 40;
+                                }
+                                if ($h6 >= $h1 * 4 && $h0 >= $h1) {
+                                    $penalty += 40;
+                                }
                             }
                         }
-                        $runColor=$c; $runLen=1;
+                        $runColor = $c;
+                        $runLen = 1;
                     }
                 }
                 if ($runColor) {
-                    if ($h0===0) $runLen+=$size;
-                    $h6=$h5;$h5=$h4;$h4=$h3;$h3=$h2;$h2=$h1;$h1=$h0;$h0=$runLen;
-                    $runLen=0;
+                    if ($h0 === 0) {
+                        $runLen += $size;
+                    }
+                    $h6 = $h5;
+                    $h5 = $h4;
+                    $h4 = $h3;
+                    $h3 = $h2;
+                    $h2 = $h1;
+                    $h1 = $h0;
+                    $h0 = $runLen;
+                    $runLen = 0;
                 }
-                $runLen+=$size;
-                if ($h0===0) $runLen+=$size;
-                $h6=$h5;$h5=$h4;$h4=$h3;$h3=$h2;$h2=$h1;$h1=$h0;$h0=$runLen;
-                if ($h1>0&&$h2===$h1&&$h3===$h1*3&&$h4===$h1&&$h5===$h1) {
-                    if ($h0>=$h1*4&&$h6>=$h1) $penalty+=40;
-                    if ($h6>=$h1*4&&$h0>=$h1) $penalty+=40;
+                $runLen += $size;
+                if ($h0 === 0) {
+                    $runLen += $size;
+                }
+                $h6 = $h5;
+                $h5 = $h4;
+                $h4 = $h3;
+                $h3 = $h2;
+                $h2 = $h1;
+                $h1 = $h0;
+                $h0 = $runLen;
+                if ($h1 > 0 && $h2 === $h1 && $h3 === $h1 * 3 && $h4 === $h1 && $h5 === $h1) {
+                    if ($h0 >= $h1 * 4 && $h6 >= $h1) {
+                        $penalty += 40;
+                    }
+                    if ($h6 >= $h1 * 4 && $h0 >= $h1) {
+                        $penalty += 40;
+                    }
                 }
             }
 
             for ($x = 0; $x < $size; $x++) {
-                $runColor = 0; $runLen = 0;
-                $h0 = 0; $h1 = 0; $h2 = 0; $h3 = 0; $h4 = 0; $h5 = 0; $h6 = 0;
+                $runColor = 0;
+                $runLen = 0;
+                $h0 = 0;
+                $h1 = 0;
+                $h2 = 0;
+                $h3 = 0;
+                $h4 = 0;
+                $h5 = 0;
+                $h6 = 0;
                 if ($x < 64) {
                     $xbit = $x;
                     for ($y = 0; $y < $size; $y++) {
                         $c = ($mrLo[$y] >> $xbit) & 1;
                         if ($c === $runColor) {
                             $runLen++;
-                            if ($runLen === 5) $penalty += 3;
-                            elseif ($runLen > 5) $penalty++;
+                            if ($runLen === 5) {
+                                $penalty += 3;
+                            } elseif ($runLen > 5) {
+                                $penalty++;
+                            }
                         } else {
-                            if ($h0===0) $runLen+=$size;
-                            $h6=$h5;$h5=$h4;$h4=$h3;$h3=$h2;$h2=$h1;$h1=$h0;$h0=$runLen;
+                            if ($h0 === 0) {
+                                $runLen += $size;
+                            }
+                            $h6 = $h5;
+                            $h5 = $h4;
+                            $h4 = $h3;
+                            $h3 = $h2;
+                            $h2 = $h1;
+                            $h1 = $h0;
+                            $h0 = $runLen;
                             if (!$runColor) {
-                                if ($h1>0&&$h2===$h1&&$h3===$h1*3&&$h4===$h1&&$h5===$h1) {
-                                    if ($h0>=$h1*4&&$h6>=$h1) $penalty+=40;
-                                    if ($h6>=$h1*4&&$h0>=$h1) $penalty+=40;
+                                if ($h1 > 0 && $h2 === $h1 && $h3 === $h1 * 3 && $h4 === $h1 && $h5 === $h1) {
+                                    if ($h0 >= $h1 * 4 && $h6 >= $h1) {
+                                        $penalty += 40;
+                                    }
+                                    if ($h6 >= $h1 * 4 && $h0 >= $h1) {
+                                        $penalty += 40;
+                                    }
                                 }
                             }
-                            $runColor=$c; $runLen=1;
+                            $runColor = $c;
+                            $runLen = 1;
                         }
                     }
                 } else {
@@ -455,40 +528,78 @@ class FastEncoder implements EncoderInterface
                         $c = ($mrHi[$y] >> $xbit) & 1;
                         if ($c === $runColor) {
                             $runLen++;
-                            if ($runLen === 5) $penalty += 3;
-                            elseif ($runLen > 5) $penalty++;
+                            if ($runLen === 5) {
+                                $penalty += 3;
+                            } elseif ($runLen > 5) {
+                                $penalty++;
+                            }
                         } else {
-                            if ($h0===0) $runLen+=$size;
-                            $h6=$h5;$h5=$h4;$h4=$h3;$h3=$h2;$h2=$h1;$h1=$h0;$h0=$runLen;
+                            if ($h0 === 0) {
+                                $runLen += $size;
+                            }
+                            $h6 = $h5;
+                            $h5 = $h4;
+                            $h4 = $h3;
+                            $h3 = $h2;
+                            $h2 = $h1;
+                            $h1 = $h0;
+                            $h0 = $runLen;
                             if (!$runColor) {
-                                if ($h1>0&&$h2===$h1&&$h3===$h1*3&&$h4===$h1&&$h5===$h1) {
-                                    if ($h0>=$h1*4&&$h6>=$h1) $penalty+=40;
-                                    if ($h6>=$h1*4&&$h0>=$h1) $penalty+=40;
+                                if ($h1 > 0 && $h2 === $h1 && $h3 === $h1 * 3 && $h4 === $h1 && $h5 === $h1) {
+                                    if ($h0 >= $h1 * 4 && $h6 >= $h1) {
+                                        $penalty += 40;
+                                    }
+                                    if ($h6 >= $h1 * 4 && $h0 >= $h1) {
+                                        $penalty += 40;
+                                    }
                                 }
                             }
-                            $runColor=$c; $runLen=1;
+                            $runColor = $c;
+                            $runLen = 1;
                         }
                     }
                 }
                 if ($runColor) {
-                    if ($h0===0) $runLen+=$size;
-                    $h6=$h5;$h5=$h4;$h4=$h3;$h3=$h2;$h2=$h1;$h1=$h0;$h0=$runLen;
-                    $runLen=0;
+                    if ($h0 === 0) {
+                        $runLen += $size;
+                    }
+                    $h6 = $h5;
+                    $h5 = $h4;
+                    $h4 = $h3;
+                    $h3 = $h2;
+                    $h2 = $h1;
+                    $h1 = $h0;
+                    $h0 = $runLen;
+                    $runLen = 0;
                 }
-                $runLen+=$size;
-                if ($h0===0) $runLen+=$size;
-                $h6=$h5;$h5=$h4;$h4=$h3;$h3=$h2;$h2=$h1;$h1=$h0;$h0=$runLen;
-                if ($h1>0&&$h2===$h1&&$h3===$h1*3&&$h4===$h1&&$h5===$h1) {
-                    if ($h0>=$h1*4&&$h6>=$h1) $penalty+=40;
-                    if ($h6>=$h1*4&&$h0>=$h1) $penalty+=40;
+                $runLen += $size;
+                if ($h0 === 0) {
+                    $runLen += $size;
+                }
+                $h6 = $h5;
+                $h5 = $h4;
+                $h4 = $h3;
+                $h3 = $h2;
+                $h2 = $h1;
+                $h1 = $h0;
+                $h0 = $runLen;
+                if ($h1 > 0 && $h2 === $h1 && $h3 === $h1 * 3 && $h4 === $h1 && $h5 === $h1) {
+                    if ($h0 >= $h1 * 4 && $h6 >= $h1) {
+                        $penalty += 40;
+                    }
+                    if ($h6 >= $h1 * 4 && $h0 >= $h1) {
+                        $penalty += 40;
+                    }
                 }
             }
 
             $validLo = ($size >= 64) ? -1 : ((1 << $size) - 1);
             $validHi = ($size <= 64) ? 0 : ((1 << ($size - 64)) - 1);
             for ($y = 0; $y < $sizeM1; $y++) {
-                $curLo = $mrLo[$y] & $validLo; $curHi = $mrHi[$y] & $validHi;
-                $nxtLo = $mrLo[$y+1] & $validLo; $nxtHi = $mrHi[$y+1] & $validHi;
+                $curLo = $mrLo[$y] & $validLo;
+                $curHi = $mrHi[$y] & $validHi;
+                $nxtLo = $mrLo[$y + 1] & $validLo;
+                $nxtHi = $mrHi[$y + 1] & $validHi;
                 $csLo = (($curLo >> 1) & \PHP_INT_MAX) | ($curHi << 63);
                 $csHi = ($curHi >> 1) & \PHP_INT_MAX;
                 $nsLo = (($nxtLo >> 1) & \PHP_INT_MAX) | ($nxtHi << 63);
@@ -512,7 +623,7 @@ class FastEncoder implements EncoderInterface
             }
 
             $k = intdiv(abs($darkCount * 20 - $totalModules * 10) + $totalModules - 1, $totalModules) - 1;
-            $penalty += ($k > 0 ? $k : 0) * 10;
+            $penalty += (max($k, 0)) * 10;
 
             if ($penalty < $bestScore) {
                 $bestScore = $penalty;
@@ -521,8 +632,10 @@ class FastEncoder implements EncoderInterface
         }
 
         // === 5. Apply best mask to get final rows ===
-        $fxrHi = $maskRowsHi[$bestMask]; $fxrLo = $maskRowsLo[$bestMask];
-        $ffrHi = $fmtRowsHi[$bestMask]; $ffrLo = $fmtRowsLo[$bestMask];
+        $fxrHi = $maskRowsHi[$bestMask];
+        $fxrLo = $maskRowsLo[$bestMask];
+        $ffrHi = $fmtRowsHi[$bestMask];
+        $ffrLo = $fmtRowsLo[$bestMask];
         for ($i = 0; $i < $size; $i++) {
             $rowsHi[$i] ^= $fxrHi[$i] ^ $ffrHi[$i];
             $rowsLo[$i] ^= $fxrLo[$i] ^ $ffrLo[$i];
@@ -564,7 +677,7 @@ class FastEncoder implements EncoderInterface
     // Static table initialization (runs once, cached forever)
     // =========================================================================
 
-    private static function initTables(): void
+    private function initTables(): void
     {
         $x = 1;
         for ($i = 0; $i < 255; $i++) {
@@ -594,11 +707,10 @@ class FastEncoder implements EncoderInterface
     /**
      * Build and cache all version-specific data using int-pair representation.
      */
-    private static function buildVersionCache(int $version, int $size): void
+    private function buildVersionCache(int $version, int $size): void
     {
         $sizeM1 = $size - 1;
         $totalModules = $size * $size;
-        $hiBits = $size > 64 ? $size - 64 : 0;
 
         // === Build reserved bitmap ===
         $reserved = array_fill(0, $totalModules, false);
@@ -647,9 +759,15 @@ class FastEncoder implements EncoderInterface
             $sizeM8 = $size - 8;
             foreach ($positions as $cy) {
                 foreach ($positions as $cx) {
-                    if ($cx <= 8 && $cy <= 8) continue;
-                    if ($cx >= $sizeM8 && $cy <= 8) continue;
-                    if ($cx <= 8 && $cy >= $sizeM8) continue;
+                    if ($cx <= 8 && $cy <= 8) {
+                        continue;
+                    }
+                    if ($cx >= $sizeM8 && $cy <= 8) {
+                        continue;
+                    }
+                    if ($cx <= 8 && $cy >= $sizeM8) {
+                        continue;
+                    }
                     for ($dy = -2; $dy <= 2; $dy++) {
                         $rowOffset = ($cy + $dy) * $size;
                         for ($dx = -2; $dx <= 2; $dx++) {
@@ -688,9 +806,15 @@ class FastEncoder implements EncoderInterface
             $sizeM8 = $size - 8;
             foreach ($positions as $cy) {
                 foreach ($positions as $cx) {
-                    if ($cx <= 8 && $cy <= 8) continue;
-                    if ($cx >= $sizeM8 && $cy <= 8) continue;
-                    if ($cx <= 8 && $cy >= $sizeM8) continue;
+                    if ($cx <= 8 && $cy <= 8) {
+                        continue;
+                    }
+                    if ($cx >= $sizeM8 && $cy <= 8) {
+                        continue;
+                    }
+                    if ($cx <= 8 && $cy >= $sizeM8) {
+                        continue;
+                    }
                     for ($dy = -2; $dy <= 2; $dy++) {
                         $bits = $ap[$dy + 2];
                         $py = $cy + $dy;
@@ -703,7 +827,7 @@ class FastEncoder implements EncoderInterface
         }
 
         if ($version >= 7) {
-            $versionBits = self::computeVersionBits($version);
+            $versionBits = $this->computeVersionBits($version);
             for ($i = 0; $i < 18; $i++) {
                 $bit = (bool)(($versionBits >> $i) & 1);
                 $row = (int)($i / 3);
@@ -853,7 +977,7 @@ class FastEncoder implements EncoderInterface
     /**
      * Build and cache format info as int-pair rows/cols for each mask.
      */
-    private static function buildFormatCache(int $version, ErrorCorrectionLevel $ecl, int $size): void
+    private function buildFormatCache(int $version, ErrorCorrectionLevel $ecl, int $size): void
     {
         $eclVal = $ecl->value;
         $fmtKey = $version . ':' . $eclVal;
@@ -879,14 +1003,18 @@ class FastEncoder implements EncoderInterface
             $positions[] = [8, $size - 15 + $i, $i];
         }
 
-        $allFmtRowsHi = []; $allFmtRowsLo = [];
-        $allFmtColsHi = []; $allFmtColsLo = [];
+        $allFmtRowsHi = [];
+        $allFmtRowsLo = [];
+        $allFmtColsHi = [];
+        $allFmtColsLo = [];
 
         for ($mask = 0; $mask < 8; $mask++) {
-            $fRHi = array_fill(0, $size, 0); $fRLo = array_fill(0, $size, 0);
-            $fCHi = array_fill(0, $size, 0); $fCLo = array_fill(0, $size, 0);
+            $fRHi = array_fill(0, $size, 0);
+            $fRLo = array_fill(0, $size, 0);
+            $fCHi = array_fill(0, $size, 0);
+            $fCLo = array_fill(0, $size, 0);
 
-            $maskBits = self::computeFormatBitsFromEcc($eccBits, $mask);
+            $maskBits = $this->computeFormatBitsFromEcc($eccBits, $mask);
 
             foreach ($positions as [$x, $y, $bit]) {
                 if (($maskBits >> $bit) & 1) {
@@ -905,8 +1033,10 @@ class FastEncoder implements EncoderInterface
                 }
             }
 
-            $allFmtRowsHi[$mask] = $fRHi; $allFmtRowsLo[$mask] = $fRLo;
-            $allFmtColsHi[$mask] = $fCHi; $allFmtColsLo[$mask] = $fCLo;
+            $allFmtRowsHi[$mask] = $fRHi;
+            $allFmtRowsLo[$mask] = $fRLo;
+            $allFmtColsHi[$mask] = $fCHi;
+            $allFmtColsLo[$mask] = $fCLo;
         }
 
         self::$formatCache[$fmtKey] = [
@@ -918,7 +1048,7 @@ class FastEncoder implements EncoderInterface
     /**
      * Build and cache RS transposed factor table for a given ECC count.
      */
-    private static function buildRsCache(int $eccCount): void
+    private function buildRsCache(int $eccCount): void
     {
         $exp = self::$exp;
         $log = self::$log;
@@ -961,7 +1091,7 @@ class FastEncoder implements EncoderInterface
     // Helper methods (cache building only, not in hot path)
     // =========================================================================
 
-    private static function computeFormatBitsFromEcc(int $eccBits, int $maskPattern): int
+    private function computeFormatBitsFromEcc(int $eccBits, int $maskPattern): int
     {
         $data = ($eccBits << 3) | $maskPattern;
         $format = $data << 10;
@@ -973,7 +1103,7 @@ class FastEncoder implements EncoderInterface
         return (($data << 10) | $format) ^ 0x5412;
     }
 
-    private static function computeVersionBits(int $version): int
+    private function computeVersionBits(int $version): int
     {
         $data = $version;
         $versionInfo = $data << 12;

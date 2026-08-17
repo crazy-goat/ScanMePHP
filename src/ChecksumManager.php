@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP;
@@ -6,7 +7,7 @@ namespace CrazyGoat\ScanMePHP;
 class ChecksumManager
 {
     private ?array $checksums = null;
-    
+
     public function __construct(private readonly string $projectRoot)
     {
         $this->loadChecksums();
@@ -15,17 +16,17 @@ class ChecksumManager
     private function loadChecksums(): void
     {
         $composerJsonPath = $this->projectRoot . '/composer.json';
-        
+
         if (!file_exists($composerJsonPath)) {
             return;
         }
-        
+
         $composer = json_decode(file_get_contents($composerJsonPath), true);
-        
+
         if (json_last_error() !== JSON_ERROR_NONE) {
             return;
         }
-        
+
         $this->checksums = $composer['extra']['scanmephp']['checksums'] ?? null;
     }
 
@@ -34,7 +35,7 @@ class ChecksumManager
         if ($this->checksums === null) {
             return null;
         }
-        
+
         return $this->checksums[$version][$binaryName] ?? null;
     }
 

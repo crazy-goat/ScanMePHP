@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP\Composer;
@@ -57,7 +58,7 @@ class Plugin implements PluginInterface, EventSubscriberInterface
         }
     }
 
-    private function installBinaries(Composer $composer, $package): void
+    private function installBinaries(Composer $composer, \Composer\Package\PackageInterface $package): void
     {
         $this->io->write('ScanMePHP Binary Installer (Plugin)');
         $this->io->write('====================================');
@@ -83,7 +84,8 @@ class Plugin implements PluginInterface, EventSubscriberInterface
             $arch = $this->getArchitecture();
             $variant = $os === 'linux' ? $this->getLinuxVariant() : null;
 
-            $this->io->write(sprintf('✓ Detected platform: %s %s%s',
+            $this->io->write(sprintf(
+                '✓ Detected platform: %s %s%s',
                 $os,
                 $variant ? $variant . ' ' : '',
                 $arch

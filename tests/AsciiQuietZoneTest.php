@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-use PHPUnit\Framework\TestCase;
 use CrazyGoat\ScanMePHP\QRCode;
 use CrazyGoat\ScanMePHP\QRCodeConfig;
 use CrazyGoat\ScanMePHP\Renderer\FullBlocksRenderer;
 use CrazyGoat\ScanMePHP\Renderer\HalfBlocksRenderer;
+use PHPUnit\Framework\TestCase;
 
 /**
  * Test for GitHub Issue #35: ASCII QR codes missing quiet zone in inverted mode
- * 
+ *
  * When generating ASCII QR codes with invert=true, the output should have
  * symmetric quiet zone (margin) at both top and bottom. The bottom margin
  * was missing, causing a white line artifact in inverted mode.
@@ -22,13 +22,12 @@ class AsciiQuietZoneTest extends TestCase
 
     /**
      * Count margin lines at top and bottom
-     * 
+     *
      * @param string[] $lines
-     * @param bool $inverted
      * @param string $marginChar Character used for margin (█ for inverted, ' ' for normal)
      * @return array [topCount, bottomCount]
      */
-    private function countMarginLines(array $lines, bool $inverted, string $marginChar): array
+    private function countMarginLines(array $lines, string $marginChar): array
     {
         $top = 0;
         foreach ($lines as $line) {
@@ -64,17 +63,17 @@ class AsciiQuietZoneTest extends TestCase
         $output = $qr->render();
         $lines = explode("\n", $output);
 
-        [$top, $bottom] = $this->countMarginLines($lines, false, ' ');
+        [$top, $bottom] = $this->countMarginLines($lines, ' ');
 
         $this->assertEquals(
             self::MARGIN_SIZE,
             $top,
-            "Top margin should be " . self::MARGIN_SIZE . " lines, got $top"
+            'Top margin should be ' . self::MARGIN_SIZE . " lines, got $top"
         );
         $this->assertEquals(
             self::MARGIN_SIZE,
             $bottom,
-            "Bottom margin should be " . self::MARGIN_SIZE . " lines, got $bottom"
+            'Bottom margin should be ' . self::MARGIN_SIZE . " lines, got $bottom"
         );
     }
 
@@ -94,17 +93,17 @@ class AsciiQuietZoneTest extends TestCase
         $lines = explode("\n", $output);
 
         // In inverted mode, margin lines are filled with '█' character
-        [$top, $bottom] = $this->countMarginLines($lines, true, '█');
+        [$top, $bottom] = $this->countMarginLines($lines, '█');
 
         $this->assertEquals(
             self::MARGIN_SIZE,
             $top,
-            "Top margin should be " . self::MARGIN_SIZE . " lines in inverted mode, got $top"
+            'Top margin should be ' . self::MARGIN_SIZE . " lines in inverted mode, got $top"
         );
         $this->assertEquals(
             self::MARGIN_SIZE,
             $bottom,
-            "Bottom margin should be " . self::MARGIN_SIZE . " lines in inverted mode, got $bottom"
+            'Bottom margin should be ' . self::MARGIN_SIZE . " lines in inverted mode, got $bottom"
         );
     }
 
@@ -121,17 +120,17 @@ class AsciiQuietZoneTest extends TestCase
         $output = $qr->render();
         $lines = explode("\n", $output);
 
-        [$top, $bottom] = $this->countMarginLines($lines, false, ' ');
+        [$top, $bottom] = $this->countMarginLines($lines, ' ');
 
         $this->assertEquals(
             self::MARGIN_SIZE,
             $top,
-            "Top margin should be " . self::MARGIN_SIZE . " lines, got $top"
+            'Top margin should be ' . self::MARGIN_SIZE . " lines, got $top"
         );
         $this->assertEquals(
             self::MARGIN_SIZE,
             $bottom,
-            "Bottom margin should be " . self::MARGIN_SIZE . " lines, got $bottom"
+            'Bottom margin should be ' . self::MARGIN_SIZE . " lines, got $bottom"
         );
     }
 
@@ -150,17 +149,17 @@ class AsciiQuietZoneTest extends TestCase
         $lines = explode("\n", $output);
 
         // In inverted mode, margin lines are filled with '█' character
-        [$top, $bottom] = $this->countMarginLines($lines, true, '█');
+        [$top, $bottom] = $this->countMarginLines($lines, '█');
 
         $this->assertEquals(
             self::MARGIN_SIZE,
             $top,
-            "Top margin should be " . self::MARGIN_SIZE . " lines in inverted mode, got $top"
+            'Top margin should be ' . self::MARGIN_SIZE . " lines in inverted mode, got $top"
         );
         $this->assertEquals(
             self::MARGIN_SIZE,
             $bottom,
-            "Bottom margin should be " . self::MARGIN_SIZE . " lines in inverted mode, got $bottom"
+            'Bottom margin should be ' . self::MARGIN_SIZE . " lines in inverted mode, got $bottom"
         );
     }
 
@@ -194,7 +193,7 @@ class AsciiQuietZoneTest extends TestCase
         $this->assertMatchesRegularExpression(
             '/^█+$/u',
             $lastLine,
-            "Last line should be all black margin (█ characters only)"
+            'Last line should be all black margin (█ characters only)'
         );
     }
 }

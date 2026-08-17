@@ -7,8 +7,8 @@ namespace CrazyGoat\ScanMePHP\Renderer;
 use CrazyGoat\ScanMePHP\Exception\InvalidConfigurationException;
 use CrazyGoat\ScanMePHP\Matrix;
 use CrazyGoat\ScanMePHP\ModuleStyle;
-use CrazyGoat\ScanMePHP\RenderOptions;
 use CrazyGoat\ScanMePHP\RendererInterface;
+use CrazyGoat\ScanMePHP\RenderOptions;
 
 class SvgRenderer implements RendererInterface
 {
@@ -43,9 +43,7 @@ class SvgRenderer implements RendererInterface
             $svg .= $this->generateLabel($options->label, $totalSize, $size, $margin);
         }
 
-        $svg .= '</svg>';
-
-        return $svg;
+        return $svg . '</svg>';
     }
 
     private function generateSvgHeader(int $size): string
@@ -54,7 +52,10 @@ class SvgRenderer implements RendererInterface
             '<?xml version="1.0" encoding="UTF-8"?>' . "\n" .
             '<svg xmlns="http://www.w3.org/2000/svg" version="1.1" ' .
             'viewBox="0 0 %d %d" width="%d" height="%d">' . "\n",
-            $size, $size, $size, $size
+            $size,
+            $size,
+            $size,
+            $size
         );
     }
 
@@ -62,7 +63,9 @@ class SvgRenderer implements RendererInterface
     {
         return sprintf(
             '  <rect width="%d" height="%d" fill="%s"/>' . "\n",
-            $size, $size, $this->escapeColor($color)
+            $size,
+            $size,
+            $this->escapeColor($color)
         );
     }
 
@@ -104,22 +107,41 @@ class SvgRenderer implements RendererInterface
             $radius = $size * 0.15;
             return sprintf(
                 '  <rect x="%d" y="%d" width="%d" height="%d" fill="%s" rx="%.1f" ry="%.1f"/>',
-                $px, $py, $size, $size, $color, $radius, $radius
+                $px,
+                $py,
+                $size,
+                $size,
+                $color,
+                $radius,
+                $radius
             );
         }
 
         return match ($style) {
             ModuleStyle::Square => sprintf(
                 '  <rect x="%d" y="%d" width="%d" height="%d" fill="%s"/>',
-                $px, $py, $size, $size, $color
+                $px,
+                $py,
+                $size,
+                $size,
+                $color
             ),
             ModuleStyle::Rounded => sprintf(
                 '  <rect x="%d" y="%d" width="%d" height="%d" fill="%s" rx="%.1f" ry="%.1f"/>',
-                $px, $py, $size, $size, $color, $size * 0.3, $size * 0.3
+                $px,
+                $py,
+                $size,
+                $size,
+                $color,
+                $size * 0.3,
+                $size * 0.3
             ),
             ModuleStyle::Dot => sprintf(
                 '  <circle cx="%d" cy="%d" r="%.1f" fill="%s"/>',
-                $px + $size / 2, $py + $size / 2, $size * 0.4, $color
+                $px + $size / 2,
+                $py + $size / 2,
+                $size * 0.4,
+                $color
             ),
         };
     }
@@ -138,13 +160,8 @@ class SvgRenderer implements RendererInterface
         if ($x >= $size - $finderSize && $y < $finderSize) {
             return true;
         }
-
         // Bottom-left finder pattern
-        if ($x < $finderSize && $y >= $size - $finderSize) {
-            return true;
-        }
-
-        return false;
+        return $x < $finderSize && $y >= $size - $finderSize;
     }
 
     private function generateLabel(string $label, int $totalSize, int $matrixSize, int $margin): string

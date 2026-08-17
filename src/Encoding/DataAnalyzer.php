@@ -13,15 +13,15 @@ class DataAnalyzer
         if ($this->isNumeric($data)) {
             return Mode::Numeric;
         }
-        
+
         if ($this->isAlphanumeric($data)) {
             return Mode::Alphanumeric;
         }
-        
+
         if ($this->isKanji($data)) {
             return Mode::Kanji;
         }
-        
+
         return Mode::Byte;
     }
 
@@ -47,18 +47,17 @@ class DataAnalyzer
         if (strlen($data) % 2 !== 0) {
             return false;
         }
-        
+
         for ($i = 0; $i < strlen($data); $i += 2) {
             $byte1 = ord($data[$i]);
             $byte2 = ord($data[$i + 1]);
             $value = ($byte1 << 8) | $byte2;
-            
-            if (!(($value >= 0x8140 && $value <= 0x9ffc) ||
-                  ($value >= 0xe040 && $value <= 0xebbf))) {
+
+            if (($value < 0x8140 || $value > 0x9ffc) && ($value < 0xe040 || $value > 0xebbf)) {
                 return false;
             }
         }
-        
+
         return true;
     }
 

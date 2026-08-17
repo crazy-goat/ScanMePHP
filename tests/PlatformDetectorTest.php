@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP\Tests;
@@ -27,7 +28,7 @@ class PlatformDetectorTest extends TestCase
         if (PHP_OS_FAMILY !== 'Linux') {
             $this->markTestSkipped('Linux only test');
         }
-        
+
         $variant = PlatformDetector::getLinuxVariant();
         $this->assertIsString($variant);
         $this->assertContains($variant, ['glibc', 'musl']);
@@ -37,10 +38,10 @@ class PlatformDetectorTest extends TestCase
     {
         $name = PlatformDetector::getBinaryName('linux', 'glibc', 'x86_64');
         $this->assertEquals('libscanme_qr-linux-glibc-x86_64.so', $name);
-        
+
         $name = PlatformDetector::getBinaryName('macos', null, 'arm64');
         $this->assertEquals('libscanme_qr-macos-arm64.dylib', $name);
-        
+
         $name = PlatformDetector::getBinaryName('windows', null, 'x86_64');
         $this->assertEquals('scanme_qr-windows-x86_64.dll', $name);
     }

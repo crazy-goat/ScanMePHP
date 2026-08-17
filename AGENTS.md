@@ -1,6 +1,6 @@
 # ScanMePHP - Agent Guidelines
 
-Pure PHP QR code generator with zero dependencies. PHP 8.1+.
+Pure PHP QR code generator with zero dependencies. PHP 8.2+.
 
 ## Build & Test Commands
 
@@ -29,7 +29,7 @@ composer install
 ## Code Style Guidelines
 
 ### PHP Version & Strict Types
-- **PHP 8.1+ required** - use modern features
+- **PHP 8.2+ required** - use modern features
 - Always start files with: `<?php\ndeclare(strict_types=1);`
 - Use constructor property promotion
 - Use readonly properties where appropriate
@@ -112,7 +112,7 @@ examples/             # Usage examples
 
 ## CI/CD
 
-GitHub Actions runs on PHP 8.1, 8.2, 8.3, 8.4.
+GitHub Actions runs on PHP 8.2, 8.3, 8.4.
 Requires write permissions to run CI.
 
 ## GitHub Workflow

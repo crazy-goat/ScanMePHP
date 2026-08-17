@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace CrazyGoat\ScanMePHP\Renderer;
 
 use CrazyGoat\ScanMePHP\Matrix;
-use CrazyGoat\ScanMePHP\RenderOptions;
 use CrazyGoat\ScanMePHP\RendererInterface;
+use CrazyGoat\ScanMePHP\RenderOptions;
 
 abstract class AbstractAsciiRenderer implements RendererInterface
 {
     public function __construct(
-        private int $sideMargin = 0,
+        private readonly int $sideMargin = 0,
     ) {
     }
 
