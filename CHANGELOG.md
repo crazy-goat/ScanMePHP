@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Docker test image (`docker/Dockerfile`) and wrapper script (`docker/test.sh`) to run the test suite on a supported PHP version (8.4 by default) without changing the system PHP; mirrors the CI environment (ffi + gd extensions, composer, C++ build tools for `clib/`)
+
 ## [0.4.11] - 2026-03-18
 
 ### Fixed
