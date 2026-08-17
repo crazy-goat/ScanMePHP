@@ -26,7 +26,7 @@ class QRCode
     private function createDefaultEncoder(): EncoderInterface
     {
         // Try NativeEncoder (PHP extension) first - fastest option
-        if (extension_loaded('scanme_qr') && class_exists('CrazyGoat\\ScanMePHP\\NativeEncoder')) {
+        if (extension_loaded('scanmeqr') && class_exists('CrazyGoat\\ScanMePHP\\NativeEncoder')) {
             return new NativeEncoder();
         }
 
