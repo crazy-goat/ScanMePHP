@@ -76,6 +76,27 @@ class FfiEncoder implements EncoderInterface
         return extension_loaded('ffi') && file_exists($libraryPath);
     }
 
+    /**
+     * Single source of truth for the FFI library path resolution used by both
+     * QRCode::createDefaultEncoder() and NativeEncoder's no-extension fallback.
+     * Returns the first usable library path (vendor binary first, then local
+     * build), or null when none is available (including when ext-ffi is absent).
+     */
+    public static function resolveLibraryPath(): ?string
+    {
+        $vendorBinary = dirname(__DIR__) . '/../../crazy-goat/scanmephp/ffi-binaries/' . PlatformDetector::getCurrentPlatformBinaryName();
+        if (self::isAvailable($vendorBinary)) {
+            return $vendorBinary;
+        }
+
+        $localBuild = dirname(__DIR__) . '/clib/build/libscanme_qr.so';
+        if (self::isAvailable($localBuild)) {
+            return $localBuild;
+        }
+
+        return null;
+    }
+
     public function getLibraryVersion(): string
     {
         return (string) $this->ffi->scanme_qr_version();

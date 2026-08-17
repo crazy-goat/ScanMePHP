@@ -29,27 +29,14 @@ if (extension_loaded('scanmeqr')) {
             string $url,
             ErrorCorrectionLevel $errorCorrectionLevel,
         ): Matrix {
-            return (new FfiEncoder($this->resolveLibraryPath()))->encode($url, $errorCorrectionLevel);
-        }
+            $libraryPath = FfiEncoder::resolveLibraryPath()
+                ?? throw new \RuntimeException(
+                    'No native ScanMePHP library available: build the FFI library '
+                    . '(cmake -S clib -B clib/build && cmake --build clib/build), '
+                    . 'enable the ext-ffi extension, or install the scanmeqr PHP extension.'
+                );
 
-        private function resolveLibraryPath(): string
-        {
-            // Same resolution order as QRCode::createDefaultEncoder: vendor binary first, then local build
-            $vendorBinary = dirname(__DIR__) . '/../../crazy-goat/scanmephp/ffi-binaries/' . PlatformDetector::getCurrentPlatformBinaryName();
-
-            if (FfiEncoder::isAvailable($vendorBinary)) {
-                return $vendorBinary;
-            }
-
-            $localBuild = dirname(__DIR__) . '/clib/build/libscanme_qr.so';
-
-            if (FfiEncoder::isAvailable($localBuild)) {
-                return $localBuild;
-            }
-
-            throw new \RuntimeException(
-                'No native ScanMePHP library found: build the FFI library (cmake -S clib -B clib/build && cmake --build clib/build) or install the scanmeqr PHP extension.'
-            );
+            return (new FfiEncoder($libraryPath))->encode($url, $errorCorrectionLevel);
         }
     }
 }
