@@ -8,7 +8,11 @@ parameters:
         - tests/
         - bin/
     excludePaths:
-        - clib/*
-        - vendor/*
-        - php-ext/*
-        - src/NativeEncoder.php
+        analyseAndScan:
+            - clib/*
+            - vendor/*
+            - php-ext/*
+            # FFI boundary: conditional if/else class swap + dynamic C struct/methods
+            # via FFI::cdef — PHPStan cannot resolve these statically.
+            - src/NativeEncoder.php
+            - src/FfiEncoder.php

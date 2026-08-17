@@ -17,7 +17,7 @@
  */
 declare(strict_types=1);
 
-$fix = in_array('--fix', $argv, true);
+$fix = in_array('--fix', $_SERVER['argv'] ?? [], true);
 $dir = __DIR__ . '/../.workflow/helpers';
 
 if (!is_dir($dir)) {

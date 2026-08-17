@@ -52,6 +52,7 @@ class DataEncoder
                 1 => 4,
                 2 => 7,
                 3 => 10,
+                default => throw InvalidDataException::incompatibleMode('Numeric', $group),
             };
 
             for ($j = $numBits - 1; $j >= 0; $j--) {

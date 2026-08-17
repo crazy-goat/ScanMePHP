@@ -63,12 +63,15 @@ PR until CI lint jobs are added.
 `composer lint` runs php-cs-fixer (dry-run), phpstan, rector (dry-run) and
 `bin/kb-lint.php`; `composer lint-fix` applies the fixable ones. PHPStan runs
 at **level 4** with `phpstan-baseline.neon` carrying the pre-existing debt
-counted when the workflow was introduced. The baseline is committed so the
-floor is stable: a new PR that adds a level-4 violation fails `composer lint`,
-while old violations are tracked until they are fixed and removed from the
-baseline. The goal is to raise the level and shrink the baseline over time;
-lowering the level or deleting baseline entries to make a round look clean is
-forbidden (see workflow `§6`). `src/NativeEncoder.php` is excluded from
-analysis because it is a conditional `if/else` class declaration that swaps in
-a C core when `extension_loaded('scanmeqr')` — PHPStan cannot resolve both
-branches at once.
+counted when the workflow was introduced (76 errors, all false positives from
+PHPUnit already-narrowed assertions and `*NEVER*` QR-matrix range reasoning in
+`FastEncoder`/`MaskSelector`). The baseline is committed so the floor is
+stable: a new PR that adds a level-4 violation fails `composer lint`, while
+old violations are tracked until they are fixed and removed from the baseline.
+The goal is to raise the level and shrink the baseline over time; lowering the
+level or deleting baseline entries to make a round look clean is forbidden
+(see workflow `§6`). `src/NativeEncoder.php` and `src/FfiEncoder.php` are
+excluded from analysis — the first is a conditional `if/else` class
+declaration that swaps in a C core when `extension_loaded('scanmeqr')`, the
+second is an FFI boundary using `FFI::cdef` dynamic C struct properties and
+functions; PHPStan cannot resolve either statically.

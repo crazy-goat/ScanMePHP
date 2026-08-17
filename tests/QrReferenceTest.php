@@ -20,6 +20,7 @@ class QrReferenceTest extends TestCase
             'M' => ErrorCorrectionLevel::Medium,
             'Q' => ErrorCorrectionLevel::Quartile,
             'H' => ErrorCorrectionLevel::High,
+            default => throw new \InvalidArgumentException(sprintf('Unknown error correction level: %s', $ecl)),
         };
     }
 

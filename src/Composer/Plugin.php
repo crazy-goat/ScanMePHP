@@ -44,7 +44,11 @@ class Plugin implements PluginInterface, EventSubscriberInterface
 
     public function onPackageInstall(PackageEvent $event): void
     {
-        $package = $event->getOperation()->getPackage();
+        $operation = $event->getOperation();
+        if (!$operation instanceof \Composer\DependencyResolver\Operation\InstallOperation) {
+            return;
+        }
+        $package = $operation->getPackage();
         if ($package->getName() === self::PACKAGE_NAME) {
             $this->installBinaries($event->getComposer(), $package);
         }
@@ -52,7 +56,11 @@ class Plugin implements PluginInterface, EventSubscriberInterface
 
     public function onPackageUpdate(PackageEvent $event): void
     {
-        $package = $event->getOperation()->getTargetPackage();
+        $operation = $event->getOperation();
+        if (!$operation instanceof \Composer\DependencyResolver\Operation\UpdateOperation) {
+            return;
+        }
+        $package = $operation->getTargetPackage();
         if ($package->getName() === self::PACKAGE_NAME) {
             $this->installBinaries($event->getComposer(), $package);
         }
