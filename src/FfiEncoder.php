@@ -49,8 +49,8 @@ class FfiEncoder implements EncoderInterface
             throw new \RuntimeException('Native QR encoding failed');
         }
 
-        $size    = $out->size;
-        $version = $out->version;
+        $size    = (int) $out->size;
+        $version = (int) $out->version;
 
         $flat = FFI::string($out->modules, $size * $size);
         $this->ffi->scanme_qr_result_free(FFI::addr($out));
