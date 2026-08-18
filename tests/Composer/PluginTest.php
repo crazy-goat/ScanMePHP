@@ -67,7 +67,9 @@ class PluginTest extends TestCase
         $plugin->onPackageInstall($event);
 
         if (!extension_loaded('scanmeqr')) {
-            $this->assertStringContainsString('checksum', implode("\n", $output));
+            $output = implode("\n", $output);
+            $this->assertStringContainsString('refused', $output);
+            $this->assertStringContainsString('extra.scanmephp.checksums', $output);
         }
 
         foreach ([$this->installPath . '/ext-binaries', $this->installPath . '/ffi-binaries'] as $dir) {

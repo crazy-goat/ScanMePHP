@@ -13,3 +13,6 @@ bench/benchmark_*.json
 
 /.php-cs-fixer.cache
 /.phpstan-baseline.neon.tmp
+
+# Local security audit working material
+review-reports/

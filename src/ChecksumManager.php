@@ -37,9 +37,11 @@ class ChecksumManager
         }
 
         // Accept both '0.4.4' and 'v0.4.4' as composer.json version keys.
+        $unprefixed = str_starts_with($version, 'v') ? substr($version, 1) : $version;
+
         return $this->checksums[$version][$binaryName]
-            ?? $this->checksums['v' . ltrim($version, 'v')][$binaryName]
-            ?? $this->checksums[ltrim($version, 'v')][$binaryName]
+            ?? $this->checksums['v' . $unprefixed][$binaryName]
+            ?? $this->checksums[$unprefixed][$binaryName]
             ?? null;
     }
 

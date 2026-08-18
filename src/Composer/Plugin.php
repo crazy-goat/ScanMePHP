@@ -12,6 +12,7 @@ use Composer\IO\IOInterface;
 use Composer\Plugin\PluginInterface;
 use CrazyGoat\ScanMePHP\BinaryDownloader;
 use CrazyGoat\ScanMePHP\ChecksumManager;
+use CrazyGoat\ScanMePHP\Exception\DownloadException;
 use CrazyGoat\ScanMePHP\PlatformDetector;
 
 class Plugin implements PluginInterface, EventSubscriberInterface
@@ -171,6 +172,16 @@ class Plugin implements PluginInterface, EventSubscriberInterface
             $this->io->write('   cp ' . $targetFile . ' $(php-config --extension-dir)/');
             $this->io->write('');
             return true;
+        } catch (DownloadException $e) {
+            if ($e->getMessage() === DownloadException::checksumMissing($binaryName)->getMessage()) {
+                $this->io->write('⛔ ' . $e->getMessage());
+                $this->io->write('   Verified native extension install is disabled until a checksum is configured.');
+                $this->io->write('   The pure PHP encoder will be used instead.');
+            } else {
+                $this->io->write('⚠️  Extension download failed: ' . $e->getMessage());
+                $this->io->write('   Falling back to FFI encoder.');
+            }
+            return false;
         } catch (\Exception $e) {
             $this->io->write('⚠️  Extension download failed: ' . $e->getMessage());
             $this->io->write('   Falling back to FFI encoder.');
@@ -219,6 +230,15 @@ class Plugin implements PluginInterface, EventSubscriberInterface
             $this->io->write('✓ FFI library downloaded successfully to: ' . $targetFile);
             $this->io->write('');
             $this->io->write('🎉 FFI library is ready to use!');
+        } catch (DownloadException $e) {
+            if ($e->getMessage() === DownloadException::checksumMissing($binaryName)->getMessage()) {
+                $this->io->write('⛔ ' . $e->getMessage());
+                $this->io->write('   Verified native FFI library install is disabled until a checksum is configured.');
+                $this->io->write('   The pure PHP encoder will be used instead.');
+            } else {
+                $this->io->write('⚠️  FFI library download failed: ' . $e->getMessage());
+                $this->io->write('   The pure PHP encoder will be used instead.');
+            }
         } catch (\Exception $e) {
             $this->io->write('⚠️  FFI library download failed: ' . $e->getMessage());
             $this->io->write('   The pure PHP encoder will be used instead.');
