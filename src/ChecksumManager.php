@@ -36,7 +36,11 @@ class ChecksumManager
             return null;
         }
 
-        return $this->checksums[$version][$binaryName] ?? null;
+        // Accept both '0.4.4' and 'v0.4.4' as composer.json version keys.
+        return $this->checksums[$version][$binaryName]
+            ?? $this->checksums['v' . ltrim($version, 'v')][$binaryName]
+            ?? $this->checksums[ltrim($version, 'v')][$binaryName]
+            ?? null;
     }
 
     public function hasChecksum(string $version, string $binaryName): bool

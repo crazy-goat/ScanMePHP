@@ -41,8 +41,14 @@ class BinaryDownloader
 
     public function download(string $binaryName, ?string $expectedChecksum = null): string
     {
-        // If no checksum provided, try to get from manager
-        if ($expectedChecksum === null && $this->checksumManager instanceof \CrazyGoat\ScanMePHP\ChecksumManager) {
+        // Fail-closed: downloading without a checksum is never allowed.
+        if ($expectedChecksum === null) {
+            $hasChecksum = $this->checksumManager instanceof ChecksumManager
+                && $this->checksumManager->hasChecksum($this->version, $binaryName);
+            if (!$hasChecksum) {
+                throw DownloadException::checksumMissing($binaryName);
+            }
+
             $expectedChecksum = $this->checksumManager->getChecksum($this->version, $binaryName);
         }
 
@@ -81,13 +87,11 @@ class BinaryDownloader
             fclose($fp);
         }
 
-        // Verify checksum if provided
-        if ($expectedChecksum !== null) {
-            $actualChecksum = hash_file('sha256', $targetPath);
-            if ($actualChecksum !== $expectedChecksum) {
-                unlink($targetPath);
-                throw DownloadException::checksumMismatch($binaryName);
-            }
+        // Verify checksum (always — fail-closed)
+        $actualChecksum = hash_file('sha256', $targetPath);
+        if ($actualChecksum !== $expectedChecksum) {
+            unlink($targetPath);
+            throw DownloadException::checksumMismatch($binaryName);
         }
 
         // Make executable on Unix systems

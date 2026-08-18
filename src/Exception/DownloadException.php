@@ -21,6 +21,14 @@ class DownloadException extends \RuntimeException
         return new self(sprintf('Checksum verification failed for: %s', $file));
     }
 
+    public static function checksumMissing(string $binaryName): self
+    {
+        return new self(sprintf(
+            'No SHA-256 checksum configured for binary %s. Download refused — add extra.scanmephp.checksums to the root composer.json.',
+            $binaryName
+        ));
+    }
+
     public static function ffiNotAvailable(): self
     {
         return new self('FFI extension is not available');
