@@ -40,6 +40,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Centralized FFI library path resolution into `FfiEncoder::resolveLibraryPath()`
   as the single source of truth used by both `QRCode` and `NativeEncoder`, with
   a consistency test pinning all `extension_loaded('scanmeqr')` call sites (#39)
+- `FfiEncoder::resolveLibraryPath()` and the FFI test entry points no longer
+  hardcode the Linux `.so` suffix for the local CMake build, so the FFI fallback
+  resolves on macOS (`.dylib`) instead of silently falling through to the
+  pure-PHP encoder; the previously-skipped `QrReferenceTest` and `FfiEncoderTest`
+  cases now run on macOS (#43)
 - Applied `php-cs-fixer` and `rector` to the whole codebase: PSR-12
   formatting, `readonly` properties, removed unused promoted property in
   `FfiEncoder`

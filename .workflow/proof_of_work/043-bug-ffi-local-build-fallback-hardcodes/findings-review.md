@@ -1,0 +1,22 @@
+# Findings Review — Issue #43 (Round 1)
+
+## Finding 1
+- **File:** `src/FfiEncoder.php:92`, `tests/FfiEncoderTest.php:18`, `tests/QrReferenceTest.php:82`
+- **What is wrong:** The `PHP_OS_FAMILY === 'Darwin' ? 'dylib' : 'so'` suffix expression is duplicated in three locations. If a new platform suffix is needed, all three must be updated in lockstep. An automated source-string contract test could catch divergence.
+- **Severity:** low
+- **Status:** fixed (round 1 follow-up) — extracted `FfiEncoder::localBuildPath()` static method; `resolveLibraryPath()` and both test entry points now call it. Single source of truth, no duplication. `composer lint` + full suite green. **Round 2: confirmed still fixed.** `grep` shows the `PHP_OS_FAMILY === 'Darwin'` expression appears only once (the `localBuildPath()` definition); all three call sites use `FfiEncoder::localBuildPath()`.
+- **Automated check:** A source-string contract test verifying the suffix expression matches across files, or extraction of a shared `FfiEncoder::localBuildPath()` method. → Adopted the latter (shared method); divergence is now impossible by construction.
+
+## Finding 2
+- **File:** `examples/generated-assets/qrcode_dark.svg`, `qrcode_fullblocks.txt`, `qrcode_halfblocks.txt`, `qrcode_simple.txt`
+- **What is wrong:** These generated asset files are modified in the working tree but are not part of the fix. They should be reverted before committing.
+- **Severity:** nit
+- **Status:** fixed (round 1 follow-up) — `git checkout -- examples/generated-assets/` reverted all four; working tree now contains only the #43 changes + proof-of-work (+ pre-existing untracked `review-reports/`, left untouched as out-of-scope). **Round 2: confirmed still fixed.** `git status --short` lists no `examples/generated-assets/*` entries.
+- **Automated check:** `git diff --stat` pre-commit hook or CI file-change allowlist.
+
+## Round 2 summary
+Round 2 reviewed the `localBuildPath()` extraction for new issues (method
+placement/visibility, docblock accuracy, tests still exercising FFI, no `.so`
+local-build literal remaining, PSR-12, types, contract-test coverage). **No new
+findings.** Full suite (5330 relevant tests) and `composer lint` green. See
+`review-2.md` for the detailed checklist.

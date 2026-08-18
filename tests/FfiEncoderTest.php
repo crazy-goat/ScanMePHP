@@ -15,14 +15,14 @@ class FfiEncoderTest extends TestCase
 
     public static function setUpBeforeClass(): void
     {
-        self::$libraryPath = dirname(__DIR__) . '/clib/build/libscanme_qr.so';
+        self::$libraryPath = FfiEncoder::localBuildPath();
     }
 
     protected function setUp(): void
     {
         if (!FfiEncoder::isAvailable(self::$libraryPath)) {
             $this->markTestSkipped(
-                'ext-ffi not available or libscanme_qr.so not built. ' .
+                'ext-ffi not available or the native library is not built. ' .
                 'Run: cmake -S clib -B clib/build && cmake --build clib/build'
             );
         }
