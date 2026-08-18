@@ -3,10 +3,13 @@
 - `branch`: DEC-001
 - `ci`: DEC-003
 - `commits`: DEC-002
+- `composer`: DEC-006
+- `ffi`: DEC-006
 - `lint`: DEC-005
 - `lock`: DEC-004
 - `main`: DEC-001
 - `phpstan`: DEC-005
+- `security`: DEC-006
 <!-- /TAG INDEX -->
 
 # Decisions — project decisions with rationale
@@ -75,3 +78,23 @@ excluded from analysis — the first is a conditional `if/else` class
 declaration that swaps in a C core when `extension_loaded('scanmeqr')`, the
 second is an FFI boundary using `FFI::cdef` dynamic C struct properties and
 functions; PHPStan cannot resolve either statically.
+
+### Consumer-pinned SHA-256 checksums are the trust anchor for native binary downloads
+
+<!-- id=DEC-006, date=2026-08-18, tags=security composer ffi, trigger=proposing a fallback to the installed package's own composer.json for checksums, or questioning why composer install refuses to download binaries, status=active -->
+
+The Composer plugin (`src/Composer/Plugin.php`) routes all native binary
+downloads through `BinaryDownloader::download()`, which is **fail-closed**: if
+no SHA-256 checksum can be determined it throws
+`DownloadException::checksumMissing()` before any HTTP request or file
+creation. Checksums are read from the **consumer's root** `composer.json`
+(`extra.scanmephp.checksums`), resolved via
+`dirname($composer->getConfig()->get('vendor-dir'))` — NOT the package's own
+`vendor/crazy-goat/scanmephp/composer.json`. An attacker who takes over the
+release channel can swap the binary AND the package's own composer.json, but
+NOT the consumer's root composer.json. Do not add a vendor-package checksum
+fallback — it defeats the entire fix (#48 / PR #181). Verification happens
+before `chmod 0755`. Signature verification (minisign/cosign) is a known
+future enhancement (#185); a consumer-pinned digest does not fully protect
+against org-account takeover. Existing on-disk binaries are currently
+accepted without re-verification (#182).
