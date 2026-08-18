@@ -27,3 +27,6 @@ findings.** Full suite (5330 relevant tests) and `composer lint` green. See
 - **Severity:** low (infra flake, not a regression)
 - **Status:** not-a-real-finding (for this PR) — re-running the failed jobs. If it recurs persistently, the fix would be CI-side (mirror fallback / retry on apt failure), out of scope for #43.
 - **Automated check:** none applicable to the product code; a workflow-level retry on the build-tools step could mask it, but that is a CI hardening task, not a #43 finding.
+
+## Finding 3 update — 8.3 apt flake is recurring
+- The `test (8.3)` job flaked identically on the re-run: passes checkout/PHP/composer, then hangs ~21 min on "Install build tools" (`apt-get update` against the Azure Ubuntu mirror) and is canceled. `test (8.2)` and `test (8.4)` pass with the same code. This is a persistent CI infra/mirror issue on the 8.3 runner, not a product-code defect. Will re-run once more; if it recurs a third time, surface to user as a CI hardening task (out of scope for #43).
