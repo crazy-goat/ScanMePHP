@@ -20,3 +20,10 @@ placement/visibility, docblock accuracy, tests still exercising FFI, no `.so`
 local-build literal remaining, PSR-12, types, contract-test coverage). **No new
 findings.** Full suite (5330 relevant tests) and `composer lint` green. See
 `review-2.md` for the detailed checklist.
+
+## Finding 3 (CI, round 1 — infra, not code)
+- **File:** `.github/workflows/ci.yml` — `test (8.3)` / `test (8.4)` jobs
+- **What is wrong:** PR #47 CI: 8.2 passed; 8.3 and 8.4 failed after 21 min with `##[error]The operation was canceled.` during the "Install build tools" `apt-get update` step, stuck looping on `Ign:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease` (Azure Ubuntu mirror unreachable). No tests ran. Transient infrastructure/network failure, not a code defect — 8.2 passed with identical code.
+- **Severity:** low (infra flake, not a regression)
+- **Status:** not-a-real-finding (for this PR) — re-running the failed jobs. If it recurs persistently, the fix would be CI-side (mirror fallback / retry on apt failure), out of scope for #43.
+- **Automated check:** none applicable to the product code; a workflow-level retry on the build-tools step could mask it, but that is a CI hardening task, not a #43 finding.
