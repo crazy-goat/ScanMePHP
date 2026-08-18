@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CrazyGoat\ScanMePHP\Tests;
 
 use CrazyGoat\ScanMePHP\BinaryDownloader;
+use CrazyGoat\ScanMePHP\ChecksumManager;
 use CrazyGoat\ScanMePHP\Exception\DownloadException;
 use PHPUnit\Framework\TestCase;
 
@@ -62,5 +63,50 @@ class BinaryDownloaderTest extends TestCase
             'invalid',
             $this->tempDir
         );
+    }
+
+    public function testDownloadThrowsChecksumMissingWhenNotConfigured(): void
+    {
+        $rootDir = sys_get_temp_dir() . '/scanme_checksum_missing_' . uniqid();
+        mkdir($rootDir, 0777, true);
+
+        try {
+            file_put_contents($rootDir . '/composer.json', json_encode(['name' => 'test/project']));
+
+            $downloader = new BinaryDownloader(
+                'crazy-goat/scanmephp',
+                '0.4.4',
+                $this->tempDir,
+                new ChecksumManager($rootDir)
+            );
+
+            try {
+                $downloader->download('libscanme_qr-linux-glibc-x86_64.so');
+                $this->fail('Expected DownloadException when no checksum is configured');
+            } catch (DownloadException $e) {
+                $this->assertStringContainsString('checksum', $e->getMessage());
+            }
+
+            $this->assertFileDoesNotExist($this->tempDir . '/libscanme_qr-linux-glibc-x86_64.so');
+        } finally {
+            if (is_dir($rootDir)) {
+                unlink($rootDir . '/composer.json');
+                rmdir($rootDir);
+            }
+        }
+    }
+
+    public function testDownloadThrowsChecksumMissingWithoutManagerAndNoExplicitChecksum(): void
+    {
+        $downloader = new BinaryDownloader(
+            'crazy-goat/scanmephp',
+            '0.4.4',
+            $this->tempDir
+        );
+
+        $this->expectException(DownloadException::class);
+        $this->expectExceptionMessage('checksum');
+
+        $downloader->download('libscanme_qr-linux-glibc-x86_64.so');
     }
 }

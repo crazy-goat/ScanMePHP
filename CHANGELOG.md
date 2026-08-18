@@ -48,6 +48,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Applied `php-cs-fixer` and `rector` to the whole codebase: PSR-12
   formatting, `readonly` properties, removed unused promoted property in
   `FfiEncoder`
+- Composer plugin (`src/Composer/Plugin.php`) now routes native binary
+  downloads through `BinaryDownloader` with a `ChecksumManager`, reuses
+  `PlatformDetector` instead of duplicating it, and refuses any download
+  without a configured SHA-256 checksum — checksum verification is now
+  mandatory (fail-closed) instead of fail-open (#48)
 
 ### Removed
 
