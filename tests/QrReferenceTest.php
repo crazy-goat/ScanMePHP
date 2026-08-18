@@ -79,9 +79,9 @@ class QrReferenceTest extends TestCase
     #[DataProvider('csvFixtureProvider')]
     public function testFfiEncoderMatchesReference(string $url, string $ecl, int $version, int $size, string $expectedBits): void
     {
-        $libPath = dirname(__DIR__) . '/clib/build/libscanme_qr.so';
+        $libPath = FfiEncoder::localBuildPath();
         if (!file_exists($libPath)) {
-            $this->markTestSkipped('libscanme_qr.so not found');
+            $this->markTestSkipped('libscanme_qr native library not found');
         }
 
         $encoder = new FfiEncoder($libPath);

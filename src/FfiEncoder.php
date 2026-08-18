@@ -89,12 +89,25 @@ class FfiEncoder implements EncoderInterface
             return $vendorBinary;
         }
 
-        $localBuild = dirname(__DIR__) . '/clib/build/libscanme_qr.so';
+        $localBuild = self::localBuildPath();
         if (self::isAvailable($localBuild)) {
             return $localBuild;
         }
 
         return null;
+    }
+
+    /**
+     * The absolute path of the local CMake build's shared library, with the
+     * platform-correct suffix (`.dylib` on macOS, `.so` elsewhere). CMake
+     * produces this name from `add_library(scanme_qr SHARED ...)` with the
+     * platform-default suffix and no override, so the suffix must be derived
+     * from `PHP_OS_FAMILY` rather than hardcoded.
+     */
+    public static function localBuildPath(): string
+    {
+        $suffix = PHP_OS_FAMILY === 'Darwin' ? 'dylib' : 'so';
+        return dirname(__DIR__) . '/clib/build/libscanme_qr.' . $suffix;
     }
 
     public function getLibraryVersion(): string
