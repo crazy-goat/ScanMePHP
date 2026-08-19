@@ -81,6 +81,20 @@ Verdict: **CLEAN** — F-1…F-8 re-checked with evidence (all fixed except F-4,
 | F-9 | low | **fixed** — added `testPackageInstallReplacesFfiBinaryWhenExistingChecksumMismatches` (PlantDefinedSkip: skips without `ffi` per FAQ-003, or with scanmeqr preloaded): tampered FFI binary under `ffi-binaries/` → warning → unlink → FFI downloader invoked exactly once → file absent, "FFI library download failed" message. Live-verified by mutation: commenting out the FFI `@unlink` (Plugin.php:231) flips the test red |
 | F-10 | nit | **fixed** — closure now declares all three parameters `(string $binaryPath, string $version, ChecksumManager $checksumManager)`, matching the invocation in `StubDownloaderPlugin::createDownloader()` and the corrected docblock; PHPStan `arguments.count` (which flagged the original) is now clean |
 
+## Round 4 (review)
+
+Verdict: **CLEAN** — F-1…F-10 re-checked with evidence (F-9 and F-10 fixed by `30ca218`; all others still fixed except F-4, KB, accepted-pending). New finding:
+
+| # | file:line | what is wrong | severity | status | automated check |
+|---|-----------|---------------|----------|--------|-----------------|
+| F-11 | src/Composer/Plugin.php:221 (FFI `is_file()` guard) | The FFI branch's `is_file()` guard has no directory-at-target regression test; the ext-only directory test does not pin it. Empirically proven (probe B): regressing the FFI `is_file()` to `file_exists()` leaves the whole suite green — the F-2 failure mode (misleading warning, silent unlink failure, directory never removed) would come back unnoticed on the FFI path. | low | open | mirror the ext directory test for the FFI path with the FAQ-003 skip |
+
+### Round 4 dispositions (main session, after fixes)
+
+| # | severity | disposition |
+|---|----------|-------------|
+| F-11 | low | **fixed** — added `testPackageInstallWithDirectoryAtFfiTargetPathFailsCleanly` (skip without `ffi` per FAQ-003): directory at FFI target path → no verification warning, directory untouched, FFI downloader invoked exactly once, "FFI library download failed" fallback. Live-verified by mutation: regressing FFI `is_file()` → `file_exists()` flips the test red |
+
 ## Round 2 (review-critical, commit 4833955 — verdict: CLEAN)
 
 Re-check of F-1…F-6 with evidence (code inspection + test/probe runs):
@@ -130,3 +144,30 @@ New findings:
 Gates: `composer lint` pass (cs-fixer 0/55, PHPStan OK, rector OK, kb-lint 0); `composer test` pass ×2 — 5411 tests / 11565 assertions, exit 0 both runs, deprecations identical to round 2's pre-existing set; PluginTest focused 5 tests / 22 assertions OK on PHP 8.5.9 with ffi loaded; composer.json diff empty; working tree pristine after the mutation probe. No gate changes proposed.
 
 KB candidates (single-writer rule — main session applies at step 14): DEC-006 update re-confirmed (F-4); FAQ-010 proposal validated by the committed fix (full text in review-3.md); new FAQ-011 proposal — a regression test on one mirror branch (ext) does not pin its sibling (FFI fallback); give each mirrored branch its own planted test with an `extension_loaded('ffi')` skip.
+
+## Round 4 (review, commit 30ca218 — verdict: CLEAN)
+
+Re-check of F-1…F-10 with evidence (code inspection + runs + read-only mutation probes A/B with throwaway copy and restore):
+
+| # | severity | round-4 status | evidence |
+|---|----------|----------------|----------|
+| F-1 | medium | **fixed** | Seam `Plugin::createDownloader()` protected (Plugin.php:262); ext mismatch test (PluginTest.php:108-143) green; `30ca218` touches no `src/` file. |
+| F-2 | low | **fixed** (FFI mirror unpinned → F-11) | `is_file()` at Plugin.php:148 (ext) and :221 (FFI); ext directory test (PluginTest.php:184-216) green — no warning, no unlink, dir untouched, graceful fallback. FFI branch guard has no directory test → F-11. |
+| F-3 | low | **fixed** | Warning precedes `@unlink` in both paths (Plugin.php:159-160, :230-231); confirmed by source read. |
+| F-4 | low (KB) | **still present in KB — accepted-pending** (main session applies at step 14) | Re-read `decisions.md:97-100` this round: DEC-006 still swaps #185/#182 and the "accepted without re-verification (#182)" sentence goes stale on merge. Not re-counted as open. |
+| F-5 | nit | **fixed** | `testExistingBinaryIsInvalidWhenFileMissing` confirmed (ChecksumManagerTest.php:210). |
+| F-6 | nit | **fixed** | `### Fixed` at CHANGELOG.md:63-69 under [Unreleased], confirmed via `git diff origin/main...HEAD`. |
+| F-7 | low | **fixed** | Factory (PluginTest.php:285-296) takes both stubs, roots each at its own directory; stub always throws (wrong-dir writes structurally impossible); `=== 1` scoped per instance; green on this ffi-loaded machine. |
+| F-8 | nit | **fixed** | Failing stub + `assertFileDoesNotExist` (:140) + fallback message (:141) + `=== 1` (:142). **Probe A this round** pins the FFI `@unlink` the same way the round-3 probe pinned the ext one — both unlink sites are mutation-proven. |
+| F-9 | low | **fixed** | `testPackageInstallReplacesFfiBinaryWhenExistingChecksumMismatches` (PluginTest.php:145-182) genuinely exercises the FFI mismatch branch (tampered file under `ffi-binaries/` → warning → unlink → FFI stub invoked exactly once → target absent → 'FFI library download failed'); skip correct per FAQ-003 (`scanmeqr` preloaded or `!ffi` → skip); ran (not skipped) on this machine. **Probe A** (FFI `@unlink` commented out) → **RED** at PluginTest.php:179; restored, tree clean. The unlink + fail-closed re-download invocation are genuinely pinned. Caveat: the FFI branch's `is_file` guard stays unpinned → F-11. |
+| F-10 | nit | **fixed** | Closure declares all three params `(string $binaryPath, string $version, ChecksumManager $checksumManager)` (PluginTest.php:289) matching the invocation (:369) and docblock (:361); `composer lint` PHPStan `[OK] No errors` (53 files). |
+
+New findings:
+
+| # | file:line | what is wrong | severity | status | automated check that could catch it |
+|---|-----------|---------------|----------|--------|-------------------------------------|
+| F-11 | src/Composer/Plugin.php:221 × tests/Composer/PluginTest.php (ext-only directory test) | The FFI branch's `is_file()` guard has no directory-at-target regression test. Empirically (probe B this round): reverting FFI `is_file()` → `file_exists()` leaves the whole suite green — the new FFI mismatch test plants a *file*, where both predicates agree; no committed test plants a directory at the FFI target path. If the guard regresses, a directory at the FFI target reproduces the pre-fix F-2 behavior (misleading 'failed SHA-256 verification' warning, silent unlink failure, download failing at `fopen('wb')`, directory never removed → repeated failure per install). Fail-closed holds; robustness/UX class, same as F-2/F-9. | low | open | mirror the ext directory test for the FFI path: plant `PlatformDetector::getBinaryName(...)` as a *directory* under `ffi-binaries/`, assert no verification warning + 'FFI library download failed' + `downloadCalls === 1` + directory untouched, with the FAQ-003 skip (`scanmeqr` preloaded or `!ffi`) |
+
+Gates: `composer lint` pass (cs-fixer 0/55, PHPStan OK, rector OK, kb-lint 0); `composer test` pass — **5412 tests / 11569 assertions** (exactly +1 test / +4 assertions = the new FFI test), exit 0, deprecations identical to the pre-existing rounds-2/3 set (8 fgetcsv + 1 PHPUnit in BuilderTest from #57; 1 skip per FAQ-001); focused PluginTest 6 tests / 26 assertions OK on PHP 8.5.9 with ffi loaded; probes A (FFI unlink removed → RED at :179) and B (FFI is_file→file_exists → GREEN → F-11) fully rolled back — `git diff --exit-code` and `git status --porcelain` clean; composer.json diff empty; no gate changes proposed.
+
+KB candidates (single-writer rule — main session applies at step 14): DEC-006 update re-confirmed (F-4); FAQ-010 (stub discipline: throw don't overwrite, honor the seam's directory, per-instance call counts) validated by the committed fix; FAQ-011 (mirrored branches each need their own planted test) validated **twice** — F-9's planted-file fix landed as proposed, and F-11 shows the same lesson for the planted-*directory* (is_file) mirror. Full texts in review-4.md. Tag-index note: no FAQ/DEC entry carries a `tests` tag yet — FAQ-010/011 should add it.

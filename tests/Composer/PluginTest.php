@@ -181,6 +181,46 @@ class PluginTest extends TestCase
         $this->assertSame(1, $ffiDownloader->downloadCalls, 'the FFI verified download path must be invoked exactly once');
     }
 
+    public function testPackageInstallWithDirectoryAtFfiTargetPathFailsCleanly(): void
+    {
+        if (extension_loaded('scanmeqr') || !extension_loaded('ffi')) {
+            $this->markTestSkipped('requires the FFI extension (FAQ-003) and no preloaded scanmeqr extension');
+        }
+
+        $os = PlatformDetector::getOperatingSystem();
+        $arch = PlatformDetector::getArchitecture();
+        $variant = $os === 'linux' ? PlatformDetector::getLinuxVariant() : null;
+        $binaryName = PlatformDetector::getBinaryName($os, $variant, $arch);
+        $binaryDir = $this->installPath . '/ffi-binaries';
+        mkdir($binaryDir, 0777, true);
+        // Mirror of the ext directory test: the FFI branch's is_file() guard
+        // must not be mistaken for the ext one being enough (F-11).
+        mkdir($binaryDir . '/' . $binaryName, 0777, true);
+
+        $extDownloader = new FailingStubBinaryDownloader($this->installPath . '/ext-binaries');
+        $ffiDownloader = new FailingStubBinaryDownloader($binaryDir);
+        $plugin = new StubDownloaderPlugin($this->downloadFactory($extDownloader, $ffiDownloader));
+
+        $output = $this->runPackageInstall([
+            'name' => 'test/project',
+            'extra' => [
+                'scanmephp' => [
+                    'checksums' => [
+                        '0.4.6' => [
+                            $binaryName => hash('sha256', 'verified-ffi-binary-content'),
+                        ],
+                    ],
+                ],
+            ],
+        ], $plugin);
+
+        $output = implode("\n", $output);
+        $this->assertStringNotContainsString('failed SHA-256 verification', $output);
+        $this->assertStringContainsString('FFI library download failed', $output);
+        $this->assertSame(1, $ffiDownloader->downloadCalls);
+        $this->assertDirectoryExists($binaryDir . '/' . $binaryName, 'the directory must be left untouched');
+    }
+
     public function testPackageInstallWithDirectoryAtTargetPathFailsCleanly(): void
     {
         if (extension_loaded('scanmeqr')) {
