@@ -142,6 +142,45 @@ class PluginTest extends TestCase
         $this->assertSame(1, $extDownloader->downloadCalls, 'the verified download path must be invoked exactly once for the extension');
     }
 
+    public function testPackageInstallReplacesFfiBinaryWhenExistingChecksumMismatches(): void
+    {
+        if (extension_loaded('scanmeqr') || !extension_loaded('ffi')) {
+            $this->markTestSkipped('requires the FFI extension (FAQ-003) and no preloaded scanmeqr extension');
+        }
+
+        $os = PlatformDetector::getOperatingSystem();
+        $arch = PlatformDetector::getArchitecture();
+        $variant = $os === 'linux' ? PlatformDetector::getLinuxVariant() : null;
+        $binaryName = PlatformDetector::getBinaryName($os, $variant, $arch);
+        $binaryDir = $this->installPath . '/ffi-binaries';
+        mkdir($binaryDir, 0777, true);
+        $binaryPath = $binaryDir . '/' . $binaryName;
+        file_put_contents($binaryPath, 'tampered-ffi-binary-content');
+
+        $extDownloader = new FailingStubBinaryDownloader($this->installPath . '/ext-binaries');
+        $ffiDownloader = new FailingStubBinaryDownloader($binaryDir);
+        $plugin = new StubDownloaderPlugin($this->downloadFactory($extDownloader, $ffiDownloader));
+
+        $output = $this->runPackageInstall([
+            'name' => 'test/project',
+            'extra' => [
+                'scanmephp' => [
+                    'checksums' => [
+                        '0.4.6' => [
+                            $binaryName => hash('sha256', 'verified-ffi-binary-content'),
+                        ],
+                    ],
+                ],
+            ],
+        ], $plugin);
+
+        $output = implode("\n", $output);
+        $this->assertStringContainsString('failed SHA-256 verification. Re-downloading', $output);
+        $this->assertFileDoesNotExist($binaryPath, 'the mismatched FFI library must be unlinked before the re-download');
+        $this->assertStringContainsString('FFI library download failed', $output);
+        $this->assertSame(1, $ffiDownloader->downloadCalls, 'the FFI verified download path must be invoked exactly once');
+    }
+
     public function testPackageInstallWithDirectoryAtTargetPathFailsCleanly(): void
     {
         if (extension_loaded('scanmeqr')) {
@@ -243,14 +282,16 @@ class PluginTest extends TestCase
      * own failing stub rooted at its own directory, so ffi-present and
      * ffi-absent environments behave identically for the assertions.
      */
-    private function downloadFactory(FailingStubBinaryDownloader $extDownloader): \Closure
-    {
-        return function (string $binaryPath) use ($extDownloader): BinaryDownloader {
+    private function downloadFactory(
+        FailingStubBinaryDownloader $extDownloader,
+        ?FailingStubBinaryDownloader $ffiDownloader = null
+    ): \Closure {
+        return function (string $binaryPath, string $version, ChecksumManager $checksumManager) use ($extDownloader, $ffiDownloader): BinaryDownloader {
             if (str_contains($binaryPath, 'ext-binaries')) {
                 return $extDownloader;
             }
 
-            return new FailingStubBinaryDownloader($binaryPath);
+            return $ffiDownloader ?? new FailingStubBinaryDownloader($binaryPath);
         };
     }
 

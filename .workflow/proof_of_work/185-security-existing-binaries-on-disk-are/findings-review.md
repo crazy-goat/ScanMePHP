@@ -65,6 +65,22 @@ Verdict: **CLEAN** — F-1…F-6 re-checked with evidence (all fixed except F-4,
 | F-7 | low | **fixed** — stub classes reworked: `StubBinaryDownloader` replaced by `FailingStubBinaryDownloader` rooted at the seam-provided directory; `StubDownloaderPlugin` now takes a factory closure honoring `$binaryPath` (ext path → recorded stub, FFI path → its own stub), so ffi-present/absent behave identically; call count asserted `=== 1` on the ext stub only |
 | F-8 | nit | **fixed** — stubs now fail instead of overwrite: mismatch test asserts the tampered file is *absent* after install (proves the unlink; verified by mutation test — removing `@unlink` flips the suite red), plus "Extension download failed" fallback message; directory test asserts no verification warning + directory untouched + graceful failure |
 
+## Round 3 (review)
+
+Verdict: **CLEAN** — F-1…F-8 re-checked with evidence (all fixed except F-4, KB, accepted-pending). New findings:
+
+| # | file:line | what is wrong | severity | status | automated check |
+|---|-----------|---------------|----------|--------|-----------------|
+| F-9 | src/Composer/Plugin.php:221-232 (FFI mirror branch) | The FFI-path re-verification + unlink branch has no committed regression test — a regression there (file_exists reintroduced, unlink dropped) would merge green. The ext mirror is pinned; the FFI fallback — the issue's exact scenario — is not. | low | open | mirror ext mismatch test for the FFI path with `extension_loaded('ffi')` skip (FAQ-003) |
+| F-10 | tests/Composer/PluginTest.php (StubDownloaderPlugin docblock) | Docblock declared `\Closure(string, string, ChecksumManager)` while the closure took 1 arg; PHP silently drops extras. | nit | open | PHPStan arguments.count (it does flag it — see disposition) |
+
+### Round 3 dispositions (main session, after fixes)
+
+| # | severity | disposition |
+|---|----------|-------------|
+| F-9 | low | **fixed** — added `testPackageInstallReplacesFfiBinaryWhenExistingChecksumMismatches` (PlantDefinedSkip: skips without `ffi` per FAQ-003, or with scanmeqr preloaded): tampered FFI binary under `ffi-binaries/` → warning → unlink → FFI downloader invoked exactly once → file absent, "FFI library download failed" message. Live-verified by mutation: commenting out the FFI `@unlink` (Plugin.php:231) flips the test red |
+| F-10 | nit | **fixed** — closure now declares all three parameters `(string $binaryPath, string $version, ChecksumManager $checksumManager)`, matching the invocation in `StubDownloaderPlugin::createDownloader()` and the corrected docblock; PHPStan `arguments.count` (which flagged the original) is now clean |
+
 ## Round 2 (review-critical, commit 4833955 — verdict: CLEAN)
 
 Re-check of F-1…F-6 with evidence (code inspection + test/probe runs):
@@ -88,3 +104,29 @@ New findings:
 Gates: `composer lint` pass (cs-fixer 0/55, phpstan OK, rector OK, kb-lint 0); `composer test` pass — 5411 tests / 11565 assertions, exit 0, stable across reruns (8 pre-existing fgetcsv deprecations; 1 pre-existing PHPUnit deprecation in BuilderTest from #57; 1 pre-existing skip per FAQ-001). `composer.json` diff empty. No gate changes proposed.
 
 KB candidates (single-writer rule — main session applies at step 14): DEC-006 update re-confirmed (see F-4); new FAQ-010 proposal — stubbed downloaders must honor the seam's target directory and fail (throw) rather than overwrite, so unlink + FFI-fallback paths are pinned honestly (full text in review-2.md).
+
+## Round 3 (review-critical, commit a34ab7e — verdict: CLEAN)
+
+Re-check of F-1…F-8 with evidence (code inspection + runs + read-only mutation probe):
+
+| # | severity | round-3 status | evidence |
+|---|----------|----------------|----------|
+| F-1 | medium | **fixed** | Seam `Plugin::createDownloader()` protected (Plugin.php:262); mismatch test (PluginTest.php:108-143) passes offline and still catches fail-open regression; round-2 caveats resolved via F-8 (unlink now proven — see F-8 probe). |
+| F-2 | low | **fixed** | `is_file()` at Plugin.php:148 and :221; directory test (PluginTest.php:145-177) passes without warnings, no unlink, dir untouched, graceful fallback. |
+| F-3 | low | **fixed** | Warning precedes `@unlink` in both paths (Plugin.php:159-160, :230-231); `@` precedent in-tree; PHPStan level 4 OK. |
+| F-4 | low (KB) | **still present in KB — accepted-pending** (step 14) | First-hand `gh issue view`: #185 = on-disk re-verification (this PR), #182 = signature verification; decisions.md:97-100 still swapped + stale sentence. Not re-counted as open. |
+| F-5 | nit | **fixed** | `testExistingBinaryIsInvalidWhenFileMissing` confirmed (ChecksumManagerTest.php:210). |
+| F-6 | nit | **fixed** | `### Fixed` at CHANGELOG.md:63, under [Unreleased]; a34ab7e didn't touch CHANGELOG. |
+| F-7 | low | **fixed** | Factory (PluginTest.php:246-255) roots ext stub at `ext-binaries`, FFI gets a fresh failing stub rooted at `ffi-binaries`; stub never writes (always throws) so wrong-dir writes are structurally impossible; `=== 1` pinned on ext stub only → ffi-present/absent identical (no assertion touches FFI output); green on this ffi-loaded machine. |
+| F-8 | nit | **fixed** | Failing stub + `assertFileDoesNotExist` (PluginTest.php:140) + 'Extension download failed' (:141) + `=== 1` (:142). **Mutation probe**: commented out `@unlink` at Plugin.php:160 → test RED ("Failed asserting that file … does not exist", PluginTest.php:140); restored from throwaway copy; `git diff --exit-code` and `git status --porcelain` clean afterwards. The test genuinely pins the unlink. |
+
+New findings:
+
+| # | file:line | what is wrong | severity | status | automated check that could catch it |
+|---|-----------|---------------|----------|--------|-------------------------------------|
+| F-9 | src/Composer/Plugin.php:221-232 (FFI re-verification + `@unlink` branch) — no plant/test under `ffi-binaries/` in tests/Composer/PluginTest.php | The FFI mirror of the ext mismatch flow has **no committed regression test**: nothing plants a tampered FFI binary, so a regression there (e.g. `is_file()` → `file_exists()`, dropped re-verification, removed `@unlink` at :231) merges green. Ext path is pinned; FFI fallback (Plugin.php:118-119) — the exact scenario of this issue — is not. Coder's throwaway smoke test once covered it and was deleted (findings-coder.md:22-25). No product bug; test coverage gap on a mirrored security-relevant branch. | low | open | PHPUnit test mirroring the ext mismatch test: plant tampered `PlatformDetector::getBinaryName(...)` under `ffi-binaries/`, assert warning + target absent + 'FFI library download failed' + exactly-once on an FFI-rooted failing stub; skip when `!extension_loaded('ffi')` (FAQ-003) |
+| F-10 | tests/Composer/PluginTest.php:320 (@param `\Closure(string, string, ChecksumManager): BinaryDownloader`) vs :248 (closure declares only `(string $binaryPath)`) | Docblock overstates the factory closure's arity; relies on PHP silently discarding `$version`/`$checksumManager` (passed at :328). Works today; PHPStan level 4 doesn't cross-check (plain `\Closure` return). Doc-accuracy only. | nit | open | none reasonable at level 4 (docblock-vs-declaration callable arity isn't enforced) |
+
+Gates: `composer lint` pass (cs-fixer 0/55, PHPStan OK, rector OK, kb-lint 0); `composer test` pass ×2 — 5411 tests / 11565 assertions, exit 0 both runs, deprecations identical to round 2's pre-existing set; PluginTest focused 5 tests / 22 assertions OK on PHP 8.5.9 with ffi loaded; composer.json diff empty; working tree pristine after the mutation probe. No gate changes proposed.
+
+KB candidates (single-writer rule — main session applies at step 14): DEC-006 update re-confirmed (F-4); FAQ-010 proposal validated by the committed fix (full text in review-3.md); new FAQ-011 proposal — a regression test on one mirror branch (ext) does not pin its sibling (FFI fallback); give each mirrored branch its own planted test with an `extension_loaded('ffi')` skip.
