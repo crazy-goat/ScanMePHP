@@ -48,25 +48,26 @@ class Builder
             mkdir($buildPath, 0755, true);
         }
 
-        // Run cmake (single invocation: captures output and exit code together)
+        // Run cmake (single invocation: exit code only; stderr stays on the
+        // process stderr and is never forwarded to callers via exceptions)
         $cmakeCmd = sprintf(
             'cd %s && cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF',
             escapeshellarg($buildPath)
         );
 
-        $cmakeExitCode = $this->runCommand($cmakeCmd, $cmakeOutput);
+        $cmakeExitCode = $this->runCommand($cmakeCmd);
 
         if ($cmakeExitCode !== 0) {
             throw BuildException::cmakeFailed($cmakeExitCode);
         }
 
-        // Run make (single invocation: captures output and exit code together)
+        // Run make (single invocation; exit code only)
         $makeCmd = sprintf(
             'cd %s && make -j$(nproc)',
             escapeshellarg($buildPath)
         );
 
-        $makeExitCode = $this->runCommand($makeCmd, $makeOutput);
+        $makeExitCode = $this->runCommand($makeCmd);
 
         if ($makeExitCode !== 0) {
             throw BuildException::buildFailed($makeExitCode);
@@ -83,21 +84,20 @@ class Builder
     }
 
     /**
-     * Execute a command once, capturing both output and exit code.
+     * Execute a command once, returning only its exit code.
      *
-     * Stderr is NOT merged into the returned output (no `2>&1`), so raw
+     * Stderr is NOT merged into the return value (no `2>&1`), so raw
      * compiler/diagnostic text containing local paths and environment
-     * details is never forwarded to callers via exception messages.
+     * details is never forwarded to callers via exception messages; stderr
+     * stays on the process's own stderr for CLI/CI diagnostics.
      *
      * @param string $command The command to execute (already escaped).
-     * @param-out string $output Filled with the command's stdout.
      * @return int The command's exit code.
      */
-    private function runCommand(string $command, ?string &$output): int
+    private function runCommand(string $command): int
     {
         $lines = [];
         exec($command, $lines, $exitCode);
-        $output = implode("\n", $lines);
 
         return $exitCode;
     }
