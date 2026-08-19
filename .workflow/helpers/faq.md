@@ -2,12 +2,12 @@
 - `baseline`: FAQ-005
 - `composer`: FAQ-007
 - `coverage`: FAQ-002
-- `exception`: FAQ-007
-- `ffi`: FAQ-001, FAQ-003, FAQ-005, FAQ-006
+- `exception`: FAQ-007, FAQ-008, FAQ-009
+- `ffi`: FAQ-001, FAQ-003, FAQ-005, FAQ-006, FAQ-008, FAQ-009
 - `phpstan`: FAQ-005
 - `phpunit`: FAQ-001, FAQ-002, FAQ-006
 - `ports`: FAQ-001
-- `security`: FAQ-007
+- `security`: FAQ-007, FAQ-008
 - `zero-deps`: FAQ-004
 <!-- /TAG INDEX -->
 
@@ -103,3 +103,35 @@ to the message. Prefer an exception code constant
 dedicated subclass caught by type, or an `isChecksumMissing(): bool` method.
 The current Plugin catch blocks (`src/Composer/Plugin.php`) use the fragile
 string-equality form and are tracked for hardening by #184.
+
+### Build commands must not merge stderr into captured output
+
+<!-- id=FAQ-008, date=2026-08-19, tags=security ffi exception, trigger=writing exec()/shell_exec() calls in src/Builder.php or any build-step code that forwards output via exception messages, status=active -->
+
+Never append `2>&1` to a command in `src/Builder.php` (or any build step) if
+the captured output may reach callers via exception messages. Compiler and
+diagnostic stderr routinely contains absolute local paths and environment
+details, which becomes an information leak when concatenated into a thrown
+message. Use a single `exec()` with the array parameter for stdout-only
+capture and surface only a sanitised `BuildException` factory message (exit
+code, `basename()` of paths); let stderr go to the process's own stderr for
+CLI/CI diagnostics. `Builder::runCommand()` is the single seam for any future
+structured logging. Root cause of #57; guarded by
+`tests/BuilderTest.php::testBuildExceptionFactoriesAreSanitised`, a dataProvider
+that asserts no `2>&1` and no absolute path in any of the four factory messages.
+
+### BuildException factories are the only sanctioned throw from Builder
+
+<!-- id=FAQ-009, date=2026-08-19, tags=exception ffi, trigger=writing a throw statement inside src/Builder.php, status=active -->
+
+`Builder::build()` must throw `BuildException` via its static factories
+(`toolsNotAvailable`, `cmakeFailed`, `buildFailed`, `libraryNotFound`), never
+a bare `\RuntimeException` with concatenated raw output. The factories produce
+sanitised messages (fixed string + exit code, or `basename()` of the build
+dir) so no local path or compiler output reaches the caller. `BuildException
+extends \RuntimeException`, so existing `catch (\RuntimeException)` /
+`catch (\Exception)` (e.g. `src/Composer/InstallScript.php`) stays compatible.
+To distinguish variants, use an exception code/subclass or an `is*(): bool`
+method, not `getMessage()` comparison (see FAQ-007). The same convention
+applies to other Builder-adjacent code that currently throws bare
+`\RuntimeException` (tracked separately).
