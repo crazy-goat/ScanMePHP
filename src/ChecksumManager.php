@@ -49,4 +49,18 @@ class ChecksumManager
     {
         return $this->getChecksum($version, $binaryName) !== null;
     }
+
+    public function existingBinaryIsValid(string $version, string $binaryName, string $path): bool
+    {
+        $checksum = $this->getChecksum($version, $binaryName);
+
+        // No pinned checksum: keep the legacy behavior of accepting whatever is
+        // already on disk (no regression for consumers without pinned checksums).
+        if ($checksum === null) {
+            return true;
+        }
+
+        // Fail-closed: a file that cannot be hashed (missing/unreadable) is invalid.
+        return @hash_file('sha256', $path) === $checksum;
+    }
 }

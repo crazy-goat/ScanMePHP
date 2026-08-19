@@ -146,11 +146,18 @@ class Plugin implements PluginInterface, EventSubscriberInterface
 
         // Check if binary already exists
         if (file_exists($targetFile)) {
-            $this->io->write('✓ Extension binary already exists at: ' . $targetFile);
-            $this->io->write('');
-            $this->io->write('📝 To enable the extension, add to your php.ini:');
-            $this->io->write('   extension=' . $targetFile);
-            return true;
+            if ($checksumManager->existingBinaryIsValid($version, $binaryName, $targetFile)) {
+                $this->io->write('✓ Extension binary already exists at: ' . $targetFile);
+                $this->io->write('');
+                $this->io->write('📝 To enable the extension, add to your php.ini:');
+                $this->io->write('   extension=' . $targetFile);
+                return true;
+            }
+
+            // Pinned checksum does not match the on-disk file: remove it and
+            // re-download through the verified (fail-closed) download path.
+            unlink($targetFile);
+            $this->io->write('⚠️  Existing extension binary failed SHA-256 verification. Re-downloading the verified binary.');
         }
 
         // Create binary directory
@@ -212,9 +219,16 @@ class Plugin implements PluginInterface, EventSubscriberInterface
 
         // Check if binary already exists
         if (file_exists($targetFile)) {
-            $this->io->write('✓ FFI library already exists at: ' . $targetFile);
-            $this->io->write('🎉 FFI library is ready to use!');
-            return;
+            if ($checksumManager->existingBinaryIsValid($version, $binaryName, $targetFile)) {
+                $this->io->write('✓ FFI library already exists at: ' . $targetFile);
+                $this->io->write('🎉 FFI library is ready to use!');
+                return;
+            }
+
+            // Pinned checksum does not match the on-disk file: remove it and
+            // re-download through the verified (fail-closed) download path.
+            unlink($targetFile);
+            $this->io->write('⚠️  Existing FFI library failed SHA-256 verification. Re-downloading the verified library.');
         }
 
         // Create binary directory

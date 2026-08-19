@@ -14,6 +14,7 @@ use Composer\IO\IOInterface;
 use Composer\Package\PackageInterface;
 use Composer\Repository\RepositoryInterface;
 use CrazyGoat\ScanMePHP\Composer\Plugin;
+use CrazyGoat\ScanMePHP\PlatformDetector;
 use PHPUnit\Framework\TestCase;
 
 class PluginTest extends TestCase
@@ -37,7 +38,77 @@ class PluginTest extends TestCase
 
     public function testPackageInstallRefusesBinaryDownloadWithoutChecksums(): void
     {
-        file_put_contents($this->tempDir . '/composer.json', json_encode(['name' => 'test/project']));
+        $output = $this->runPackageInstall(['name' => 'test/project']);
+
+        if (!extension_loaded('scanmeqr')) {
+            $output = implode("\n", $output);
+            $this->assertStringContainsString('refused', $output);
+            $this->assertStringContainsString('extra.scanmephp.checksums', $output);
+        }
+
+        foreach ([$this->installPath . '/ext-binaries', $this->installPath . '/ffi-binaries'] as $dir) {
+            $this->assertSame([], glob($dir . '/*') ?: []);
+        }
+    }
+
+    public function testPackageInstallKeepsExistingBinaryWhenChecksumMatches(): void
+    {
+        if (extension_loaded('scanmeqr')) {
+            $this->markTestSkipped('scanmeqr extension loaded; the plugin skips binary installation entirely');
+        }
+
+        $binaryName = $this->extensionBinaryName();
+        $binaryDir = $this->installPath . '/ext-binaries';
+        mkdir($binaryDir, 0777, true);
+        $binaryPath = $binaryDir . '/' . $binaryName;
+        file_put_contents($binaryPath, 'verified-binary-content');
+
+        $output = $this->runPackageInstall([
+            'name' => 'test/project',
+            'extra' => [
+                'scanmephp' => [
+                    'checksums' => [
+                        '0.4.6' => [$binaryName => hash('sha256', 'verified-binary-content')],
+                    ],
+                ],
+            ],
+        ]);
+
+        $output = implode("\n", $output);
+        $this->assertStringContainsString('already exists', $output);
+        $this->assertStringContainsString('extension=' . $binaryPath, $output);
+        $this->assertStringNotContainsString('Re-downloading', $output);
+        $this->assertSame('verified-binary-content', file_get_contents($binaryPath));
+        $this->assertSame([$binaryName], array_map(basename(...), glob($binaryDir . '/*') ?: []));
+    }
+
+    public function testPackageInstallKeepsExistingBinaryWhenNoChecksumConfigured(): void
+    {
+        if (extension_loaded('scanmeqr')) {
+            $this->markTestSkipped('scanmeqr extension loaded; the plugin skips binary installation entirely');
+        }
+
+        $binaryName = $this->extensionBinaryName();
+        $binaryDir = $this->installPath . '/ext-binaries';
+        mkdir($binaryDir, 0777, true);
+        $binaryPath = $binaryDir . '/' . $binaryName;
+        file_put_contents($binaryPath, 'unverified-binary-content');
+
+        $output = $this->runPackageInstall(['name' => 'test/project']);
+
+        $output = implode("\n", $output);
+        $this->assertStringContainsString('already exists', $output);
+        $this->assertStringNotContainsString('refused', $output);
+        $this->assertStringNotContainsString('Re-downloading', $output);
+        $this->assertSame('unverified-binary-content', file_get_contents($binaryPath));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function runPackageInstall(array $composerJson): array
+    {
+        file_put_contents($this->tempDir . '/composer.json', json_encode($composerJson));
 
         $output = [];
         $io = $this->createMock(IOInterface::class);
@@ -66,15 +137,31 @@ class PluginTest extends TestCase
         $plugin->activate($composer, $io);
         $plugin->onPackageInstall($event);
 
-        if (!extension_loaded('scanmeqr')) {
-            $output = implode("\n", $output);
-            $this->assertStringContainsString('refused', $output);
-            $this->assertStringContainsString('extra.scanmephp.checksums', $output);
-        }
+        return $output;
+    }
 
-        foreach ([$this->installPath . '/ext-binaries', $this->installPath . '/ffi-binaries'] as $dir) {
-            $this->assertSame([], glob($dir . '/*') ?: []);
+    /**
+     * Mirrors Plugin::getExtensionBinaryName() on purpose: if the plugin's
+     * naming ever changes, these tests fail loudly instead of silently
+     * testing a stale file path.
+     */
+    private function extensionBinaryName(): string
+    {
+        $os = PlatformDetector::getOperatingSystem();
+        $arch = PlatformDetector::getArchitecture();
+        $variant = $os === 'linux' ? PlatformDetector::getLinuxVariant() : null;
+
+        if (!preg_match('/^(\d+\.\d+)/', PHP_VERSION, $matches)) {
+            $this->fail('Could not determine PHP version');
         }
+        $phpVersion = str_replace('.', '', $matches[1]);
+
+        return match ($os) {
+            'linux' => sprintf('php-ext-linux-%s-%s-php%s.so', $variant ?? 'glibc', $arch, $phpVersion),
+            'macos' => sprintf('php-ext-macos-%s-php%s.so', $arch, $phpVersion),
+            'windows' => sprintf('php-ext-windows-%s-php%s.dll', $arch, $phpVersion),
+            default => $this->fail('Unsupported OS: ' . $os),
+        };
     }
 
     private function createPackageEvent(Composer $composer, IOInterface $io, InstallOperation $operation): PackageEvent
