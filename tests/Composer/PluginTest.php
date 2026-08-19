@@ -117,8 +117,11 @@ class PluginTest extends TestCase
         $binaryPath = $binaryDir . '/' . $binaryName;
         file_put_contents($binaryPath, 'tampered-binary-content');
 
-        $downloader = new StubBinaryDownloader($binaryDir, 're-downloaded-verified-content');
-        $plugin = new StubDownloaderPlugin($downloader);
+        // The re-download stub never writes: if the target file is absent after
+        // the install, the unlink in the mismatch branch actually happened
+        // (an overwrite-success stub would mask a missing unlink).
+        $extDownloader = new FailingStubBinaryDownloader($binaryDir);
+        $plugin = new StubDownloaderPlugin($this->downloadFactory($extDownloader));
 
         $output = $this->runPackageInstall([
             'name' => 'test/project',
@@ -134,8 +137,9 @@ class PluginTest extends TestCase
         $output = implode("\n", $output);
         $this->assertStringContainsString('failed SHA-256 verification. Re-downloading', $output);
         $this->assertStringNotContainsString('already exists', $output);
-        $this->assertSame(1, $downloader->downloadCalls, 'the verified download path must be invoked exactly once');
-        $this->assertSame('re-downloaded-verified-content', file_get_contents($binaryPath));
+        $this->assertFileDoesNotExist($binaryPath, 'the mismatched binary must be unlinked before the re-download');
+        $this->assertStringContainsString('Extension download failed', $output);
+        $this->assertSame(1, $extDownloader->downloadCalls, 'the verified download path must be invoked exactly once for the extension');
     }
 
     public function testPackageInstallWithDirectoryAtTargetPathFailsCleanly(): void
@@ -151,8 +155,8 @@ class PluginTest extends TestCase
         // binary (is_file() guard): no unlink attempt, no verification warning.
         mkdir($binaryDir . '/' . $binaryName, 0777, true);
 
-        $downloader = new StubBinaryDownloader($binaryDir, 'verified-binary-content');
-        $plugin = new StubDownloaderPlugin($downloader);
+        $extDownloader = new FailingStubBinaryDownloader($binaryDir);
+        $plugin = new StubDownloaderPlugin($this->downloadFactory($extDownloader));
 
         $output = $this->runPackageInstall([
             'name' => 'test/project',
@@ -168,7 +172,7 @@ class PluginTest extends TestCase
         $output = implode("\n", $output);
         $this->assertStringNotContainsString('failed SHA-256 verification', $output);
         $this->assertStringContainsString('download failed', $output);
-        $this->assertGreaterThanOrEqual(1, $downloader->downloadCalls);
+        $this->assertSame(1, $extDownloader->downloadCalls);
         $this->assertDirectoryExists($binaryDir . '/' . $binaryName, 'the directory must be left untouched');
     }
 
@@ -233,6 +237,23 @@ class PluginTest extends TestCase
         };
     }
 
+    /**
+     * Factory for StubDownloaderPlugin: the extension path (the one under
+     * test) always receives the same recording stub; the FFI path gets its
+     * own failing stub rooted at its own directory, so ffi-present and
+     * ffi-absent environments behave identically for the assertions.
+     */
+    private function downloadFactory(FailingStubBinaryDownloader $extDownloader): \Closure
+    {
+        return function (string $binaryPath) use ($extDownloader): BinaryDownloader {
+            if (str_contains($binaryPath, 'ext-binaries')) {
+                return $extDownloader;
+            }
+
+            return new FailingStubBinaryDownloader($binaryPath);
+        };
+    }
+
     private function createPackageEvent(Composer $composer, IOInterface $io, InstallOperation $operation): PackageEvent
     {
         $localRepo = $this->createMock(RepositoryInterface::class);
@@ -268,45 +289,42 @@ class PluginTest extends TestCase
 }
 
 /**
- * Offline stand-in for a productive BinaryDownloader: records invocations and
- * writes pre-verified content instead of hitting the network.
+ * Offline stand-in for a productive BinaryDownloader: never writes anything,
+ * records invocations, and reports the download as failed. Used to prove the
+ * unlink + fall-through orchestration of issue #185 without network access.
  */
-final class StubBinaryDownloader extends BinaryDownloader
+final class FailingStubBinaryDownloader extends BinaryDownloader
 {
     public int $downloadCalls = 0;
 
-    private readonly string $dir;
-
-    public function __construct(string $downloadPath, private readonly string $content)
+    public function __construct(string $downloadPath)
     {
         parent::__construct('crazy-goat/scanmephp', '0.4.6', $downloadPath);
-        $this->dir = $downloadPath;
     }
 
     public function download(string $binaryName, ?string $expectedChecksum = null): string
     {
         $this->downloadCalls++;
-        $targetPath = $this->dir . '/' . $binaryName;
-        if (@file_put_contents($targetPath, $this->content) === false) {
-            throw new \RuntimeException('stub: cannot write ' . $targetPath);
-        }
-
-        return $targetPath;
+        throw new \RuntimeException('stub: simulated download failure');
     }
 }
 
 /**
- * Plugin that swaps the real downloader for a stub, so the replica
- * re-download path of issue #185 is testable without network access.
+ * Plugin that swaps the real downloader for stubs via a factory, so both the
+ * extension and the FFI install paths receive a stub rooted at their own
+ * directory (createDownloader() is called per path).
  */
 final class StubDownloaderPlugin extends Plugin
 {
-    public function __construct(private readonly StubBinaryDownloader $downloader)
+    /**
+     * @param \Closure(string, string, ChecksumManager): BinaryDownloader $factory
+     */
+    public function __construct(private readonly \Closure $factory)
     {
     }
 
-    protected function createDownloader(string $binaryPath, string $version, ChecksumManager $checksumManager): StubBinaryDownloader
+    protected function createDownloader(string $binaryPath, string $version, ChecksumManager $checksumManager): BinaryDownloader
     {
-        return $this->downloader;
+        return ($this->factory)($binaryPath, $version, $checksumManager);
     }
 }
