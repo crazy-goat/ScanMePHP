@@ -30,6 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `Builder::build()` now runs each build command (cmake, make) exactly once
+  instead of twice (it previously ran `shell_exec()` for output and `exec()`
+  again for the exit code). Stderr is no longer merged into captured output
+  (`2>&1` removed), so local paths and environment details are not leaked via
+  exception messages; build failures now throw a sanitised `BuildException`
+  with the exit code only (#57)
 - `QRCode::createDefaultEncoder()` now checks `extension_loaded('scanmeqr')`
   (the correct module name per `php-ext/scanme_qr.c`) instead of the misspelled
   `scanme_qr`, so the native C extension is actually selected when loaded (#39)
