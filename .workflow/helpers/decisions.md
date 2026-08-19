@@ -95,6 +95,9 @@ release channel can swap the binary AND the package's own composer.json, but
 NOT the consumer's root composer.json. Do not add a vendor-package checksum
 fallback — it defeats the entire fix (#48 / PR #181). Verification happens
 before `chmod 0755`. Signature verification (minisign/cosign) is a known
-future enhancement (#185); a consumer-pinned digest does not fully protect
-against org-account takeover. Existing on-disk binaries are currently
-accepted without re-verification (#182).
+future enhancement (#182); a consumer-pinned digest does not fully protect
+against org-account takeover. On-disk binaries are re-verified against the
+pinned checksum since #185 (PR #192): `ChecksumManager::existingBinaryIsValid()`
+is fail-closed when a checksum is pinned (mismatch or unhashable → unlink and
+re-download through the verified path), while the no-checksum legacy
+acceptance is preserved for consumers without pinned checksums.
