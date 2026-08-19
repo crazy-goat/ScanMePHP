@@ -39,6 +39,29 @@ class ExtensionNameConsistencyTest extends TestCase
     }
 
     /**
+     * Pin the C-side zend_module_entry name, which is the source of truth for
+     * what PHP actually registers. A naive substring check for "scanme_qr"
+     * would false-fail on includes like "scanme_qr.h", so we match the
+     * module-entry block instead. See GitHub issue #44.
+     */
+    public function testCExtensionModuleNameMatchesPhpExtensionName(): void
+    {
+        $file = 'php-ext/scanme_qr.c';
+        $source = (string) file_get_contents(dirname(__DIR__) . '/' . $file);
+
+        $this->assertMatchesRegularExpression(
+            '/zend_module_entry\s+\w+\s*=\s*\{[^}]*"scanmeqr"/s',
+            $source,
+            'php-ext/scanme_qr.c zend_module_entry name must be "scanmeqr"'
+        );
+        $this->assertDoesNotMatchRegularExpression(
+            '/zend_module_entry\s+\w+\s*=\s*\{[^}]*"scanme_qr"/s',
+            $source,
+            'php-ext/scanme_qr.c must not register zend_module_entry name "scanme_qr"'
+        );
+    }
+
+    /**
      * R1-1 guard: FFI library path resolution must be a single source of truth.
      * Both QRCode::createDefaultEncoder() and NativeEncoder's no-extension
      * fallback must route through FfiEncoder::resolveLibraryPath() rather than
