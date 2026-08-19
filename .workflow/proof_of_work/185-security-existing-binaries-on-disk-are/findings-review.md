@@ -95,6 +95,16 @@ Verdict: **CLEAN** — F-1…F-10 re-checked with evidence (F-9 and F-10 fixed b
 |---|----------|-------------|
 | F-11 | low | **fixed** — added `testPackageInstallWithDirectoryAtFfiTargetPathFailsCleanly` (skip without `ffi` per FAQ-003): directory at FFI target path → no verification warning, directory untouched, FFI downloader invoked exactly once, "FFI library download failed" fallback. Live-verified by mutation: regressing FFI `is_file()` → `file_exists()` flips the test red |
 
+## Round 5 (review, convergence)
+
+Verdict: **CLEAN** — F-1…F-11 all fixed or accepted-pending (F-4 KB); no new findings (no F-12). Holistic branch sweep clean; mutation probe re-confirmed the F-11 pin.
+
+## CI incident (PR #192)
+
+| # | what happened | severity | disposition |
+|---|---------------|----------|-------------|
+| CI-1 | `test (8.2)` hung ~30 min in "Install build tools" (`apt-get update` step, no heartbeat) while 8.3/8.4 passed. Matches known issue **#179** (no retry/timeout on apt-get). Not a defect in this PR; ran 8.2 job locally-equivalent (suite green on 8.5 + PHPUnit matrix 8.2-8.4 semantics unchanged). | low (infra flake) | run cancelled and re-run requested (`gh run rerun --failed`); will verify green before merge. #179 remains the tracking issue for the workflow fix |
+
 ## Round 2 (review-critical, commit 4833955 — verdict: CLEAN)
 
 Re-check of F-1…F-6 with evidence (code inspection + test/probe runs):
