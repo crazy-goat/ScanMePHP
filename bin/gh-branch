@@ -1,3 +1,4 @@
+#!/usr/bin/env php
 <?php
 /**
  * bin/gh-branch — create/switch to a feature branch derived from a GitHub issue.
