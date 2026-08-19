@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CrazyGoat\ScanMePHP\Tests;
 
 use CrazyGoat\ScanMePHP\Builder;
+use CrazyGoat\ScanMePHP\Exception\BuildException;
 use PHPUnit\Framework\TestCase;
 
 class BuilderTest extends TestCase
@@ -57,5 +58,39 @@ class BuilderTest extends TestCase
         $clibPath = $builder->getClibPath();
 
         $this->assertEquals($this->tempDir . '/clib', $clibPath);
+    }
+
+    /**
+     * When build tools are absent, build() must throw BuildException
+     * (not a bare RuntimeException) with a sanitised message.
+     */
+    public function testBuildThrowsBuildExceptionWhenToolsUnavailable(): void
+    {
+        // tempDir has no clib/ directory, so isBuildAvailable() is false.
+        $builder = new Builder($this->tempDir);
+
+        $this->expectException(BuildException::class);
+        $this->expectExceptionMessage('Build tools not available');
+
+        $builder->build();
+    }
+
+    /**
+     * Exception messages must not leak raw command output / local paths.
+     * The factory message for a failed step is static and contains only
+     * the exit code, never stdout/stderr.
+     */
+    public function testBuildExceptionMessageDoesNotLeakOutput(): void
+    {
+        // tempDir has no clib/ so we get the tools-not-available path.
+        $builder = new Builder($this->tempDir);
+
+        try {
+            $builder->build();
+            $this->fail('Expected BuildException was not thrown');
+        } catch (BuildException $e) {
+            $this->assertStringNotContainsString($this->tempDir, $e->getMessage());
+            $this->assertStringNotContainsString('2>&1', $e->getMessage());
+        }
     }
 }

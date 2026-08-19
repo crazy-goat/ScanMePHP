@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP;
 
+use CrazyGoat\ScanMePHP\Exception\BuildException;
+
 class Builder
 {
     public function __construct(private readonly string $projectRoot)
@@ -35,7 +37,7 @@ class Builder
     public function build(): string
     {
         if (!$this->isBuildAvailable()) {
-            throw new \RuntimeException('Build tools not available');
+            throw BuildException::toolsNotAvailable();
         }
 
         $clibPath = $this->getClibPath();
@@ -46,42 +48,58 @@ class Builder
             mkdir($buildPath, 0755, true);
         }
 
-        // Run cmake
+        // Run cmake (single invocation: captures output and exit code together)
         $cmakeCmd = sprintf(
-            'cd %s && cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF 2>&1',
+            'cd %s && cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF',
             escapeshellarg($buildPath)
         );
 
-        $cmakeOutput = shell_exec($cmakeCmd);
-        $cmakeExitCode = 0;
-        exec($cmakeCmd, $_, $cmakeExitCode);
+        $cmakeExitCode = $this->runCommand($cmakeCmd, $cmakeOutput);
 
         if ($cmakeExitCode !== 0) {
-            throw new \RuntimeException('CMake configuration failed: ' . $cmakeOutput);
+            throw BuildException::cmakeFailed($cmakeExitCode);
         }
 
-        // Run make
+        // Run make (single invocation: captures output and exit code together)
         $makeCmd = sprintf(
-            'cd %s && make -j$(nproc) 2>&1',
+            'cd %s && make -j$(nproc)',
             escapeshellarg($buildPath)
         );
 
-        $makeOutput = shell_exec($makeCmd);
-        $makeExitCode = 0;
-        exec($makeCmd, $_, $makeExitCode);
+        $makeExitCode = $this->runCommand($makeCmd, $makeOutput);
 
         if ($makeExitCode !== 0) {
-            throw new \RuntimeException('Build failed: ' . $makeOutput);
+            throw BuildException::buildFailed($makeExitCode);
         }
 
         // Find the built library
         $libraryPath = $this->findBuiltLibrary($buildPath);
 
         if ($libraryPath === null) {
-            throw new \RuntimeException('Built library not found in: ' . $buildPath);
+            throw BuildException::libraryNotFound($buildPath);
         }
 
         return $libraryPath;
+    }
+
+    /**
+     * Execute a command once, capturing both output and exit code.
+     *
+     * Stderr is NOT merged into the returned output (no `2>&1`), so raw
+     * compiler/diagnostic text containing local paths and environment
+     * details is never forwarded to callers via exception messages.
+     *
+     * @param string $command The command to execute (already escaped).
+     * @param-out string $output Filled with the command's stdout.
+     * @return int The command's exit code.
+     */
+    private function runCommand(string $command, ?string &$output): int
+    {
+        $lines = [];
+        exec($command, $lines, $exitCode);
+        $output = implode("\n", $lines);
+
+        return $exitCode;
     }
 
     private function findBuiltLibrary(string $buildPath): ?string
