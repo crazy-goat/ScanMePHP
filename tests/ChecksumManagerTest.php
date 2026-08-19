@@ -207,7 +207,7 @@ class ChecksumManagerTest extends TestCase
         }
     }
 
-    public function testExistingBinaryIsInvalidWhenFileMissingOrUnreadable(): void
+    public function testExistingBinaryIsInvalidWhenFileMissing(): void
     {
         $tempDir = $this->createChecksumFixture([
             'v0.4.4' => [

@@ -13,6 +13,8 @@ use Composer\Installer\PackageEvents;
 use Composer\IO\IOInterface;
 use Composer\Package\PackageInterface;
 use Composer\Repository\RepositoryInterface;
+use CrazyGoat\ScanMePHP\BinaryDownloader;
+use CrazyGoat\ScanMePHP\ChecksumManager;
 use CrazyGoat\ScanMePHP\Composer\Plugin;
 use CrazyGoat\ScanMePHP\PlatformDetector;
 use PHPUnit\Framework\TestCase;
@@ -103,10 +105,77 @@ class PluginTest extends TestCase
         $this->assertSame('unverified-binary-content', file_get_contents($binaryPath));
     }
 
+    public function testPackageInstallReplacesBinaryWhenExistingChecksumMismatches(): void
+    {
+        if (extension_loaded('scanmeqr')) {
+            $this->markTestSkipped('scanmeqr extension loaded; the plugin skips binary installation entirely');
+        }
+
+        $binaryName = $this->extensionBinaryName();
+        $binaryDir = $this->installPath . '/ext-binaries';
+        mkdir($binaryDir, 0777, true);
+        $binaryPath = $binaryDir . '/' . $binaryName;
+        file_put_contents($binaryPath, 'tampered-binary-content');
+
+        $downloader = new StubBinaryDownloader($binaryDir, 're-downloaded-verified-content');
+        $plugin = new StubDownloaderPlugin($downloader);
+
+        $output = $this->runPackageInstall([
+            'name' => 'test/project',
+            'extra' => [
+                'scanmephp' => [
+                    'checksums' => [
+                        '0.4.6' => [$binaryName => hash('sha256', 'verified-binary-content')],
+                    ],
+                ],
+            ],
+        ], $plugin);
+
+        $output = implode("\n", $output);
+        $this->assertStringContainsString('failed SHA-256 verification. Re-downloading', $output);
+        $this->assertStringNotContainsString('already exists', $output);
+        $this->assertSame(1, $downloader->downloadCalls, 'the verified download path must be invoked exactly once');
+        $this->assertSame('re-downloaded-verified-content', file_get_contents($binaryPath));
+    }
+
+    public function testPackageInstallWithDirectoryAtTargetPathFailsCleanly(): void
+    {
+        if (extension_loaded('scanmeqr')) {
+            $this->markTestSkipped('scanmeqr extension loaded; the plugin skips binary installation entirely');
+        }
+
+        $binaryName = $this->extensionBinaryName();
+        $binaryDir = $this->installPath . '/ext-binaries';
+        mkdir($binaryDir, 0777, true);
+        // A directory at the target path must not be mistaken for an existing
+        // binary (is_file() guard): no unlink attempt, no verification warning.
+        mkdir($binaryDir . '/' . $binaryName, 0777, true);
+
+        $downloader = new StubBinaryDownloader($binaryDir, 'verified-binary-content');
+        $plugin = new StubDownloaderPlugin($downloader);
+
+        $output = $this->runPackageInstall([
+            'name' => 'test/project',
+            'extra' => [
+                'scanmephp' => [
+                    'checksums' => [
+                        '0.4.6' => [$binaryName => hash('sha256', 'verified-binary-content')],
+                    ],
+                ],
+            ],
+        ], $plugin);
+
+        $output = implode("\n", $output);
+        $this->assertStringNotContainsString('failed SHA-256 verification', $output);
+        $this->assertStringContainsString('download failed', $output);
+        $this->assertGreaterThanOrEqual(1, $downloader->downloadCalls);
+        $this->assertDirectoryExists($binaryDir . '/' . $binaryName, 'the directory must be left untouched');
+    }
+
     /**
      * @return list<string>
      */
-    private function runPackageInstall(array $composerJson): array
+    private function runPackageInstall(array $composerJson, ?Plugin $plugin = null): array
     {
         file_put_contents($this->tempDir . '/composer.json', json_encode($composerJson));
 
@@ -133,7 +202,7 @@ class PluginTest extends TestCase
         $operation = new InstallOperation($package);
         $event = $this->createPackageEvent($composer, $io, $operation);
 
-        $plugin = new Plugin();
+        $plugin ??= new Plugin();
         $plugin->activate($composer, $io);
         $plugin->onPackageInstall($event);
 
@@ -195,5 +264,49 @@ class PluginTest extends TestCase
         }
 
         rmdir($dir);
+    }
+}
+
+/**
+ * Offline stand-in for a productive BinaryDownloader: records invocations and
+ * writes pre-verified content instead of hitting the network.
+ */
+final class StubBinaryDownloader extends BinaryDownloader
+{
+    public int $downloadCalls = 0;
+
+    private readonly string $dir;
+
+    public function __construct(string $downloadPath, private readonly string $content)
+    {
+        parent::__construct('crazy-goat/scanmephp', '0.4.6', $downloadPath);
+        $this->dir = $downloadPath;
+    }
+
+    public function download(string $binaryName, ?string $expectedChecksum = null): string
+    {
+        $this->downloadCalls++;
+        $targetPath = $this->dir . '/' . $binaryName;
+        if (@file_put_contents($targetPath, $this->content) === false) {
+            throw new \RuntimeException('stub: cannot write ' . $targetPath);
+        }
+
+        return $targetPath;
+    }
+}
+
+/**
+ * Plugin that swaps the real downloader for a stub, so the replica
+ * re-download path of issue #185 is testable without network access.
+ */
+final class StubDownloaderPlugin extends Plugin
+{
+    public function __construct(private readonly StubBinaryDownloader $downloader)
+    {
+    }
+
+    protected function createDownloader(string $binaryPath, string $version, ChecksumManager $checksumManager): StubBinaryDownloader
+    {
+        return $this->downloader;
     }
 }

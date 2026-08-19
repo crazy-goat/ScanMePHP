@@ -145,7 +145,7 @@ class Plugin implements PluginInterface, EventSubscriberInterface
         $this->io->write('✓ Target extension: ' . $binaryName);
 
         // Check if binary already exists
-        if (file_exists($targetFile)) {
+        if (is_file($targetFile)) {
             if ($checksumManager->existingBinaryIsValid($version, $binaryName, $targetFile)) {
                 $this->io->write('✓ Extension binary already exists at: ' . $targetFile);
                 $this->io->write('');
@@ -156,8 +156,8 @@ class Plugin implements PluginInterface, EventSubscriberInterface
 
             // Pinned checksum does not match the on-disk file: remove it and
             // re-download through the verified (fail-closed) download path.
-            unlink($targetFile);
             $this->io->write('⚠️  Existing extension binary failed SHA-256 verification. Re-downloading the verified binary.');
+            @unlink($targetFile);
         }
 
         // Create binary directory
@@ -218,7 +218,7 @@ class Plugin implements PluginInterface, EventSubscriberInterface
         $this->io->write('✓ Target library: ' . $binaryName);
 
         // Check if binary already exists
-        if (file_exists($targetFile)) {
+        if (is_file($targetFile)) {
             if ($checksumManager->existingBinaryIsValid($version, $binaryName, $targetFile)) {
                 $this->io->write('✓ FFI library already exists at: ' . $targetFile);
                 $this->io->write('🎉 FFI library is ready to use!');
@@ -227,8 +227,8 @@ class Plugin implements PluginInterface, EventSubscriberInterface
 
             // Pinned checksum does not match the on-disk file: remove it and
             // re-download through the verified (fail-closed) download path.
-            unlink($targetFile);
             $this->io->write('⚠️  Existing FFI library failed SHA-256 verification. Re-downloading the verified library.');
+            @unlink($targetFile);
         }
 
         // Create binary directory
@@ -259,7 +259,7 @@ class Plugin implements PluginInterface, EventSubscriberInterface
         }
     }
 
-    private function createDownloader(string $binaryPath, string $version, ChecksumManager $checksumManager): BinaryDownloader
+    protected function createDownloader(string $binaryPath, string $version, ChecksumManager $checksumManager): BinaryDownloader
     {
         return new BinaryDownloader(self::PACKAGE_NAME, $version, $binaryPath, $checksumManager);
     }

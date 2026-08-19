@@ -60,7 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   without a configured SHA-256 checksum — checksum verification is now
   mandatory (fail-closed) instead of fail-open (#48)
 
-### Security
+### Fixed
 
 - Composer plugin no longer trusts binaries already present on disk without
   re-verification: when a SHA-256 checksum is pinned in the root
