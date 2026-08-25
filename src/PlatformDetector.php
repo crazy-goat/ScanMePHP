@@ -4,6 +4,15 @@ declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP;
 
+/**
+ * Maps the running platform to the binary names published on the releases page.
+ *
+ * Windows is still detected and still gets a name, even though no Windows
+ * binaries are published (dropped in 0.5.0): the name is only ever used to
+ * probe for a file, and callers treat "not there" as "fall back". Throwing for
+ * Windows instead would take down every `new QRCode()` on that platform,
+ * because FfiEncoder::resolveLibraryPath() asks for the name unconditionally.
+ */
 class PlatformDetector
 {
     public static function getOperatingSystem(): string
@@ -53,6 +62,7 @@ class PlatformDetector
         return match ($os) {
             'linux' => sprintf('libscanme_qr-linux-%s-%s.so', $variant ?? 'glibc', $arch),
             'macos' => sprintf('libscanme_qr-macos-%s.dylib', $arch),
+            // Not published since 0.5.0 — a local MSVC build produces this name.
             'windows' => sprintf('scanme_qr-windows-%s.dll', $arch),
             default => throw new \RuntimeException('Unsupported OS: ' . $os),
         };

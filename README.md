@@ -48,7 +48,7 @@ composer require crazy-goat/scanmephp
 
 When you install or update the package via Composer, the library will automatically:
 
-1. Detect your platform (Linux glibc/musl, macOS Intel/ARM, Windows)
+1. Detect your platform (Linux glibc/musl, macOS Intel/ARM)
 2. Try to download and install the PHP extension (`scanmeqr`) — **fastest option** (190–360× faster)
 3. Fall back to FFI library if extension is not available — **90–130× faster**
 4. Use pure PHP encoder as final fallback — works everywhere
@@ -150,7 +150,11 @@ Prebuilt FFI library binaries are available for:
 | Linux (musl/Alpine) | `libscanme_qr-linux-musl-x86_64.so` |
 | macOS Intel | `libscanme_qr-macos-x86_64.dylib` |
 | macOS Apple Silicon | `libscanme_qr-macos-arm64.dylib` |
-| Windows x86_64 | `scanme_qr-windows-x86_64.dll` |
+
+> **Windows:** no prebuilt binaries are published. ScanMePHP still works —
+> it falls back to the pure-PHP encoder, which needs no extension and no FFI.
+> For native speed on Windows, build `clib/` from source with MSVC and point
+> `FfiEncoder` at the resulting `scanme_qr.dll`.
 
 ## Quick Start
 
@@ -482,7 +486,11 @@ Prebuilt binaries are available from [GitHub Releases](https://github.com/crazy-
 | Linux (musl/Alpine) | `libscanme_qr-linux-musl-x86_64.so` | [Latest Release](../../releases/latest) |
 | macOS Intel | `libscanme_qr-macos-x86_64.dylib` | [Latest Release](../../releases/latest) |
 | macOS Apple Silicon | `libscanme_qr-macos-arm64.dylib` | [Latest Release](../../releases/latest) |
-| Windows x86_64 | `scanme_qr-windows-x86_64.dll` | [Latest Release](../../releases/latest) |
+
+> **Windows:** no prebuilt binaries are published. ScanMePHP still works —
+> it falls back to the pure-PHP encoder, which needs no extension and no FFI.
+> For native speed on Windows, build `clib/` from source with MSVC and point
+> `FfiEncoder` at the resulting `scanme_qr.dll`.
 
 Place the downloaded binary in your project directory. The `FfiEncoder` will automatically detect and load it.
 

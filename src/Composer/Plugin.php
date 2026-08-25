@@ -284,6 +284,8 @@ class Plugin implements PluginInterface, EventSubscriberInterface
         return match ($os) {
             'linux' => sprintf('php-ext-linux-%s-%s-php%s.so', $variant ?? 'glibc', $arch, $phpVersion),
             'macos' => sprintf('php-ext-macos-%s-php%s.so', $arch, $phpVersion),
+            // No Windows extension binaries are published; the download simply
+            // fails and the installer falls back, same as any missing asset.
             'windows' => sprintf('php-ext-windows-%s-php%s.dll', $arch, $phpVersion),
             default => throw new \RuntimeException('Unsupported OS: ' . $os),
         };

@@ -57,8 +57,16 @@ target_include_directories(scanme_qr_objs
 )
 target_compile_options(scanme_qr_objs PRIVATE
     $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Werror>
-    $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX>
+    # /wd4324: the kernels deliberately over-align their row buffers, and MSVC
+    # warns on every such struct ("padded due to alignment specifier"). The
+    # padding is the point, so the warning is pure noise here.
+    $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX /wd4324>
     $<$<CONFIG:Release>:$<IF:$<CXX_COMPILER_ID:MSVC>,/O2,-O3>>
+)
+# MSVC deprecates std::getenv in favour of the non-portable _dupenv_s; the one
+# call site reads an optional test/bench override once at startup.
+target_compile_definitions(scanme_qr_objs PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:_CRT_SECURE_NO_WARNINGS>
 )
 set_target_properties(scanme_qr_objs PROPERTIES
     CXX_VISIBILITY_PRESET hidden

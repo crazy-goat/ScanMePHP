@@ -14,6 +14,8 @@ numbers). Minor bump rather than a patch because three things change what
 callers observe:
 
 - PHP 8.1 is no longer supported (`composer.json` requires `^8.2`)
+- Windows no longer gets prebuilt binaries — the pure-PHP encoder still works
+  there, but the FFI/extension fast paths need a local build
 - `SvgRenderer` in the default Square style emits one `<path>` of merged
   horizontal runs instead of one `<rect>` per module — same rendered pixels,
   ~4.5× smaller files, but different markup for anyone parsing or diffing it
@@ -178,6 +180,12 @@ callers observe:
 
 ### Removed
 
+- Prebuilt **Windows** binaries. The Windows FFI job is gone from the release
+  workflow, so `scanme_qr-windows-x86_64.dll` is no longer published (no
+  Windows extension binary was ever built). Windows keeps working through the
+  pure-PHP encoder, and a local MSVC build of `clib/` still produces a usable
+  DLL; `PlatformDetector` deliberately still resolves a Windows binary name so
+  the probe-then-fall-back path stays intact instead of throwing
 - PHP 8.1 from the supported PHP range for the library code
 
 ## [0.4.11] - 2026-03-18
