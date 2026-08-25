@@ -7,6 +7,7 @@
 #include "tables.hpp"
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 
@@ -30,6 +31,24 @@ static uint64_t rnd() {
 
 int main(int argc, char** argv) {
     int rounds = argc > 1 ? std::atoi(argv[1]) : 6;
+
+    // SCANME_MASK_KERNEL forces a kernel with no CPU check, so a CI runner
+    // without AVX-512 would SIGILL here. Report the kernel as skipped instead;
+    // an unknown name is still an error.
+    if (const char* forced = std::getenv("SCANME_MASK_KERNEL")) {
+        if (!scanme::mask_kernel_supported(forced)) {
+            const bool known = std::strcmp(forced, "generic") == 0 ||
+                               std::strcmp(forced, "avx2") == 0 ||
+                               std::strcmp(forced, "avx512") == 0;
+            if (!known) {
+                std::printf("unknown mask kernel \'%s\' (expected generic|avx2|avx512)\n", forced);
+                return 1;
+            }
+            std::printf("SKIP: mask kernel \'%s\' is not available in this build or on this CPU\n", forced);
+            return 0;
+        }
+        std::printf("mask kernel: %s\n", scanme::active_mask_kernel());
+    }
     int failures = 0, checked = 0;
     for (int version = 1; version <= 40; ++version) {
         for (int ecl = 0; ecl < 4; ++ecl) {

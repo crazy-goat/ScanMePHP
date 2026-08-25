@@ -12,6 +12,12 @@ int select_best_mask(QRMatrix& m, int ecl, int* penalties_out = nullptr);
 // Name of the penalty kernel selected for this CPU ("generic", "avx2", "avx512").
 const char* active_mask_kernel();
 
+// Whether a named kernel ("generic", "avx2", "avx512") is both compiled into
+// this build and runnable on this CPU. SCANME_MASK_KERNEL forces a kernel
+// without any CPU check (forcing an unsupported ISA SIGILLs), so tests and
+// benchmarks must ask this before forcing one.
+bool mask_kernel_supported(const char* name);
+
 // Scalar reference implementation (nayuki-style); used by tests/bench.
 int select_best_mask_reference(const QRMatrix& m, int ecl, int* penalties_out = nullptr);
 int calculate_penalty_scalar(const Row3* masked_rows, int size, int* rule_out = nullptr);

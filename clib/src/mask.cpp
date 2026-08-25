@@ -35,7 +35,8 @@ using KernelFn = int (*)(const QRMatrix&, int, int*, MaskScratch&);
 
 static KernelFn pick_kernel() {
     // Test/bench override: SCANME_MASK_KERNEL=generic|avx2|avx512. No CPU check
-    // is done for an explicit override — forcing an unsupported ISA will SIGILL.
+    // is done for an explicit override — forcing an unsupported ISA will SIGILL,
+    // so callers must gate on mask_kernel_supported() first.
     const char* forced = std::getenv("SCANME_MASK_KERNEL");
     if (forced && std::strcmp(forced, "generic") == 0) return &generic::select_best_mask_kernel;
 #if defined(SCANME_HAVE_AVX512_KERNEL)
@@ -58,6 +59,25 @@ static KernelFn pick_kernel() {
 #endif
 #endif
     return &generic::select_best_mask_kernel;
+}
+
+bool mask_kernel_supported(const char* name) {
+    if (!name) return false;
+    if (std::strcmp(name, "generic") == 0) return true;
+#if (defined(SCANME_HAVE_AVX2_KERNEL) || defined(SCANME_HAVE_AVX512_KERNEL)) && (defined(__GNUC__) || defined(__clang__))
+    __builtin_cpu_init();
+#if defined(SCANME_HAVE_AVX512_KERNEL)
+    if (std::strcmp(name, "avx512") == 0)
+        return __builtin_cpu_supports("avx512f") && __builtin_cpu_supports("avx512bw") &&
+               __builtin_cpu_supports("avx512vpopcntdq") && __builtin_cpu_supports("bmi2");
+#endif
+#if defined(SCANME_HAVE_AVX2_KERNEL)
+    if (std::strcmp(name, "avx2") == 0)
+        return __builtin_cpu_supports("avx2") && __builtin_cpu_supports("popcnt") &&
+               __builtin_cpu_supports("bmi2");
+#endif
+#endif
+    return false;
 }
 
 const char* active_mask_kernel() {

@@ -94,8 +94,11 @@ jobs:
         make -j$(nproc)
 
     # Runs the nayuki fixtures and the mask-penalty equivalence test on x86-64,
-    # once per available SIMD kernel (generic / avx2 / avx512), then prints the
-    # C++ micro-benchmark so per-kernel timings are visible in the job log.
+    # once per SIMD kernel (generic / avx2 / avx512), then prints the C++
+    # micro-benchmark so per-kernel timings are visible in the job log.
+    # A kernel the runner's CPU cannot execute reports "SKIP" and passes —
+    # forcing an unsupported ISA would SIGILL, so hosted runners without
+    # AVX-512 validate only the kernels they can actually run.
     - name: Test C++ library (all SIMD kernels)
       working-directory: clib/build
       run: |
