@@ -90,8 +90,21 @@ jobs:
       run: |
         rm -rf build
         mkdir -p build && cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DBUILD_BENCH=ON
         make -j$(nproc)
+
+    # Runs the nayuki fixtures and the mask-penalty equivalence test on x86-64,
+    # once per available SIMD kernel (generic / avx2 / avx512), then prints the
+    # C++ micro-benchmark so per-kernel timings are visible in the job log.
+    - name: Test C++ library (all SIMD kernels)
+      working-directory: clib/build
+      run: |
+        ctest --output-on-failure
+        for k in generic avx2 avx512; do
+          echo "== kernel: $k"
+          SCANME_MASK_KERNEL=$k ./tests/test_penalty_equivalence 4 || exit 1
+        done
+        ./bench/scanme_bench 300
 
     - name: Run test suite
       run: composer run-script test
