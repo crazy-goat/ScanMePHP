@@ -6,19 +6,111 @@ namespace CrazyGoat\ScanMePHP;
 
 class Matrix
 {
-    /** @var bool[] Flat array of size*size, indexed as [y * size + x] */
-    private array $data;
+    /**
+     * Flat size*size module storage indexed as [y * size + x]; truthiness of
+     * an element marks a dark module. Three representations share the same
+     * read path (`(bool) $this->data[$i]`):
+     *   - bool[]           — pure-PHP encoders, and after normalize();
+     *   - int[] of 0/1     — straight from unpack() (FastEncoder);
+     *   - string of '0'/'1' — native encoders (ext / FFI) hand in one byte per
+     *                        module, which avoids building size*size zvals
+     *                        (~3 µs of a 9 µs encode at v10, ~35 µs at v40).
+     * Any write goes through normalize() first, so mutation always sees bool[].
+     *
+     * @var list<bool|int>|string
+     */
+    private array|string $data;
     private readonly int $version;
     private readonly int $size;
 
     /** @var bool[]|null Lazily computed reserved bitmap (flat) */
     private ?array $reserved = null;
 
-    public function __construct(int $version)
+    /** False while $data may still be a '0'/'1' string or hold 0/1 ints. */
+    private bool $normalized;
+
+    /** Cached toModuleString() result for array-backed data; reset on every write. */
+    private ?string $moduleString = null;
+
+    /**
+     * @param list<bool|int>|null $data Prefilled flat module data (size*size
+     *        entries, [y * size + x]); null allocates an all-light matrix.
+     * @param bool $normalized Pass false when $data holds 0/1 ints instead of
+     *        bools; the public raw getters then convert lazily on first use.
+     */
+    public function __construct(int $version, ?array $data = null, bool $normalized = true)
     {
         $this->version = $version;
         $this->size = 17 + ($version * 4);
-        $this->data = array_fill(0, $this->size * $this->size, false);
+        $this->data = $data ?? array_fill(0, $this->size * $this->size, false);
+        $this->normalized = $data === null || $normalized;
+    }
+
+    /**
+     * Build a matrix from one byte per module, '0' = light, '1' = dark,
+     * ordered [y * size + x]. This is the zero-copy entry point for the native
+     * encoders: the string is stored as-is and only expanded to bool[] if a
+     * caller mutates the matrix or asks for the raw array.
+     *
+     * @internal Used by NativeEncoder (php-ext) and FfiEncoder.
+     */
+    public static function fromModuleString(int $version, string $modules): self
+    {
+        $matrix = new self($version, [], normalized: false);
+        if (\strlen($modules) !== $matrix->size * $matrix->size) {
+            throw new \InvalidArgumentException(sprintf(
+                'Module string for version %d must hold %d bytes, got %d',
+                $version,
+                $matrix->size * $matrix->size,
+                \strlen($modules)
+            ));
+        }
+        $matrix->data = $modules;
+
+        return $matrix;
+    }
+
+    /**
+     * Ensure $data is strictly bool[] before exposing or mutating it.
+     * Renderers only go through get()/fastGet() (which cast), so this runs at
+     * most once and only for matrices built from native modules.
+     */
+    private function normalize(): void
+    {
+        if ($this->normalized) {
+            return;
+        }
+        if (\is_string($this->data)) {
+            /** @var list<int> $ints */
+            $ints = array_values((array) unpack('C*', strtr($this->data, '01', "\0\1")));
+            $this->data = array_map(boolval(...), $ints);
+        } else {
+            $this->data = array_map(boolval(...), $this->data);
+        }
+        $this->normalized = true;
+    }
+
+    /**
+     * One byte per module, '0' = light, '1' = dark, ordered [y * size + x].
+     * This is the form the renderers consume: a row is a substr(), a glyph or
+     * markup mapping is a strtr(), dark runs are a preg_match_all() — all C
+     * loops instead of one method call per module. Free for matrices built by
+     * the native encoders; one pack()+strtr() pass (~5 µs at v10) otherwise.
+     */
+    public function toModuleString(): string
+    {
+        if (\is_string($this->data)) {
+            return $this->data;
+        }
+        if ($this->moduleString === null) {
+            // int[] straight from unpack() implodes to '0'/'1' as-is (12 µs at
+            // v10); bool[] needs pack() first, since false implodes to ''.
+            $this->moduleString = $this->normalized
+                ? strtr(pack('C*', ...$this->data), "\0\1", '01')
+                : implode('', $this->data);
+        }
+
+        return $this->moduleString;
     }
 
     public function getSize(): int
@@ -36,12 +128,14 @@ class Matrix
         if ($x < 0 || $x >= $this->size || $y < 0 || $y >= $this->size) {
             return false;
         }
-        return $this->data[$y * $this->size + $x];
+        return (bool) $this->data[$y * $this->size + $x];
     }
 
     public function set(int $x, int $y, bool $value): void
     {
         if ($x >= 0 && $x < $this->size && $y >= 0 && $y < $this->size) {
+            $this->normalize();
+            $this->moduleString = null;
             $this->data[$y * $this->size + $x] = $value;
         }
     }
@@ -51,22 +145,32 @@ class Matrix
      */
     public function fastGet(int $x, int $y): bool
     {
-        return $this->data[$y * $this->size + $x];
+        return (bool) $this->data[$y * $this->size + $x];
     }
 
     /**
      * Fast inline set — no bounds check. Caller must guarantee valid coords.
+     * Matrices built from native module strings pay a one-off normalize() on
+     * the first write; the pure-PHP pipeline never does.
      */
     public function fastSet(int $x, int $y, bool $value): void
     {
+        if (!$this->normalized) {
+            $this->normalize();
+        }
+        $this->moduleString = null;
         $this->data[$y * $this->size + $x] = $value;
     }
 
     /**
      * Get the raw flat data array. For high-performance iteration.
+     *
+     * @return list<bool>
      */
     public function getRawData(): array
     {
+        $this->normalize();
+        \assert(\is_array($this->data));
         return $this->data;
     }
 
@@ -76,6 +180,8 @@ class Matrix
     public function setRawData(array $data): void
     {
         $this->data = $data;
+        $this->normalized = true;
+        $this->moduleString = null;
     }
 
     /**
@@ -85,6 +191,8 @@ class Matrix
      */
     public function getPackedRows(): array
     {
+        $size = $this->size;
+        $data = $this->data;
         $size = $this->size;
         $data = $this->data;
         $rows = [];
@@ -130,6 +238,8 @@ class Matrix
      */
     public function applyXorMask(array $xorRows): void
     {
+        $this->normalize();
+        $this->moduleString = null;
         $size = $this->size;
         $sizeM1 = $size - 1;
 
@@ -153,6 +263,7 @@ class Matrix
      */
     public function getData(): array
     {
+        $this->normalize();
         $result = [];
         $size = $this->size;
         for ($y = 0; $y < $size; $y++) {
@@ -171,6 +282,8 @@ class Matrix
      */
     public function setData(array $data): void
     {
+        $this->normalized = true;
+        $this->moduleString = null;
         $size = $this->size;
         $flat = [];
         for ($y = 0; $y < $size; $y++) {
@@ -335,6 +448,8 @@ class Matrix
     {
         $clone = new self($this->version);
         $clone->data = $this->data;
+        $clone->normalized = $this->normalized;
+        $clone->moduleString = $this->moduleString;
         $clone->reserved = $this->reserved;
         return $clone;
     }
