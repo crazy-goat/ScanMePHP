@@ -45,21 +45,30 @@ if test "$PHP_SCANMEQR" != "no"; then
   dnl -- locate the C++ core ------------------------------------------------
 
   AC_MSG_CHECKING([for the ScanMePHP C++ core])
-  if test -r "$srcdir/encoder.cpp"; then
+
+  dnl clib wins when it is there, and the bundled layout is recognised by a
+  dnl *header* rather than a source: once configure has run once in a checkout,
+  dnl $srcdir/encoder.cpp exists as a symlink, and keying off it would make the
+  dnl second run believe it was looking at the standalone package and drop the
+  dnl include paths the headers still live behind.
+  SCANMEQR_CLIB=""
+  if test "$PHP_SCANMEQR_CLIB" != "yes" && test "$PHP_SCANMEQR_CLIB" != "no"; then
+    SCANMEQR_CLIB="$PHP_SCANMEQR_CLIB"
+    if test ! -r "$SCANMEQR_CLIB/src/encoder.cpp"; then
+      AC_MSG_RESULT([not found])
+      AC_MSG_ERROR([encoder.cpp not found in $SCANMEQR_CLIB/src/.])
+    fi
+  elif test -r "$srcdir/../clib/src/encoder.cpp"; then
+    SCANMEQR_CLIB="$srcdir/../clib"
+  elif test ! -r "$srcdir/encoder.hpp"; then
+    AC_MSG_RESULT([not found])
+    AC_MSG_ERROR([the C++ core is neither bundled here nor in ../clib. Pass --with-scanmeqr-clib=DIR.])
+  fi
+
+  if test -z "$SCANMEQR_CLIB"; then
     AC_MSG_RESULT([bundled])
     PHP_ADD_INCLUDE([$abs_srcdir])
   else
-    if test "$PHP_SCANMEQR_CLIB" != "yes" && test "$PHP_SCANMEQR_CLIB" != "no"; then
-      SCANMEQR_CLIB="$PHP_SCANMEQR_CLIB"
-    else
-      SCANMEQR_CLIB="$srcdir/../clib"
-    fi
-
-    if test ! -r "$SCANMEQR_CLIB/src/encoder.cpp"; then
-      AC_MSG_RESULT([not found])
-      AC_MSG_ERROR([encoder.cpp not found in $SCANMEQR_CLIB/src/. Pass --with-scanmeqr-clib=DIR.])
-    fi
-
     SCANMEQR_CLIB=`cd "$SCANMEQR_CLIB" && pwd`
     AC_MSG_RESULT([$SCANMEQR_CLIB])
 
@@ -108,6 +117,25 @@ if test "$PHP_SCANMEQR" != "no"; then
       ;;
   esac
 
+  dnl -- symbol visibility --------------------------------------------------
+
+  dnl The C++ core exports 70-odd symbols that nothing outside the extension has
+  dnl any business seeing, and PHP dlopens extensions into the global namespace:
+  dnl on ELF those definitions then interpose on the identically named ones in
+  dnl libscanme_qr.so, so loading the extension corrupted FfiEncoder's results.
+  dnl CMake already builds the same sources with CXX_VISIBILITY_PRESET hidden.
+  dnl get_module survives because ZEND_DLEXPORT marks it visibility("default").
+  AC_MSG_CHECKING([whether $CXX accepts -fvisibility=hidden])
+  AC_LANG_PUSH([C++])
+  scanmeqr_saved_cxxflags="$CXXFLAGS"
+  CXXFLAGS="$scanmeqr_saved_cxxflags -fvisibility=hidden -Werror"
+  AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[]])],
+    [SCANMEQR_VISIBILITY="-fvisibility=hidden -DSCANME_QR_NO_EXPORT"],
+    [SCANMEQR_VISIBILITY="-DSCANME_QR_NO_EXPORT"])
+  CXXFLAGS="$scanmeqr_saved_cxxflags"
+  AC_LANG_POP([C++])
+  AC_MSG_RESULT([${SCANMEQR_VISIBILITY:-no}])
+
   dnl -- build --------------------------------------------------------------
 
   dnl scanme_qr.c #includes native_encoder.c, so the glue is one translation
@@ -115,12 +143,12 @@ if test "$PHP_SCANMEQR" != "no"; then
   dnl need -m flags that must not reach anything else. Compiling the whole
   dnl extension with -mavx512f would let the compiler emit AVX-512 anywhere and
   dnl the binary would SIGILL on every CPU without it.
-  PHP_NEW_EXTENSION([scanmeqr], [scanme_qr.c], [$ext_shared],, [], [cxx])
+  PHP_NEW_EXTENSION([scanmeqr], [scanme_qr.c], [$ext_shared],, [$SCANMEQR_VISIBILITY], [cxx])
 
   dnl -D rather than AC_DEFINE: mask.cpp is a clib source and never sees PHP's
   dnl config.h, so a define that only lands there would leave the dispatcher
   dnl blind to kernels that were in fact compiled in.
-  SCANMEQR_CXXFLAGS="$SCANMEQR_STDCXX -DZEND_COMPILE_DL_EXT=1"
+  SCANMEQR_CXXFLAGS="$SCANMEQR_STDCXX $SCANMEQR_VISIBILITY -DZEND_COMPILE_DL_EXT=1"
   if test "$SCANMEQR_HAVE_AVX2" = "yes"; then
     SCANMEQR_CXXFLAGS="$SCANMEQR_CXXFLAGS -DSCANME_HAVE_AVX2_KERNEL"
   fi
