@@ -22,7 +22,7 @@ use CrazyGoat\ScanMePHP\Exception\InvalidDataException;
  */
 class FastEncoder implements EncoderInterface
 {
-    private const MAX_VERSION = 27;
+    public const MAX_VERSION = 27;
 
     // Byte-mode capacity: [version-1][ecl] = max URL length
     private const BYTE_CAPACITY = [
@@ -141,8 +141,8 @@ class FastEncoder implements EncoderInterface
     /** @var int[] Galois field log table (256 entries) */
     private static array $log = [];
 
-    /** @var int[] Byte popcount LUT (256 entries) */
-    private static array $pop = [];
+    /** @var string[] byte value -> 8 module bytes ("\0"/"\1", MSB first) */
+    private static array $moduleBytes = [];
 
     /**
      * Per-version cached data. All row/col arrays use int-pair layout:
@@ -194,13 +194,38 @@ class FastEncoder implements EncoderInterface
             return $this->fallback->encode($url, $errorCorrectionLevel);
         }
 
+        return $this->encodeVersion($url, $errorCorrectionLevel, $version);
+    }
+
+    /**
+     * Encodes $url as a Byte-mode symbol of exactly $version (1..27). The data
+     * must fit; Encoder validates that before delegating here.
+     *
+     * @internal Used by Encoder for its fast path; prefer encode().
+     */
+    public function encodeVersion(
+        string $url,
+        ErrorCorrectionLevel $errorCorrectionLevel,
+        int $version,
+    ): Matrix {
+        $dataLen = strlen($url);
+        $eclVal = $errorCorrectionLevel->value;
+        if ($dataLen === 0) {
+            throw InvalidDataException::emptyData();
+        }
+        if ($version < 1 || $version > self::MAX_VERSION || $dataLen > self::BYTE_CAPACITY[$version - 1][$eclVal]) {
+            throw new \InvalidArgumentException(
+                "FastEncoder::encodeVersion(): {$dataLen} bytes do not fit in version {$version}"
+                . " at ECL {$errorCorrectionLevel->name} (or version is outside 1.." . self::MAX_VERSION . ')'
+            );
+        }
+
         // === Initialize static tables on first use ===
         if (self::$exp === []) {
             $this->initTables();
         }
 
         $size = 17 + ($version << 2);
-        $sizeM1 = $size - 1;
         $eccCount = self::ECC_COUNT[$version - 1][$eclVal];
         $totalCodewords = self::TOTAL_CODEWORDS[$version];
         $dataCodewords = $totalCodewords - $eccCount;
@@ -229,8 +254,6 @@ class FastEncoder implements EncoderInterface
         // =====================================================================
         // HOT PATH — everything below is inlined, zero method calls
         // =====================================================================
-
-        $pop = self::$pop;
 
         // === 1. Byte-mode encode: URL bytes → codeword array ===
         $charCountBits = $version <= 9 ? 8 : 16;
@@ -267,369 +290,125 @@ class FastEncoder implements EncoderInterface
         }
 
         // === 2. Reed-Solomon ECC with multi-block interleaving ===
+        // The ECC register of each block is 4 packed 64-bit words (byte j of
+        // the register = coefficient j, little-endian): consuming a data byte
+        // shifts the register down one byte and XORs the factor row, which is
+        // 4 word XORs instead of a per-coefficient loop.
         $g1Blocks = $ecBlock[0];
         $g1Data   = $ecBlock[1];
         $g2Blocks = $ecBlock[3];
         $g2Data   = $ecBlock[4];
         $numBlocks = $g1Blocks + $g2Blocks;
 
-        $blockData = [];
-        $blockEcc  = [];
+        $blockOffset = [];
+        $blockLen = [];
+        $blockEcc = [];
         $k = 0;
         for ($b = 0; $b < $numBlocks; $b++) {
             $dlen = ($b < $g1Blocks) ? $g1Data : $g2Data;
-            $bd = array_slice($codewords, $k, $dlen);
-            $k += $dlen;
-
-            $ecc = array_fill(0, $eccPerBlock, 0);
-            for ($i = 0; $i < $dlen; $i++) {
-                $factor = $bd[$i] ^ array_shift($ecc);
-                $ecc[] = 0;
+            $blockOffset[$b] = $k;
+            $blockLen[$b] = $dlen;
+            $w0 = 0;
+            $w1 = 0;
+            $w2 = 0;
+            $w3 = 0;
+            for ($i = $k, $end = $k + $dlen; $i < $end; $i++) {
+                $factor = $codewords[$i] ^ ($w0 & 0xFF);
+                $w0 = (($w0 >> 8) & 0x00FFFFFFFFFFFFFF) | ($w1 << 56);
+                $w1 = (($w1 >> 8) & 0x00FFFFFFFFFFFFFF) | ($w2 << 56);
+                $w2 = (($w2 >> 8) & 0x00FFFFFFFFFFFFFF) | ($w3 << 56);
+                $w3 = ($w3 >> 8) & 0x00FFFFFFFFFFFFFF;
                 if ($factor !== 0) {
                     $ft = $factorTable[$factor];
-                    for ($j = 0; $j < $eccPerBlock; $j++) {
-                        $ecc[$j] ^= $ft[$j];
-                    }
+                    $w0 ^= $ft[0];
+                    $w1 ^= $ft[1];
+                    $w2 ^= $ft[2];
+                    $w3 ^= $ft[3];
                 }
             }
-            $blockData[$b] = $bd;
-            $blockEcc[$b]  = $ecc;
+            $blockEcc[$b] = [$w0, $w1, $w2, $w3];
+            $k += $dlen;
         }
 
         $maxDataLen = ($g2Blocks > 0) ? $g2Data : $g1Data;
         $interleaved = [];
         for ($col = 0; $col < $maxDataLen; $col++) {
             for ($b = 0; $b < $numBlocks; $b++) {
-                $dlen = ($b < $g1Blocks) ? $g1Data : $g2Data;
-                if ($col < $dlen) {
-                    $interleaved[] = $blockData[$b][$col];
+                if ($col < $blockLen[$b]) {
+                    $interleaved[] = $codewords[$blockOffset[$b] + $col];
                 }
             }
         }
         for ($col = 0; $col < $eccPerBlock; $col++) {
+            $word = $col >> 3;
+            $shift = ($col & 7) << 3;
             for ($b = 0; $b < $numBlocks; $b++) {
-                $interleaved[] = $blockEcc[$b][$col];
+                $interleaved[] = ($blockEcc[$b][$word] >> $shift) & 0xFF;
             }
         }
         $codewords = $interleaved;
 
         // === 3. Place data into int-pair rows/cols ===
+        // Zigzag position p carries bit p of the codeword stream (MSB first),
+        // so codeword byte i owns positions 8i..8i+7. Zero bytes are skipped;
+        // remainder bits after the last codeword are light.
         $rowsHi = $vc['baseRowsHi'];
         $rowsLo = $vc['baseRowsLo'];
         $colsHi = $vc['baseColsHi'];
         $colsLo = $vc['baseColsLo'];
 
         $allCount = count($codewords);
-
-        // Place data bits using pre-computed zigzag positions
         $zigX = $vc['zigX'];
         $zigY = $vc['zigY'];
-        $zigRowBitHi = $vc['zigRowBitHi'];
         $zigRowBitLo = $vc['zigRowBitLo'];
-        $zigColBitHi = $vc['zigColBitHi'];
         $zigColBitLo = $vc['zigColBitLo'];
-        $zigCount = count($zigX);
 
-        $bitIndex = 0;
-        for ($p = 0; $p < $zigCount; $p++) {
-            $byteIndex = $bitIndex >> 3;
-            if ($byteIndex < $allCount && (($codewords[$byteIndex] >> (7 - ($bitIndex & 7))) & 1)) {
-                $y = $zigY[$p];
-                $x = $zigX[$p];
-                $rowsHi[$y] |= $zigRowBitHi[$p];
-                $rowsLo[$y] |= $zigRowBitLo[$p];
-                $colsHi[$x] |= $zigColBitHi[$p];
-                $colsLo[$x] |= $zigColBitLo[$p];
+        if ($size <= 64) {
+            // hi words stay zero for v1-v11
+            for ($bi = 0; $bi < $allCount; $bi++) {
+                $cw = $codewords[$bi];
+                if ($cw === 0) {
+                    continue;
+                }
+                $p = $bi << 3;
+                for ($bit = 7; $bit >= 0; $bit--, $p++) {
+                    if (($cw >> $bit) & 1) {
+                        $rowsLo[$zigY[$p]] |= $zigRowBitLo[$p];
+                        $colsLo[$zigX[$p]] |= $zigColBitLo[$p];
+                    }
+                }
             }
-            $bitIndex++;
+        } else {
+            $zigRowBitHi = $vc['zigRowBitHi'];
+            $zigColBitHi = $vc['zigColBitHi'];
+            for ($bi = 0; $bi < $allCount; $bi++) {
+                $cw = $codewords[$bi];
+                if ($cw === 0) {
+                    continue;
+                }
+                $p = $bi << 3;
+                for ($bit = 7; $bit >= 0; $bit--, $p++) {
+                    if (($cw >> $bit) & 1) {
+                        $y = $zigY[$p];
+                        $x = $zigX[$p];
+                        $rowsHi[$y] |= $zigRowBitHi[$p];
+                        $rowsLo[$y] |= $zigRowBitLo[$p];
+                        $colsHi[$x] |= $zigColBitHi[$p];
+                        $colsLo[$x] |= $zigColBitLo[$p];
+                    }
+                }
+            }
         }
 
-        // === 4. Select best mask (all 8 masks, bitwise penalty rules on int pairs) ===
+        // === 4. Select best mask (bitwise penalty on whole rows/columns) ===
         $maskRowsHi = $vc['maskRowsHi'];
         $maskRowsLo = $vc['maskRowsLo'];
-        $maskColsHi = $vc['maskColsHi'];
-        $maskColsLo = $vc['maskColsLo'];
         $fmtRowsHi = $fc['fmtRowsHi'];
         $fmtRowsLo = $fc['fmtRowsLo'];
-        $fmtColsHi = $fc['fmtColsHi'];
-        $fmtColsLo = $fc['fmtColsLo'];
 
-        $totalModules = $size * $size;
-
-        // Pre-compute masks for the hi part (bits above 63)
-        // For size <= 64, hiBits = 0 and all hi masks are 0
-        $hiBits = $size > 64 ? $size - 64 : 0;
-
-        $bestMask = 0;
-        $bestScore = \PHP_INT_MAX;
-
-        for ($mask = 0; $mask < 8; $mask++) {
-            $xrHi = $maskRowsHi[$mask];
-            $xrLo = $maskRowsLo[$mask];
-            $xcHi = $maskColsHi[$mask];
-            $xcLo = $maskColsLo[$mask];
-            $frHi = $fmtRowsHi[$mask];
-            $frLo = $fmtRowsLo[$mask];
-            $fcHi = $fmtColsHi[$mask];
-            $fcLo = $fmtColsLo[$mask];
-
-            // Apply mask XOR + format info
-            $mrHi = [];
-            $mrLo = [];
-            $mcHi = [];
-            $mcLo = [];
-            for ($i = 0; $i < $size; $i++) {
-                $mrHi[$i] = $rowsHi[$i] ^ $xrHi[$i] ^ $frHi[$i];
-                $mrLo[$i] = $rowsLo[$i] ^ $xrLo[$i] ^ $frLo[$i];
-                $mcHi[$i] = $colsHi[$i] ^ $xcHi[$i] ^ $fcHi[$i];
-                $mcLo[$i] = $colsLo[$i] ^ $xcLo[$i] ^ $fcLo[$i];
-            }
-
-            $penalty = 0;
-            $darkCount = 0;
-
-            for ($y = 0; $y < $size; $y++) {
-                $lo = $mrLo[$y];
-                $hi = $mrHi[$y];
-
-                $darkCount += $pop[$lo & 0xff] + $pop[($lo >> 8) & 0xff]
-                    + $pop[($lo >> 16) & 0xff] + $pop[($lo >> 24) & 0xff]
-                    + $pop[($lo >> 32) & 0xff] + $pop[($lo >> 40) & 0xff]
-                    + $pop[($lo >> 48) & 0xff] + $pop[($lo >> 56) & 0xff]
-                    + $pop[$hi & 0xff] + $pop[($hi >> 8) & 0xff]
-                    + $pop[($hi >> 16) & 0xff] + $pop[($hi >> 24) & 0xff];
-
-                $runColor = 0;
-                $runLen = 0;
-                $h0 = 0;
-                $h1 = 0;
-                $h2 = 0;
-                $h3 = 0;
-                $h4 = 0;
-                $h5 = 0;
-                $h6 = 0;
-                for ($x = 0; $x < $size; $x++) {
-                    $c = ($x < 64) ? (($lo >> $x) & 1) : (($hi >> ($x - 64)) & 1);
-                    if ($c === $runColor) {
-                        $runLen++;
-                        if ($runLen === 5) {
-                            $penalty += 3;
-                        } elseif ($runLen > 5) {
-                            $penalty++;
-                        }
-                    } else {
-                        if ($h0 === 0) {
-                            $runLen += $size;
-                        }
-                        $h6 = $h5;
-                        $h5 = $h4;
-                        $h4 = $h3;
-                        $h3 = $h2;
-                        $h2 = $h1;
-                        $h1 = $h0;
-                        $h0 = $runLen;
-                        if (!$runColor) {
-                            if ($h1 > 0 && $h2 === $h1 && $h3 === $h1 * 3 && $h4 === $h1 && $h5 === $h1) {
-                                if ($h0 >= $h1 * 4 && $h6 >= $h1) {
-                                    $penalty += 40;
-                                }
-                                if ($h6 >= $h1 * 4 && $h0 >= $h1) {
-                                    $penalty += 40;
-                                }
-                            }
-                        }
-                        $runColor = $c;
-                        $runLen = 1;
-                    }
-                }
-                if ($runColor) {
-                    if ($h0 === 0) {
-                        $runLen += $size;
-                    }
-                    $h6 = $h5;
-                    $h5 = $h4;
-                    $h4 = $h3;
-                    $h3 = $h2;
-                    $h2 = $h1;
-                    $h1 = $h0;
-                    $h0 = $runLen;
-                    $runLen = 0;
-                }
-                $runLen += $size;
-                if ($h0 === 0) {
-                    $runLen += $size;
-                }
-                $h6 = $h5;
-                $h5 = $h4;
-                $h4 = $h3;
-                $h3 = $h2;
-                $h2 = $h1;
-                $h1 = $h0;
-                $h0 = $runLen;
-                if ($h1 > 0 && $h2 === $h1 && $h3 === $h1 * 3 && $h4 === $h1 && $h5 === $h1) {
-                    if ($h0 >= $h1 * 4 && $h6 >= $h1) {
-                        $penalty += 40;
-                    }
-                    if ($h6 >= $h1 * 4 && $h0 >= $h1) {
-                        $penalty += 40;
-                    }
-                }
-            }
-
-            for ($x = 0; $x < $size; $x++) {
-                $runColor = 0;
-                $runLen = 0;
-                $h0 = 0;
-                $h1 = 0;
-                $h2 = 0;
-                $h3 = 0;
-                $h4 = 0;
-                $h5 = 0;
-                $h6 = 0;
-                if ($x < 64) {
-                    $xbit = $x;
-                    for ($y = 0; $y < $size; $y++) {
-                        $c = ($mrLo[$y] >> $xbit) & 1;
-                        if ($c === $runColor) {
-                            $runLen++;
-                            if ($runLen === 5) {
-                                $penalty += 3;
-                            } elseif ($runLen > 5) {
-                                $penalty++;
-                            }
-                        } else {
-                            if ($h0 === 0) {
-                                $runLen += $size;
-                            }
-                            $h6 = $h5;
-                            $h5 = $h4;
-                            $h4 = $h3;
-                            $h3 = $h2;
-                            $h2 = $h1;
-                            $h1 = $h0;
-                            $h0 = $runLen;
-                            if (!$runColor) {
-                                if ($h1 > 0 && $h2 === $h1 && $h3 === $h1 * 3 && $h4 === $h1 && $h5 === $h1) {
-                                    if ($h0 >= $h1 * 4 && $h6 >= $h1) {
-                                        $penalty += 40;
-                                    }
-                                    if ($h6 >= $h1 * 4 && $h0 >= $h1) {
-                                        $penalty += 40;
-                                    }
-                                }
-                            }
-                            $runColor = $c;
-                            $runLen = 1;
-                        }
-                    }
-                } else {
-                    $xbit = $x - 64;
-                    for ($y = 0; $y < $size; $y++) {
-                        $c = ($mrHi[$y] >> $xbit) & 1;
-                        if ($c === $runColor) {
-                            $runLen++;
-                            if ($runLen === 5) {
-                                $penalty += 3;
-                            } elseif ($runLen > 5) {
-                                $penalty++;
-                            }
-                        } else {
-                            if ($h0 === 0) {
-                                $runLen += $size;
-                            }
-                            $h6 = $h5;
-                            $h5 = $h4;
-                            $h4 = $h3;
-                            $h3 = $h2;
-                            $h2 = $h1;
-                            $h1 = $h0;
-                            $h0 = $runLen;
-                            if (!$runColor) {
-                                if ($h1 > 0 && $h2 === $h1 && $h3 === $h1 * 3 && $h4 === $h1 && $h5 === $h1) {
-                                    if ($h0 >= $h1 * 4 && $h6 >= $h1) {
-                                        $penalty += 40;
-                                    }
-                                    if ($h6 >= $h1 * 4 && $h0 >= $h1) {
-                                        $penalty += 40;
-                                    }
-                                }
-                            }
-                            $runColor = $c;
-                            $runLen = 1;
-                        }
-                    }
-                }
-                if ($runColor) {
-                    if ($h0 === 0) {
-                        $runLen += $size;
-                    }
-                    $h6 = $h5;
-                    $h5 = $h4;
-                    $h4 = $h3;
-                    $h3 = $h2;
-                    $h2 = $h1;
-                    $h1 = $h0;
-                    $h0 = $runLen;
-                    $runLen = 0;
-                }
-                $runLen += $size;
-                if ($h0 === 0) {
-                    $runLen += $size;
-                }
-                $h6 = $h5;
-                $h5 = $h4;
-                $h4 = $h3;
-                $h3 = $h2;
-                $h2 = $h1;
-                $h1 = $h0;
-                $h0 = $runLen;
-                if ($h1 > 0 && $h2 === $h1 && $h3 === $h1 * 3 && $h4 === $h1 && $h5 === $h1) {
-                    if ($h0 >= $h1 * 4 && $h6 >= $h1) {
-                        $penalty += 40;
-                    }
-                    if ($h6 >= $h1 * 4 && $h0 >= $h1) {
-                        $penalty += 40;
-                    }
-                }
-            }
-
-            $validLo = ($size >= 64) ? -1 : ((1 << $size) - 1);
-            $validHi = ($size <= 64) ? 0 : ((1 << ($size - 64)) - 1);
-            for ($y = 0; $y < $sizeM1; $y++) {
-                $curLo = $mrLo[$y] & $validLo;
-                $curHi = $mrHi[$y] & $validHi;
-                $nxtLo = $mrLo[$y + 1] & $validLo;
-                $nxtHi = $mrHi[$y + 1] & $validHi;
-                $csLo = (($curLo >> 1) & \PHP_INT_MAX) | ($curHi << 63);
-                $csHi = ($curHi >> 1) & \PHP_INT_MAX;
-                $nsLo = (($nxtLo >> 1) & \PHP_INT_MAX) | ($nxtHi << 63);
-                $nsHi = ($nxtHi >> 1) & \PHP_INT_MAX;
-                $validR2Lo = ($sizeM1 >= 64) ? -1 : ((1 << $sizeM1) - 1);
-                $validR2Hi = ($sizeM1 <= 64) ? 0 : ((1 << ($sizeM1 - 64)) - 1);
-                $adLo = $curLo & $csLo & $nxtLo & $nsLo & $validR2Lo;
-                $adHi = $curHi & $csHi & $nxtHi & $nsHi & $validR2Hi;
-                $alLo = ~$curLo & ~$csLo & ~$nxtLo & ~$nsLo & $validR2Lo;
-                $alHi = ~$curHi & ~$csHi & ~$nxtHi & ~$nsHi & $validR2Hi;
-                $bLo = $adLo | $alLo;
-                $bHi = $adHi | $alHi;
-                if ($bLo !== 0 || $bHi !== 0) {
-                    $penalty += 3 * ($pop[$bLo & 0xff] + $pop[($bLo >> 8) & 0xff]
-                        + $pop[($bLo >> 16) & 0xff] + $pop[($bLo >> 24) & 0xff]
-                        + $pop[($bLo >> 32) & 0xff] + $pop[($bLo >> 40) & 0xff]
-                        + $pop[($bLo >> 48) & 0xff] + $pop[($bLo >> 56) & 0xff]
-                        + $pop[$bHi & 0xff] + $pop[($bHi >> 8) & 0xff]
-                        + $pop[($bHi >> 16) & 0xff] + $pop[($bHi >> 24) & 0xff]);
-                }
-            }
-
-            $k = intdiv(abs($darkCount * 20 - $totalModules * 10) + $totalModules - 1, $totalModules) - 1;
-            $penalty += (max($k, 0)) * 10;
-
-            if ($penalty < $bestScore) {
-                $bestScore = $penalty;
-                $bestMask = $mask;
-            }
-        }
+        $bestMask = $size <= 64
+            ? $this->selectMask64($rowsLo, $colsLo, $maskRowsLo, $vc['maskColsLo'], $fmtRowsLo, $fc['fmtColsLo'], $size)
+            : $this->selectMask128($rowsLo, $rowsHi, $colsLo, $colsHi, $maskRowsLo, $maskRowsHi, $vc['maskColsLo'], $vc['maskColsHi'], $fmtRowsLo, $fmtRowsHi, $fc['fmtColsLo'], $fc['fmtColsHi'], $size);
 
         // === 5. Apply best mask to get final rows ===
         $fxrHi = $maskRowsHi[$bestMask];
@@ -641,36 +420,533 @@ class FastEncoder implements EncoderInterface
             $rowsLo[$i] ^= $fxrLo[$i] ^ $ffrLo[$i];
         }
 
-        // === 6. Convert int-pair rows → flat bool[] → Matrix ===
-        $flat = array_fill(0, $totalModules, false);
-        for ($y = 0; $y < $size; $y++) {
-            $hi = $rowsHi[$y];
-            $lo = $rowsLo[$y];
-            if ($hi === 0 && $lo === 0) {
-                continue;
+        // === 6. Convert int-pair rows → module bytes → Matrix ===
+        // Each row is expanded 8 modules at a time through a 256-entry LUT of
+        // "\0"/"\1" strings, then unpack() turns the whole symbol into a
+        // list<int> in C. Matrix normalizes it to bool[] lazily on demand.
+        $bytes = self::$moduleBytes;
+        $s = '';
+        if ($size <= 64) {
+            $shift = 64 - $size;
+            for ($y = 0; $y < $size; $y++) {
+                $v = $rowsLo[$y] << $shift; // x = 0 lands on bit 63
+                $s .= substr(
+                    "{$bytes[($v >> 56) & 0xFF]}{$bytes[($v >> 48) & 0xFF]}{$bytes[($v >> 40) & 0xFF]}{$bytes[($v >> 32) & 0xFF]}"
+                    . "{$bytes[($v >> 24) & 0xFF]}{$bytes[($v >> 16) & 0xFF]}{$bytes[($v >> 8) & 0xFF]}{$bytes[$v & 0xFF]}",
+                    0,
+                    $size,
+                );
             }
-            $rowOffset = $y * $size;
-            // Extract bits from hi part (bits [size-1 .. 64])
-            if ($hi !== 0) {
-                for ($x = 0; $x < $hiBits; $x++) {
-                    if (($hi >> ($hiBits - 1 - $x)) & 1) {
-                        $flat[$rowOffset + $x] = true;
-                    }
-                }
-            }
-            // Extract bits from lo part (bits [sizeM1-hiBits .. 0])
-            if ($lo !== 0) {
-                for ($x = 0; $x < 64 && ($hiBits + $x) < $size; $x++) {
-                    if (($lo >> ($sizeM1 - $hiBits - $x)) & 1) {
-                        $flat[$rowOffset + $hiBits + $x] = true;
-                    }
-                }
+        } else {
+            $shift = 128 - $size;           // 3..63
+            $loShift = $size - 64;          // 1..61
+            $loMask = \PHP_INT_MAX >> ($size - 65);  // low (128 - size) bits
+            for ($y = 0; $y < $size; $y++) {
+                $lo = $rowsLo[$y];
+                $v = ($rowsHi[$y] << $shift) | (($lo >> $loShift) & $loMask); // x = 0..63
+                $w = $lo << $shift;                                           // x = 64..
+                $s .= substr(
+                    "{$bytes[($v >> 56) & 0xFF]}{$bytes[($v >> 48) & 0xFF]}{$bytes[($v >> 40) & 0xFF]}{$bytes[($v >> 32) & 0xFF]}"
+                    . "{$bytes[($v >> 24) & 0xFF]}{$bytes[($v >> 16) & 0xFF]}{$bytes[($v >> 8) & 0xFF]}{$bytes[$v & 0xFF]}"
+                    . "{$bytes[($w >> 56) & 0xFF]}{$bytes[($w >> 48) & 0xFF]}{$bytes[($w >> 40) & 0xFF]}{$bytes[($w >> 32) & 0xFF]}"
+                    . "{$bytes[($w >> 24) & 0xFF]}{$bytes[($w >> 16) & 0xFF]}{$bytes[($w >> 8) & 0xFF]}{$bytes[$w & 0xFF]}",
+                    0,
+                    $size,
+                );
             }
         }
 
-        $matrix = new Matrix($version);
-        $matrix->setRawData($flat);
-        return $matrix;
+        /** @var list<int> $modules */
+        $modules = array_values((array) unpack('C*', $s));
+
+        return new Matrix($version, $modules, normalized: false);
+    }
+
+    // =========================================================================
+    // Mask selection: bitwise penalty rules on whole lines
+    // =========================================================================
+    //
+    // Every row and every column is one bitset (bit i = module i counted from
+    // the far end; the rules are symmetric so orientation does not matter).
+    // Instead of walking modules one by one, the penalty rules are evaluated
+    // with shifts/ands on the whole line — the same formulation as the C++
+    // kernel in clib/src/mask_kernel.hpp:
+    //
+    //   rule 1: C5 = C & C>>1 & ... & C>>4 marks every start of a run >= 5 of
+    //           colour C; a run of length L sets L-4 bits plus one group start,
+    //           and (L-4) + 2 == L-2 is exactly 3 + (L-5).
+    //   rule 3: the n = 1 finder-like pattern (L D L DDD L D L with >= 4 light
+    //           on either side) is an 11-bit template; bits beyond the symbol
+    //           are zero, so shifts pull in "light" — nayuki's virtual border.
+    //           Scaled (n >= 2) patterns need a dark run >= 6 preceded by two
+    //           light modules; those anchors are rare and checked locally.
+    //   rule 2: 2x2 blocks between adjacent rows.
+    //   rule 4: popcount of all rows.
+    //
+    // Popcounts use SWAR reduced to 16-bit fields and accumulated across lines
+    // (max 48 per field per line, <= 122 lines), folded once per mask.
+
+    private const SWAR_M1 = 0x5555555555555555;
+    private const SWAR_M2 = 0x3333333333333333;
+    private const SWAR_M4 = 0x0F0F0F0F0F0F0F0F;
+    private const SWAR_M8 = 0x00FF00FF00FF00FF;
+
+    /**
+     * Sizes <= 61 (v1-v11): one non-negative 64-bit int per line.
+     *
+     * @param int[] $rowsLo
+     * @param int[] $colsLo
+     * @param array<int, int[]> $maskRowsLo
+     * @param array<int, int[]> $maskColsLo
+     * @param array<int, int[]> $fmtRowsLo
+     * @param array<int, int[]> $fmtColsLo
+     */
+    private function selectMask64(
+        array $rowsLo,
+        array $colsLo,
+        array $maskRowsLo,
+        array $maskColsLo,
+        array $fmtRowsLo,
+        array $fmtColsLo,
+        int $size,
+    ): int {
+        $valid = (1 << $size) - 1;
+        $valid2 = (1 << ($size - 1)) - 1;
+        $total = $size * $size;
+        $lineCount = $size << 1;
+
+        $bestMask = 0;
+        $bestScore = \PHP_INT_MAX;
+
+        for ($mask = 0; $mask < 8; $mask++) {
+            $xr = $maskRowsLo[$mask];
+            $fr = $fmtRowsLo[$mask];
+            $xc = $maskColsLo[$mask];
+            $fcl = $fmtColsLo[$mask];
+
+            $lines = [];
+            for ($i = 0; $i < $size; $i++) {
+                $lines[] = $rowsLo[$i] ^ $xr[$i] ^ $fr[$i];
+            }
+            for ($i = 0; $i < $size; $i++) {
+                $lines[] = $colsLo[$i] ^ $xc[$i] ^ $fcl[$i];
+            }
+
+            $acc1 = 0;
+            $r3 = 0;
+
+            for ($i = 0; $i < $lineCount; $i++) {
+                $r = $lines[$i];
+                $s1 = $r >> 1;
+                $s2 = $r >> 2;
+                $s5 = $r >> 5;
+                $d2 = $r & $s1;
+                $d3 = $d2 & $s2;
+                $d4 = $d2 & ($d2 >> 2);
+                $d5 = $d4 & ($r >> 4);
+                $sl1 = $r << 1;
+
+                // Rule 1
+                $l = ~$r & $valid;
+                $l2 = $l & ($l >> 1);
+                $l4 = $l2 & ($l2 >> 2);
+                $runs = $d5 | ($l4 & ($l >> 4));
+                $starts = $runs & ~($runs >> 1);
+                $a = $runs - (($runs >> 1) & self::SWAR_M1);
+                $a = ($a & self::SWAR_M2) + (($a >> 2) & self::SWAR_M2);
+                $b = $starts - (($starts >> 1) & self::SWAR_M1);
+                $b = ($b & self::SWAR_M2) + (($b >> 2) & self::SWAR_M2);
+                $t = $a + $b + $b;
+                $t = ($t + ($t >> 4)) & self::SWAR_M4;
+                $acc1 += ($t + ($t >> 8)) & self::SWAR_M8;
+
+                // Rule 3, n = 1
+                $core = $r & ~$s1 & ($d3 >> 2) & ~$s5 & ($r >> 6) & ~($r >> 7) & ~$sl1;
+                if ($core !== 0) {
+                    $pa = $core & ~(($r | $sl1 | ($r << 2)) << 2);
+                    $pb = $core & ~(($r | $s1 | $s2) >> 8);
+                    $hits = $pa | $pb;
+                    if ($hits !== 0) {
+                        $r3 += $this->popcount($pa) + $this->popcount($pb);
+                    }
+                }
+
+                // Rule 3, n >= 2: dark run >= 6 preceded by two light modules
+                $anch = $d5 & $s5 & ~(($r | $sl1) << 1);
+                if ($anch !== 0) {
+                    for ($x = 0; $anch !== 0; $x++) {
+                        if (($anch >> $x) & 1) {
+                            $anch ^= 1 << $x;
+                            $r3 += $this->scaledPatternsAt($r, 0, $size, $x);
+                        }
+                    }
+                }
+            }
+
+            // Rules 2 and 4 over rows
+            $acc2 = 0;
+            $prev = $lines[0];
+            $prevS = $prev >> 1;
+            $t = $prev - (($prev >> 1) & self::SWAR_M1);
+            $t = ($t & self::SWAR_M2) + (($t >> 2) & self::SWAR_M2);
+            $t = ($t + ($t >> 4)) & self::SWAR_M4;
+            $accDark = ($t + ($t >> 8)) & self::SWAR_M8;
+            for ($y = 1; $y < $size; $y++) {
+                $r = $lines[$y];
+                $s = $r >> 1;
+                $blocks = ($prev & $prevS & $r & $s & $valid2) | (~($prev | $prevS | $r | $s) & $valid2);
+                $t = $blocks - (($blocks >> 1) & self::SWAR_M1);
+                $t = ($t & self::SWAR_M2) + (($t >> 2) & self::SWAR_M2);
+                $t = ($t + ($t >> 4)) & self::SWAR_M4;
+                $acc2 += ($t + ($t >> 8)) & self::SWAR_M8;
+                $t = $r - (($r >> 1) & self::SWAR_M1);
+                $t = ($t & self::SWAR_M2) + (($t >> 2) & self::SWAR_M2);
+                $t = ($t + ($t >> 4)) & self::SWAR_M4;
+                $accDark += ($t + ($t >> 8)) & self::SWAR_M8;
+                $prev = $r;
+                $prevS = $s;
+            }
+
+            $acc1 += $acc1 >> 32;
+            $acc1 += $acc1 >> 16;
+            $acc2 += $acc2 >> 32;
+            $acc2 += $acc2 >> 16;
+            $accDark += $accDark >> 32;
+            $accDark += $accDark >> 16;
+            $dark = $accDark & 0xFFFF;
+            $k = intdiv(abs($dark * 20 - $total * 10) + $total - 1, $total) - 1;
+            $penalty = ($acc1 & 0xFFFF) + 3 * ($acc2 & 0xFFFF) + 40 * $r3 + 10 * $k;
+
+            if ($penalty < $bestScore) {
+                $bestScore = $penalty;
+                $bestMask = $mask;
+            }
+        }
+
+        return $bestMask;
+    }
+
+    /**
+     * Sizes 65..125 (v12-v27): int pair per line, lo = bits 0..63 (may be
+     * negative), hi = bits 64..size-1 (always non-negative).
+     *
+     * @param int[] $rowsLo
+     * @param int[] $rowsHi
+     * @param int[] $colsLo
+     * @param int[] $colsHi
+     * @param array<int, int[]> $maskRowsLo
+     * @param array<int, int[]> $maskRowsHi
+     * @param array<int, int[]> $maskColsLo
+     * @param array<int, int[]> $maskColsHi
+     * @param array<int, int[]> $fmtRowsLo
+     * @param array<int, int[]> $fmtRowsHi
+     * @param array<int, int[]> $fmtColsLo
+     * @param array<int, int[]> $fmtColsHi
+     */
+    private function selectMask128(
+        array $rowsLo,
+        array $rowsHi,
+        array $colsLo,
+        array $colsHi,
+        array $maskRowsLo,
+        array $maskRowsHi,
+        array $maskColsLo,
+        array $maskColsHi,
+        array $fmtRowsLo,
+        array $fmtRowsHi,
+        array $fmtColsLo,
+        array $fmtColsHi,
+        int $size,
+    ): int {
+        $validHi = (1 << ($size - 64)) - 1;
+        $valid2Hi = (1 << ($size - 65)) - 1;
+        $total = $size * $size;
+        $lineCount = $size << 1;
+
+        $bestMask = 0;
+        $bestScore = \PHP_INT_MAX;
+
+        for ($mask = 0; $mask < 8; $mask++) {
+            $xrLo = $maskRowsLo[$mask];
+            $xrHi = $maskRowsHi[$mask];
+            $frLo = $fmtRowsLo[$mask];
+            $frHi = $fmtRowsHi[$mask];
+            $xcLo = $maskColsLo[$mask];
+            $xcHi = $maskColsHi[$mask];
+            $fcLo = $fmtColsLo[$mask];
+            $fcHi = $fmtColsHi[$mask];
+
+            $linesLo = [];
+            $linesHi = [];
+            for ($i = 0; $i < $size; $i++) {
+                $linesLo[] = $rowsLo[$i] ^ $xrLo[$i] ^ $frLo[$i];
+                $linesHi[] = $rowsHi[$i] ^ $xrHi[$i] ^ $frHi[$i];
+            }
+            for ($i = 0; $i < $size; $i++) {
+                $linesLo[] = $colsLo[$i] ^ $xcLo[$i] ^ $fcLo[$i];
+                $linesHi[] = $colsHi[$i] ^ $xcHi[$i] ^ $fcHi[$i];
+            }
+
+            $acc1 = 0;
+            $r3 = 0;
+
+            for ($i = 0; $i < $lineCount; $i++) {
+                $lo = $linesLo[$i];
+                $hi = $linesHi[$i];
+
+                // Shifted copies of the line (128-bit shifts across the pair)
+                $s1Lo = (($lo >> 1) & \PHP_INT_MAX) | ($hi << 63);
+                $s1Hi = $hi >> 1;
+                $s2Lo = (($lo >> 2) & (\PHP_INT_MAX >> 1)) | ($hi << 62);
+                $s2Hi = $hi >> 2;
+                $s4Lo = (($lo >> 4) & (\PHP_INT_MAX >> 3)) | ($hi << 60);
+                $s4Hi = $hi >> 4;
+                $s5Lo = (($lo >> 5) & (\PHP_INT_MAX >> 4)) | ($hi << 59);
+                $s5Hi = $hi >> 5;
+                $sl1Lo = $lo << 1;
+                $sl1Hi = ($hi << 1) | (($lo >> 63) & 1);
+
+                $d2Lo = $lo & $s1Lo;
+                $d2Hi = $hi & $s1Hi;
+                $d3Lo = $d2Lo & $s2Lo;
+                $d3Hi = $d2Hi & $s2Hi;
+                $d4Lo = $d2Lo & ((($d2Lo >> 2) & (\PHP_INT_MAX >> 1)) | ($d2Hi << 62));
+                $d4Hi = $d2Hi & ($d2Hi >> 2);
+                $d5Lo = $d4Lo & $s4Lo;
+                $d5Hi = $d4Hi & $s4Hi;
+
+                // Rule 1
+                $lLo = ~$lo;
+                $lHi = ~$hi & $validHi;
+                $l2Lo = $lLo & ((($lLo >> 1) & \PHP_INT_MAX) | ($lHi << 63));
+                $l2Hi = $lHi & ($lHi >> 1);
+                $l4Lo = $l2Lo & ((($l2Lo >> 2) & (\PHP_INT_MAX >> 1)) | ($l2Hi << 62));
+                $l4Hi = $l2Hi & ($l2Hi >> 2);
+                $runsLo = $d5Lo | ($l4Lo & ((($lLo >> 4) & (\PHP_INT_MAX >> 3)) | ($lHi << 60)));
+                $runsHi = $d5Hi | ($l4Hi & ($lHi >> 4));
+                $startsLo = $runsLo & ~((($runsLo >> 1) & \PHP_INT_MAX) | ($runsHi << 63));
+                $startsHi = $runsHi & ~($runsHi >> 1);
+
+                // bit 63 handled separately: the SWAR steps need non-negative ints
+                $acc1 += (($runsLo >> 63) & 1) + ((($startsLo >> 63) & 1) << 1);
+                $a = $runsLo & \PHP_INT_MAX;
+                $a -= ($a >> 1) & self::SWAR_M1;
+                $a = ($a & self::SWAR_M2) + (($a >> 2) & self::SWAR_M2);
+                $b = $startsLo & \PHP_INT_MAX;
+                $b -= ($b >> 1) & self::SWAR_M1;
+                $b = ($b & self::SWAR_M2) + (($b >> 2) & self::SWAR_M2);
+                $t = $a + $b + $b;
+                $t = ($t + ($t >> 4)) & self::SWAR_M4;
+                $acc1 += ($t + ($t >> 8)) & self::SWAR_M8;
+                $a = $runsHi - (($runsHi >> 1) & self::SWAR_M1);
+                $a = ($a & self::SWAR_M2) + (($a >> 2) & self::SWAR_M2);
+                $b = $startsHi - (($startsHi >> 1) & self::SWAR_M1);
+                $b = ($b & self::SWAR_M2) + (($b >> 2) & self::SWAR_M2);
+                $t = $a + $b + $b;
+                $t = ($t + ($t >> 4)) & self::SWAR_M4;
+                $acc1 += ($t + ($t >> 8)) & self::SWAR_M8;
+
+                // Rule 3, n = 1
+                $s6Lo = (($lo >> 6) & (\PHP_INT_MAX >> 5)) | ($hi << 58);
+                $s6Hi = $hi >> 6;
+                $s7Lo = (($lo >> 7) & (\PHP_INT_MAX >> 6)) | ($hi << 57);
+                $s7Hi = $hi >> 7;
+                $coreLo = $lo & ~$s1Lo & ((($d3Lo >> 2) & (\PHP_INT_MAX >> 1)) | ($d3Hi << 62))
+                    & ~$s5Lo & $s6Lo & ~$s7Lo & ~$sl1Lo;
+                $coreHi = $hi & ~$s1Hi & ($d3Hi >> 2) & ~$s5Hi & $s6Hi & ~$s7Hi & ~$sl1Hi;
+                if (($coreLo | $coreHi) !== 0) {
+                    $o3lLo = $lo | $sl1Lo | ($lo << 2);
+                    $o3lHi = $hi | $sl1Hi | ($hi << 2) | (($lo >> 62) & 3);
+                    $paLo = $coreLo & ~($o3lLo << 2);
+                    $paHi = $coreHi & ~(($o3lHi << 2) | (($o3lLo >> 62) & 3));
+                    $o3rLo = $lo | $s1Lo | $s2Lo;
+                    $o3rHi = $hi | $s1Hi | $s2Hi;
+                    $pbLo = $coreLo & ~((($o3rLo >> 8) & (\PHP_INT_MAX >> 7)) | ($o3rHi << 56));
+                    $pbHi = $coreHi & ~($o3rHi >> 8);
+                    if (($paLo | $paHi | $pbLo | $pbHi) !== 0) {
+                        $r3 += $this->popcount($paLo) + $this->popcount($paHi)
+                            + $this->popcount($pbLo) + $this->popcount($pbHi);
+                    }
+                }
+
+                // Rule 3, n >= 2
+                $o1Lo = $lo | $sl1Lo;
+                $o1Hi = $hi | $sl1Hi;
+                $anchLo = $d5Lo & $s5Lo & ~($o1Lo << 1);
+                $anchHi = $d5Hi & $s5Hi & ~(($o1Hi << 1) | (($o1Lo >> 63) & 1));
+                if (($anchLo | $anchHi) !== 0) {
+                    for ($x = 0; $anchLo !== 0; $x++) {
+                        if (($anchLo >> $x) & 1) {
+                            $anchLo ^= 1 << $x;
+                            $r3 += $this->scaledPatternsAt($lo, $hi, $size, $x);
+                        }
+                    }
+                    for ($x = 0; $anchHi !== 0; $x++) {
+                        if (($anchHi >> $x) & 1) {
+                            $anchHi ^= 1 << $x;
+                            $r3 += $this->scaledPatternsAt($lo, $hi, $size, $x + 64);
+                        }
+                    }
+                }
+            }
+
+            // Rules 2 and 4 over rows
+            $acc2 = 0;
+            $prevLo = $linesLo[0];
+            $prevHi = $linesHi[0];
+            $prevSLo = (($prevLo >> 1) & \PHP_INT_MAX) | ($prevHi << 63);
+            $prevSHi = $prevHi >> 1;
+            $t = $prevLo & \PHP_INT_MAX;
+            $t -= ($t >> 1) & self::SWAR_M1;
+            $t = ($t & self::SWAR_M2) + (($t >> 2) & self::SWAR_M2);
+            $t = ($t + ($t >> 4)) & self::SWAR_M4;
+            $accDark = (($t + ($t >> 8)) & self::SWAR_M8) + (($prevLo >> 63) & 1);
+            $t = $prevHi - (($prevHi >> 1) & self::SWAR_M1);
+            $t = ($t & self::SWAR_M2) + (($t >> 2) & self::SWAR_M2);
+            $t = ($t + ($t >> 4)) & self::SWAR_M4;
+            $accDark += ($t + ($t >> 8)) & self::SWAR_M8;
+            for ($y = 1; $y < $size; $y++) {
+                $lo = $linesLo[$y];
+                $hi = $linesHi[$y];
+                $sLo = (($lo >> 1) & \PHP_INT_MAX) | ($hi << 63);
+                $sHi = $hi >> 1;
+                $blocks = ($prevLo & $prevSLo & $lo & $sLo) | ~($prevLo | $prevSLo | $lo | $sLo);
+                $acc2 += ($blocks >> 63) & 1;
+                $t = $blocks & \PHP_INT_MAX;
+                $t -= ($t >> 1) & self::SWAR_M1;
+                $t = ($t & self::SWAR_M2) + (($t >> 2) & self::SWAR_M2);
+                $t = ($t + ($t >> 4)) & self::SWAR_M4;
+                $acc2 += ($t + ($t >> 8)) & self::SWAR_M8;
+                $blocks = (($prevHi & $prevSHi & $hi & $sHi) | ~($prevHi | $prevSHi | $hi | $sHi)) & $valid2Hi;
+                $t = $blocks - (($blocks >> 1) & self::SWAR_M1);
+                $t = ($t & self::SWAR_M2) + (($t >> 2) & self::SWAR_M2);
+                $t = ($t + ($t >> 4)) & self::SWAR_M4;
+                $acc2 += ($t + ($t >> 8)) & self::SWAR_M8;
+                $accDark += ($lo >> 63) & 1;
+                $t = $lo & \PHP_INT_MAX;
+                $t -= ($t >> 1) & self::SWAR_M1;
+                $t = ($t & self::SWAR_M2) + (($t >> 2) & self::SWAR_M2);
+                $t = ($t + ($t >> 4)) & self::SWAR_M4;
+                $accDark += ($t + ($t >> 8)) & self::SWAR_M8;
+                $t = $hi - (($hi >> 1) & self::SWAR_M1);
+                $t = ($t & self::SWAR_M2) + (($t >> 2) & self::SWAR_M2);
+                $t = ($t + ($t >> 4)) & self::SWAR_M4;
+                $accDark += ($t + ($t >> 8)) & self::SWAR_M8;
+                $prevLo = $lo;
+                $prevHi = $hi;
+                $prevSLo = $sLo;
+                $prevSHi = $sHi;
+            }
+
+            $acc1 += $acc1 >> 32;
+            $acc1 += $acc1 >> 16;
+            $acc2 += $acc2 >> 32;
+            $acc2 += $acc2 >> 16;
+            $accDark += $accDark >> 32;
+            $accDark += $accDark >> 16;
+            $dark = $accDark & 0xFFFF;
+            $k = intdiv(abs($dark * 20 - $total * 10) + $total - 1, $total) - 1;
+            $penalty = ($acc1 & 0xFFFF) + 3 * ($acc2 & 0xFFFF) + 40 * $r3 + 10 * $k;
+
+            if ($penalty < $bestScore) {
+                $bestScore = $penalty;
+                $bestMask = $mask;
+            }
+        }
+
+        return $bestMask;
+    }
+
+    private function popcount(int $x): int
+    {
+        $top = ($x >> 63) & 1;
+        $x &= \PHP_INT_MAX;
+        $x -= ($x >> 1) & self::SWAR_M1;
+        $x = ($x & self::SWAR_M2) + (($x >> 2) & self::SWAR_M2);
+        $x = ($x + ($x >> 4)) & self::SWAR_M4;
+        $x += $x >> 8;
+        $x += $x >> 16;
+        $x += $x >> 32;
+        return ($x & 0x7F) + $top;
+    }
+
+    /**
+     * Counts scaled (n >= 2) finder-like patterns whose central 3n dark run
+     * starts at bit $x of the line (lo, hi). Mirrors nayuki's run-history
+     * test exactly, including the border acting as an arbitrarily long light
+     * run — see scaled_patterns_at() in clib/src/mask_common.hpp.
+     */
+    private function scaledPatternsAt(int $lo, int $hi, int $size, int $x): int
+    {
+        // light run immediately before: exactly n >= 2, not touching the border
+        $i = $x - 1;
+        $n = 0;
+        while ($i >= 0 && !(($i < 64 ? $lo >> $i : $hi >> ($i - 64)) & 1)) {
+            $n++;
+            $i--;
+        }
+        if ($i < 0 || $n < 2) {
+            return 0;
+        }
+        // dark run of exactly 3n starting at x
+        $d = 0;
+        $i = $x;
+        while ($i < $size && (($i < 64 ? $lo >> $i : $hi >> ($i - 64)) & 1) && $d <= 3 * $n) {
+            $d++;
+            $i++;
+        }
+        if ($d !== 3 * $n) {
+            return 0;
+        }
+        // light run of exactly n after
+        $nr = 0;
+        while ($i < $size && !(($i < 64 ? $lo >> $i : $hi >> ($i - 64)) & 1) && $nr <= $n) {
+            $nr++;
+            $i++;
+        }
+        if ($i >= $size || $nr !== $n) {
+            return 0;
+        }
+        // dark run of exactly n after
+        $dr = 0;
+        while ($i < $size && (($i < 64 ? $lo >> $i : $hi >> ($i - 64)) & 1) && $dr <= $n) {
+            $dr++;
+            $i++;
+        }
+        if ($dr !== $n) {
+            return 0;
+        }
+        // outer light run after, capped at 4n; border counts as >= 4n
+        $outerR = 0;
+        while ($i < $size && !(($i < 64 ? $lo >> $i : $hi >> ($i - 64)) & 1) && $outerR < 4 * $n) {
+            $outerR++;
+            $i++;
+        }
+        if ($i >= $size) {
+            $outerR = 4 * $n;
+        }
+        // dark run of exactly n before (may touch the border)
+        $j = $x - $n - 1;
+        $dl = 0;
+        while ($j >= 0 && (($j < 64 ? $lo >> $j : $hi >> ($j - 64)) & 1) && $dl <= $n) {
+            $dl++;
+            $j--;
+        }
+        if ($dl !== $n) {
+            return 0;
+        }
+        // outer light run before, capped at 4n; border counts as >= 4n
+        $outerL = 0;
+        while ($j >= 0 && !(($j < 64 ? $lo >> $j : $hi >> ($j - 64)) & 1) && $outerL < 4 * $n) {
+            $outerL++;
+            $j--;
+        }
+        if ($j < 0) {
+            $outerL = 4 * $n;
+        }
+
+        return ($outerL >= 4 * $n && $outerR >= $n ? 1 : 0)
+            + ($outerR >= 4 * $n && $outerL >= $n ? 1 : 0);
     }
 
     // =========================================================================
@@ -694,13 +970,11 @@ class FastEncoder implements EncoderInterface
         }
 
         for ($i = 0; $i < 256; $i++) {
-            $c = 0;
-            $v = $i;
-            while ($v) {
-                $c++;
-                $v &= ($v - 1);
+            $chunk = '';
+            for ($bit = 7; $bit >= 0; $bit--) {
+                $chunk .= (($i >> $bit) & 1) ? "\1" : "\0";
             }
-            self::$pop[$i] = $c;
+            self::$moduleBytes[$i] = $chunk;
         }
     }
 
@@ -1077,9 +1351,10 @@ class FastEncoder implements EncoderInterface
         $factorTable = [];
         for ($f = 1; $f < 256; $f++) {
             $lf = $log[$f];
-            $row = [];
+            $row = [0, 0, 0, 0];
             for ($i = 0; $i < $eccCount; $i++) {
-                $row[$i] = $genLog[$i] !== -1 ? $exp[$genLog[$i] + $lf] : 0;
+                $coeff = $genLog[$i] !== -1 ? $exp[$genLog[$i] + $lf] : 0;
+                $row[$i >> 3] |= $coeff << (($i & 7) << 3);
             }
             $factorTable[$f] = $row;
         }

@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `clib/bench/scanme_bench` (CMake option `BUILD_BENCH`): C++-only benchmark
+  with per-version latency and a per-stage breakdown (codewords, RS,
+  placement, mask selection, apply); `csv` mode for scripting
+- `clib/tests/test_penalty_equivalence`: checks the lane-parallel mask
+  selection against the scalar nayuki-style reference for v1–v40, all ECLs,
+  all 8 penalties; CI now runs the C++ tests once per SIMD kernel
+- `SCANME_MASK_KERNEL=generic|avx2|avx512` environment override to force a
+  mask-penalty kernel (tests/benchmarks)
+- `Matrix::__construct(int $version, ?array $data = null, bool $normalized = true)`
+  accepts prefilled module data so native encoders skip the `array_fill()`
+  and a second per-module pass; the public raw getters still return `bool[]`
+- `Matrix::fromModuleString(int $version, string $modules)`: builds a matrix
+  from one `'0'`/`'1'` byte per module and stores the string as-is (reads go
+  through the same `(bool) $data[$i]` path; the first write or raw-array
+  getter normalises it to `bool[]`). Used by `FfiEncoder` and the `scanmeqr`
+  extension; `tests/MatrixTest.php` covers the bool[] / int[] / string
+  representations
+- `Matrix::toModuleString()`: the symbol as one `'0'`/`'1'` byte per module,
+  cached for array-backed matrices until the next write — the input all
+  renderers now work on
+- `PngRenderer(compressionLevel: int = 1)`: zlib level for the IDAT stream
+- `PngEncoder::encodeScanlines()`: encode pre-filtered scanline bytes
+- `tests/RendererTest.php`: pins every renderer to a naive per-module
+  reference and to identical output for bool[] / int[] / string matrices
+- `bench/benchmark_e2e.php`: component + end-to-end benchmark that can run
+  against another checkout; `OPTIMIZATION_RESULTS_2026-08.md` holds the
+  before/after report of the 2026-08 pass
+
 - Agent workflow (`.workflow/workflow.md`) adapted from the workerman-bundle
   workflow: issue → feature branch → subagent implementation → review rounds
   → PR → CI → merge, with proof-of-work files under `.workflow/proof_of_work/`
@@ -24,12 +52,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Renderers rewritten around `Matrix::toModuleString()` and whole-matrix
+  string operations (`substr`/`strtr`/`str_replace`/`preg_match_all`) instead
+  of one `Matrix::get()` call per module. v10 / v27 render time (µs):
+  FullBlocks 47→13 / 232→74, HalfBlocks 85→11 / 403→56, Simple 47→13 /
+  235→72, HtmlDiv 332→45 / 1363→199, HtmlTable 338→43 / 1409→314,
+  Svg 251→80 / 1166→376, Png 3161→123 / 14181→633. ASCII and HTML output is
+  byte-identical. Full before/after report incl. end-to-end numbers in
+  `OPTIMIZATION_RESULTS_2026-08.md`
+- `SvgRenderer` (Square style) merges horizontal runs of dark modules into a
+  single `<path>` instead of one `<rect>` per module — same pixels when
+  rasterised, ~4.5× smaller files (v10: 103 → 22 KB). Finder patterns keep
+  their per-module rounded `<rect>`s; Rounded/Dot styles emit the same
+  elements as before (finder rects now come first)
+- `PngRenderer` stores the `moduleSize − 1` repeated scanlines of each module
+  row with the PNG *Up* filter (all zeros) and defaults to zlib level 1:
+  7× faster compression for a ~1 KB larger file (v10: 1.4 → 2.4 KB); pass
+  `compressionLevel: 6` for the previous size. Pixels are unchanged
+- The `scanmeqr` extension returns a string-backed `Matrix`
+  (`Matrix::fromModuleString`) like `FfiEncoder`: encode v10 9 → 7 µs, and
+  renderers skip the `bool[]` → string conversion
+
+- Pure-PHP `FastEncoder` is 20–50× faster (PHP 8.5 + JIT, Apple M-series:
+  v1 233 → 15 µs, v10 1465 → 60 µs, v20 ~5 ms → 200 µs; ~4× slower without
+  the JIT). Mask selection evaluates penalty rules bitwise on whole rows and
+  columns (the same formulation as the C++ kernel) instead of visiting every
+  module of every mask; Reed–Solomon keeps each block's remainder in four
+  packed 64-bit words; placement walks the stream per byte; the matrix is
+  expanded through a string LUT + `unpack()`. Output is byte-for-byte
+  unchanged (cross-checked against the C++ library for v1–v27)
+- `Encoder` delegates Byte-mode symbols up to v27 to the `FastEncoder` bitset
+  path (`FastEncoder::encodeVersion()`, honours a requested version) and only
+  runs its scalar pipeline for v28–v40, so the portable encoder is as fast as
+  `FastEncoder` for every size it covers
+- `bench/benchmark_*.php`: the case labelled "v10 (57x57) M" was a v12 symbol
+  (260 bytes exceed v10-M capacity); relabelled
+- C++ encoder (`clib/`) is 12–16× faster: v1 21 → 1.5 µs, v10 68 → 6 µs,
+  v40 1276 → 80 µs (Apple M-series). Mask selection now evaluates all 8 masks
+  lane-parallel with bitwise penalty rules (templated on row width), the
+  kernel is compiled for SSE2 / AVX2 / AVX-512 on x86-64 with runtime
+  dispatch (NEON on arm64), Reed–Solomon runs on 4×`uint64` with per-ec_count
+  cached tables, data placement is branch-free and the byte expansion is
+  table-driven. Output is byte-for-byte unchanged
+- PHP boundary of the native encoders: the extension fills the `Matrix` array
+  with `ZEND_HASH_FILL_PACKED` and calls the two-argument constructor;
+  `FfiEncoder` uses `unpack('C*')` instead of `array_chunk` + nested
+  `array_map`. End to end (PHP 8.5, arm64): ext v10 33 → 16 µs, FFI v10
+  167 → 35 µs
+- `FfiEncoder` no longer builds a size² PHP array at all: the C library's
+  0/1 bytes go through one `strtr()` into `Matrix::fromModuleString()`. FFI
+  encode time drops 3× (v1 5 → 3 µs, v10 24 → 8 µs, v27 113 → 39 µs), on par
+  with the extension. Rendering a string-backed matrix is ~5–15 % slower than
+  a `bool[]` one, so the extension deliberately keeps filling `bool[]` in C
+  (encode + render is cheaper that way; see BENCHMARK.md)
+- `QRMatrix` no longer maintains a column-major copy; `clib/tests/CMakeLists.txt`
+  only lists the tests that exist (the `BUILD_TESTS=ON` build was broken)
+- `bench/benchmark_*.php` resolve the FFI library via
+  `FfiEncoder::localBuildPath()` (`.dylib` on macOS) instead of a hardcoded `.so`
 - Minimum PHP raised from 8.1 to 8.2 (`composer.json`, CI matrix). The
   precompiled extension binaries are still built for 8.1 in `release-build.yml`
 - CI test matrix is now PHP 8.2, 8.3, 8.4 (8.1 dropped)
 
 ### Fixed
 
+- `FastEncoder` produced a sub-optimal (still valid, but different from the
+  reference) mask for v20–v27: penalty rules 2 and 4 only popcounted the low
+  32 bits of the `hi` word, so modules in the first columns were not counted
+  once the symbol exceeded 96 modules. The reference fixtures only cover
+  v2–v11, which is why it went unnoticed; the new bitwise implementation
+  matches `Encoder` and the C++ library for all of v1–v27
 - `Builder::build()` now runs each build command (cmake, make) exactly once
   instead of twice (it previously ran `shell_exec()` for output and `exec()`
   again for the exit code). Stderr is no longer merged into captured output

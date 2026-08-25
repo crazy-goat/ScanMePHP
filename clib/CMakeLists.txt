@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(BUILD_TESTS "Build tests" ON)
+option(BUILD_BENCH "Build benchmark" OFF)
 
 include(CheckCXXCompilerFlag)
 
@@ -13,50 +14,60 @@ set(LIB_SOURCES
     src/reed_solomon.cpp
     src/matrix.cpp
     src/mask.cpp
+    src/mask_kernel_generic.cpp
 )
 
-if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
-    check_cxx_compiler_flag("-msse2" HAVE_SSE2)
-    check_cxx_compiler_flag("-mavx2" HAVE_AVX2)
-    check_cxx_compiler_flag("-mavx512f -mavx512bw -mavx512vpopcntdq" HAVE_AVX512)
-
-    if(HAVE_SSE2)
-        add_compile_definitions(BUILD_SSE2)
+# The mask-penalty kernel (mask_kernel.hpp) is plain C++ written so the
+# compiler auto-vectorizes it. On x86-64 the baseline is SSE2 without POPCNT,
+# so we additionally compile the same kernel for AVX2 and AVX-512 and pick one
+# at runtime (see mask.cpp). One binary then runs well on any VPS CPU.
+# On aarch64 NEON is baseline and a single build is enough.
+set(SCANME_X86 FALSE)
+if(CMAKE_OSX_ARCHITECTURES)
+    if(CMAKE_OSX_ARCHITECTURES MATCHES "x86_64")
+        set(SCANME_X86 TRUE)
     endif()
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64")
+    set(SCANME_X86 TRUE)
+endif()
 
+if(SCANME_X86 AND NOT MSVC)
+    check_cxx_compiler_flag("-mavx2 -mbmi2 -mpopcnt" HAVE_AVX2)
+    check_cxx_compiler_flag("-mavx512f -mavx512bw -mavx512vl -mavx512vpopcntdq" HAVE_AVX512)
     if(HAVE_AVX2)
-        add_compile_definitions(BUILD_AVX2)
+        list(APPEND LIB_SOURCES src/mask_kernel_avx2.cpp)
+        set_source_files_properties(src/mask_kernel_avx2.cpp PROPERTIES
+            COMPILE_OPTIONS "-mavx2;-mbmi;-mbmi2;-mpopcnt;-mlzcnt")
+        add_compile_definitions(SCANME_HAVE_AVX2_KERNEL)
     endif()
-
     if(HAVE_AVX512)
-        add_compile_definitions(BUILD_AVX512)
+        list(APPEND LIB_SOURCES src/mask_kernel_avx512.cpp)
+        set_source_files_properties(src/mask_kernel_avx512.cpp PROPERTIES
+            COMPILE_OPTIONS "-mavx512f;-mavx512bw;-mavx512vl;-mavx512vpopcntdq;-mbmi;-mbmi2;-mpopcnt;-mlzcnt")
+        add_compile_definitions(SCANME_HAVE_AVX512_KERNEL)
     endif()
 endif()
 
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
-    add_compile_definitions(BUILD_NEON)
-endif()
-
-add_library(scanme_qr SHARED ${LIB_SOURCES})
-
-# Define SCANME_QR_EXPORTS when building the library (for Windows DLL exports)
-target_compile_definitions(scanme_qr PRIVATE SCANME_QR_EXPORTS)
-
-target_include_directories(scanme_qr
+# Object library shared by the .so, the tests (which use internal symbols) and the bench.
+add_library(scanme_qr_objs OBJECT ${LIB_SOURCES})
+target_compile_definitions(scanme_qr_objs PRIVATE SCANME_QR_EXPORTS)
+target_include_directories(scanme_qr_objs
     PUBLIC include
     PRIVATE src
 )
-
-target_compile_options(scanme_qr PRIVATE
+target_compile_options(scanme_qr_objs PRIVATE
     $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Werror>
     $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX>
     $<$<CONFIG:Release>:$<IF:$<CXX_COMPILER_ID:MSVC>,/O2,-O3>>
 )
+set_target_properties(scanme_qr_objs PROPERTIES
+    CXX_VISIBILITY_PRESET hidden
+    VISIBILITY_INLINES_HIDDEN ON
+    POSITION_INDEPENDENT_CODE ON
+)
 
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "13")
-    set_source_files_properties(src/encoder.cpp
-        PROPERTIES COMPILE_FLAGS "-Wno-free-nonheap-object")
-endif()
+add_library(scanme_qr SHARED $<TARGET_OBJECTS:scanme_qr_objs>)
+target_include_directories(scanme_qr PUBLIC include)
 
 set_target_properties(scanme_qr PROPERTIES
     CXX_VISIBILITY_PRESET hidden
@@ -67,4 +78,8 @@ set_target_properties(scanme_qr PROPERTIES
 if(BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
+endif()
+
+if(BUILD_BENCH)
+    add_subdirectory(bench)
 endif()

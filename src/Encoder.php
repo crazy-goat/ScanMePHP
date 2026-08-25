@@ -66,6 +66,8 @@ class Encoder implements EncoderInterface
         [[7089, 4296, 2953, 1817], [5596, 3391, 2331, 1435], [3993, 2420, 1663, 1024], [3057, 1852, 1273, 784]], // v40
     ];
 
+    private ?FastEncoder $fastEncoder = null;
+
     public function __construct()
     {
         $this->dataEncoder = new DataEncoder();
@@ -89,6 +91,13 @@ class Encoder implements EncoderInterface
 
         // Determine version
         $version = $this->determineVersion($data, $errorCorrectionLevel, $requestedVersion);
+
+        // Byte-mode symbols up to v27 take the bitset fast path (identical output);
+        // the readable pipeline below stays for v28-v40.
+        if ($version <= FastEncoder::MAX_VERSION) {
+            $this->fastEncoder ??= new FastEncoder();
+            return $this->fastEncoder->encodeVersion($data, $errorCorrectionLevel, $version);
+        }
 
         // Encode data
         $encodedData = $this->dataEncoder->encode($data, $mode, $version);

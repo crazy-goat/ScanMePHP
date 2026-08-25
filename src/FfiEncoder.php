@@ -56,19 +56,9 @@ class FfiEncoder implements EncoderInterface
         $flat = FFI::string($out->modules, $size * $size);
         $this->ffi->scanme_qr_result_free(FFI::addr($out));
 
-        $bytes = array_values((array) unpack('C*', $flat));
-        $matrix = new Matrix($version);
-        $matrix->setData(
-            array_map(
-                static fn (array $row): array => array_map(
-                    static fn (int $v): bool => $v !== 0,
-                    $row
-                ),
-                array_chunk($bytes, $size)
-            )
-        );
-
-        return $matrix;
+        // One byte per module (0/1) from C; strtr() turns it into the '0'/'1'
+        // string Matrix stores directly, so no size*size PHP array is built.
+        return Matrix::fromModuleString($version, strtr($flat, "\0\1", '01'));
     }
 
     public static function isAvailable(string $libraryPath): bool

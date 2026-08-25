@@ -34,17 +34,17 @@ class HtmlDivRenderer implements RendererInterface
 
         $html = '<div style="display:inline-block;background:' . $escBg . ';padding:0;line-height:0">';
 
-        for ($y = 0; $y < $totalModules; $y++) {
-            $dataY = $y - $margin;
-            $html .= '<div style="display:flex">';
-            for ($x = 0; $x < $totalModules; $x++) {
-                $dataX = $x - $margin;
-                $isDark = $dataX >= 0 && $dataX < $size && $dataY >= 0 && $dataY < $size && $matrix->fastGet($dataX, $dataY);
-                $color = $isDark ? $escFg : $escBg;
-                $html .= '<div style="width:' . $mod . 'px;height:' . $mod . 'px;background:' . $color . '"></div>';
-            }
-            $html .= '</div>';
-        }
+        // One cell string per module colour; quiet-zone rows are built once.
+        $cellHead = '<div style="width:' . $mod . 'px;height:' . $mod . 'px;background:';
+        $cells = ['0' => $cellHead . $escBg . '"></div>', '1' => $cellHead . $escFg . '"></div>'];
+        $side = str_repeat($cells['0'], $margin);
+        $marginRow = str_repeat('<div style="display:flex">' . str_repeat($cells['0'], $totalModules) . '</div>', $margin);
+        // The whole symbol in one strtr(): module bytes become cells and the
+        // row separator becomes "close row, open row" plus both side margins.
+        $html .= $marginRow . '<div style="display:flex">' . $side . strtr(
+            implode("\n", str_split($matrix->toModuleString(), $size)),
+            $cells + ["\n" => $side . '</div><div style="display:flex">' . $side]
+        ) . $side . '</div>' . $marginRow;
 
         if ($options->label !== null && $options->label !== '') {
             $fontSize = (int) ($mod * 1.5);

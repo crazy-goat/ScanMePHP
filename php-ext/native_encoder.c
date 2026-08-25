@@ -150,40 +150,33 @@ static PHP_METHOD(NativeEncoderExt, encodeMatrix)
     }
 
     /* Find CrazyGoat\ScanMePHP\Matrix class */
-    zend_class_entry *matrix_ce = zend_lookup_class(zend_string_init("CrazyGoat\\ScanMePHP\\Matrix", sizeof("CrazyGoat\\ScanMePHP\\Matrix") - 1, 0));
+    zend_string *class_name = zend_string_init("CrazyGoat\\ScanMePHP\\Matrix", sizeof("CrazyGoat\\ScanMePHP\\Matrix") - 1, 0);
+    zend_class_entry *matrix_ce = zend_lookup_class(class_name);
+    zend_string_release(class_name);
     if (!matrix_ce) {
         scanme_qr_matrix_free(matrix);
         zend_throw_exception(zend_ce_exception, "CrazyGoat\\ScanMePHP\\Matrix class not found", 0);
         return;
     }
 
-    /* Instantiate Matrix: new Matrix($version) */
-    object_init_ex(return_value, matrix_ce);
-    
-    zval version_val;
-    ZVAL_LONG(&version_val, matrix->version);
-    
-    zval constructor_retval;
-    zend_call_method(Z_OBJ_P(return_value), matrix_ce, &matrix_ce->constructor, "__construct", sizeof("__construct") - 1, &constructor_retval, 1, &version_val, NULL);
-    zval_ptr_dtor(&constructor_retval);
-
-    /* Populate data: $matrix->setRawData($data) */
-    zval data_array;
-    array_init(&data_array);
-    int total_modules = matrix->size * matrix->size;
-    for (int i = 0; i < total_modules; i++) {
-        add_next_index_bool(&data_array, matrix->data[i] != 0);
+    /* Hand the modules over as one '0'/'1' byte per module
+       (Matrix::fromModuleString): no size*size zvals to build here, and it is
+       the representation the renderers consume directly (substr/strtr/preg),
+       so a bool[] would only be converted back to this string on first render. */
+    uint32_t total_modules = (uint32_t)(matrix->size * matrix->size);
+    zend_string *modules = zend_string_alloc(total_modules, 0);
+    char *out = ZSTR_VAL(modules);
+    for (uint32_t i = 0; i < total_modules; i++) {
+        out[i] = matrix->data[i] ? '1' : '0';
     }
+    out[total_modules] = '\0';
 
-    /* Call setRawData. We need to find the function entry. */
-    zend_function *set_raw_data_fn = zend_hash_str_find_ptr(&matrix_ce->function_table, "setrawdata", sizeof("setrawdata") - 1);
-    if (set_raw_data_fn) {
-        zval set_data_retval;
-        zend_call_method(Z_OBJ_P(return_value), matrix_ce, &set_raw_data_fn, "setrawdata", sizeof("setrawdata") - 1, &set_data_retval, 1, &data_array, NULL);
-        zval_ptr_dtor(&set_data_retval);
-    }
-    
-    zval_ptr_dtor(&data_array);
+    /* Matrix::fromModuleString($version, $modules) */
+    zval args[2];
+    ZVAL_LONG(&args[0], matrix->version);
+    ZVAL_STR(&args[1], modules);
+    zend_call_method_with_2_params(NULL, matrix_ce, NULL, "frommodulestring", return_value, &args[0], &args[1]);
+    zval_ptr_dtor(&args[1]);
     scanme_qr_matrix_free(matrix);
 }
 

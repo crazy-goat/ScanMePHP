@@ -22,6 +22,53 @@ abstract class AbstractAsciiRenderer implements RendererInterface
 
     abstract public function render(Matrix $matrix, RenderOptions $options): string;
 
+    /**
+     * Render the symbol as one text block (rows joined by "\n") by replacing
+     * every module byte with its glyph in one or two passes over the whole
+     * matrix instead of one method call per module.
+     */
+    protected function renderRows(Matrix $matrix, RenderOptions $options, string $lightGlyph, string $darkGlyph, string $bgChar): string
+    {
+        $size = $matrix->getSize();
+        $block = implode("\n", str_split($matrix->toModuleString(), $size));
+        // A single-byte light glyph (the usual space) goes through the
+        // byte-table strtr(), which is ~100× cheaper than a str_replace() pass.
+        $block = \strlen($lightGlyph) === 1
+            ? str_replace('1', $darkGlyph, strtr($block, '0', $lightGlyph))
+            : str_replace(['1', '0'], [$darkGlyph, $lightGlyph], $block);
+
+        return $this->assemble($block, $size, $options, $bgChar);
+    }
+
+    /**
+     * Wrap the rendered symbol block with the side margin, top/bottom quiet
+     * zone (issue #35: both sides, also when inverted) and the optional label.
+     *
+     * @param string $block Symbol rows joined by "\n", without margins
+     */
+    protected function assemble(string $block, int $size, RenderOptions $options, string $bgChar): string
+    {
+        $sideMargin = $this->sideMargin;
+        if ($sideMargin > 0) {
+            $side = str_repeat($bgChar, $sideMargin);
+            $block = $side . str_replace("\n", $side . "\n" . $side, $block) . $side;
+        }
+
+        $totalWidth = $size + (2 * $sideMargin);
+        $marginLines = $options->margin > 0
+            ? array_fill(0, $options->margin, str_repeat($bgChar, $totalWidth))
+            : [];
+
+        $out = $marginLines;
+        $out[] = $block;
+        $this->appendLabel($out, $options->label, $totalWidth, $bgChar);
+        foreach ($marginLines as $line) {
+            $out[] = $line;
+        }
+
+        return implode("\n", $out);
+    }
+
     protected function getSideMargin(): int
     {
         return $this->sideMargin;

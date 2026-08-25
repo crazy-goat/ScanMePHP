@@ -34,17 +34,17 @@ class HtmlTableRenderer implements RendererInterface
 
         $html = '<table style="border-collapse:collapse;border-spacing:0;background:' . $escBg . '">';
 
-        for ($y = 0; $y < $totalModules; $y++) {
-            $dataY = $y - $margin;
-            $html .= '<tr>';
-            for ($x = 0; $x < $totalModules; $x++) {
-                $dataX = $x - $margin;
-                $isDark = $dataX >= 0 && $dataX < $size && $dataY >= 0 && $dataY < $size && $matrix->fastGet($dataX, $dataY);
-                $color = $isDark ? $escFg : $escBg;
-                $html .= '<td style="width:' . $mod . 'px;height:' . $mod . 'px;padding:0;border:0;background:' . $color . '"></td>';
-            }
-            $html .= '</tr>';
-        }
+        // Same scheme as HtmlDivRenderer.
+        $cellHead = '<td style="width:' . $mod . 'px;height:' . $mod . 'px;padding:0;border:0;background:';
+        $cells = ['0' => $cellHead . $escBg . '"></td>', '1' => $cellHead . $escFg . '"></td>'];
+        $side = str_repeat($cells['0'], $margin);
+        $marginRow = str_repeat('<tr>' . str_repeat($cells['0'], $totalModules) . '</tr>', $margin);
+        // The whole symbol in one strtr(): module bytes become cells and the
+        // row separator becomes "close row, open row" plus both side margins.
+        $html .= $marginRow . '<tr>' . $side . strtr(
+            implode("\n", str_split($matrix->toModuleString(), $size)),
+            $cells + ["\n" => $side . '</tr><tr>' . $side]
+        ) . $side . '</tr>' . $marginRow;
 
         $html .= '</table>';
 

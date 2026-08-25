@@ -11,20 +11,23 @@ struct QRMatrix {
     int size;
     int version;
     Row3 rows[MAX_QR_SIZE];
-    Row3 cols[MAX_QR_SIZE];
     Row3 func[MAX_QR_SIZE];
 
-    explicit QRMatrix(int version_);
+    explicit QRMatrix(int version_) { reset(version_); }
+
+    // Re-initialise for `version_` (clears only the rows that matter).
+    void reset(int version_) noexcept {
+        version = version_;
+        size = 17 + version_ * 4;
+        std::memset(rows, 0, sizeof(Row3) * static_cast<size_t>(size));
+        std::memset(func, 0, sizeof(Row3) * static_cast<size_t>(size));
+    }
 
     void set_module(int x, int y, bool dark) noexcept {
         uint64_t bit = uint64_t(1) << (x & 63);
         int word = x >> 6;
         if (dark) rows[y].w[word] |= bit;
         else      rows[y].w[word] &= ~bit;
-        bit = uint64_t(1) << (y & 63);
-        word = y >> 6;
-        if (dark) cols[x].w[word] |= bit;
-        else      cols[x].w[word] &= ~bit;
     }
 
     bool get_module(int x, int y) const noexcept {

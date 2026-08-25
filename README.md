@@ -2,14 +2,15 @@
 
 **The fastest pure PHP QR code generator with optional native C++ acceleration.**
 
-Generate QR codes in PHP without dependencies — then go **10× faster** with a single C++ library. Zero bloat, maximum speed, production-ready.
+Generate QR codes in PHP without dependencies — then go **100× faster** with a single C++ library. Zero bloat, maximum speed, production-ready.
 
 QR encoding algorithms are based on [Nayuki's QR Code generator](https://www.nayuki.io/page/qr-code-generator-library).
 
 ## Why ScanMePHP?
 
 **🚀 Blazing Fast — 3-Tier Performance**
-- **Native C++ via FFI**: 10–12× faster than pure PHP (sub-millisecond generation)
+- **Fast pure PHP**: bitwise mask selection and packed Reed–Solomon — a v10 code in ~60 µs with the JIT, no extensions needed
+- **Native C++ via FFI / extension**: another 6–8× (a v10 code in ~8–9 µs); SIMD mask selection with runtime AVX2/AVX-512 dispatch on x86-64, NEON on arm64
 - **64-bit Optimized**: 2× faster with int-pair bit packing (no extensions needed)
 - **Portable Fallback**: Works on any PHP 8.2+, 32-bit or 64-bit
 
@@ -33,7 +34,7 @@ SVG, PNG (pure PHP, 1-bit), HTML (div/table), ASCII (3 styles). Works in termina
 - **Zero dependencies** — no external packages, no PHP extensions required
 - **8 built-in renderers** — SVG, PNG, HTML (div/table), ASCII (full/half/simple blocks)
 - **All QR versions** — v1–v40, all error correction levels (L/M/Q/H)
-- **High performance** — 3 encoder tiers: native C++ FFI (10–12× faster), FastEncoder (2×), portable Encoder
+- **High performance** — pure PHP encodes v1 in ~15 µs / v10 in ~60 µs (JIT); native C++ extension/FFI adds another 6–8×
 - **Customizable** — module styles, colors, labels, dark mode, margins
 - **Type-safe** — strict types, enums, readonly properties, PHP 8.2+ idioms
 
@@ -48,8 +49,8 @@ composer require crazy-goat/scanmephp
 When you install or update the package via Composer, the library will automatically:
 
 1. Detect your platform (Linux glibc/musl, macOS Intel/ARM, Windows)
-2. Try to download and install the PHP extension (`scanmeqr`) — **fastest option** (13–21× faster)
-3. Fall back to FFI library if extension is not available — **10–12× faster**
+2. Try to download and install the PHP extension (`scanmeqr`) — **fastest option** (190–360× faster)
+3. Fall back to FFI library if extension is not available — **90–130× faster**
 4. Use pure PHP encoder as final fallback — works everywhere
 
 ### PHP Extension Installation (Recommended)
@@ -170,7 +171,7 @@ ScanMePHP ships with 8 renderers. Each implements `RendererInterface` and can be
 | `HalfBlocksRenderer` | ASCII `▀▄█` compact | `sideMargin` (int, default: 0) |
 | `SimpleRenderer` | ASCII `●` dots | `sideMargin` (int, default: 0) |
 | `SvgRenderer` | SVG XML | `moduleSize` (int, default: 10) |
-| `PngRenderer` | PNG image (1-bit) | `moduleSize` (int, default: 10) |
+| `PngRenderer` | PNG image (1-bit) | `moduleSize` (int, default: 10), `compressionLevel` (int 0–9, default: 1) |
 | `HtmlDivRenderer` | HTML `<div>` grid | `moduleSize` (int, default: 10), `fullHtml` (bool, default: false) |
 | `HtmlTableRenderer` | HTML `<table>` | `moduleSize` (int, default: 10), `fullHtml` (bool, default: false) |
 
@@ -240,7 +241,7 @@ $qr->saveToFile('qrcode.svg');
 
 **Examples:** [qrcode.png](examples/generated-assets/qrcode.png) | [qrcode_small.png](examples/generated-assets/qrcode_small.png) | [qrcode_large.png](examples/generated-assets/qrcode_large.png) | [qrcode_high_ecc.png](examples/generated-assets/qrcode_high_ecc.png)
 
-Generates valid PNG files in pure PHP — no GD, no Imagick, no external libraries. Black and white only, 1-bit monochrome. Ideal for email attachments, API responses, and print.
+Generates valid PNG files in pure PHP — no GD, no Imagick, no external libraries. Black and white only, 1-bit monochrome. Ideal for email attachments, API responses, and print. Repeated pixel rows are stored with the PNG *Up* filter, so the default zlib level 1 already gives ~2 KB files in ~0.1 ms; pass `compressionLevel: 6` for the smallest output.
 
 > **Note:** Labels are not supported in PNG output (no font engine). Passing a `label` will throw a `RenderException`.
 
@@ -390,10 +391,10 @@ ScanMePHP includes four encoder implementations. `QRCode` auto-selects the faste
 
 | Encoder | Versions | Requirements | Relative Speed |
 |---|---|---|---|
-| `NativeEncoderExt` | v1–v27 | 64-bit PHP + `scanmeqr` extension | **13–21×** faster |
-| `FfiEncoder` | v1–v40 | 64-bit PHP + FFI + `libscanme_qr.so` | **10–12×** faster |
-| `FastEncoder` | v1–v27 | 64-bit PHP | **~2×** faster |
-| `Encoder` | v1–v40 | any PHP 8.2+ | baseline |
+| `NativeEncoderExt` | v1–v40 | 64-bit PHP + `scanmeqr` extension | **7–9×** faster (a v10 code in ~7 µs) |
+| `FfiEncoder` | v1–v40 | 64-bit PHP + FFI + `libscanme_qr.so` | **6–8×** faster (a v10 code in ~8 µs) |
+| `FastEncoder` | v1–v27 | 64-bit PHP | baseline (bitset fast path) |
+| `Encoder` | v1–v40 | 64-bit PHP 8.2+ | baseline — same fast path for v1–v27, scalar pipeline for v28–v40 |
 
 ### Capacity (Byte Mode)
 
@@ -406,29 +407,38 @@ Maximum data length for URL/text encoding (Byte mode) at different QR versions:
 | v27 | 125×125 | 1465 | 1125 | 805 | 625 |
 | v40 | 177×177 | **2953** | **2331** | **1663** | **1273** |
 
-**Note:** FastEncoder and FfiEncoder support up to v27 (1465 bytes max). For larger data, the portable Encoder (v1–v40) is automatically used.
+**Note:** FastEncoder supports up to v27 (1465 bytes max). For larger data, the portable Encoder's v28–v40 pipeline is automatically used.
 
 ### Benchmark Results
 
-Measured on PHP 8.4, 200 iterations per case, median latency:
+Measured on PHP 8.5 (`opcache.jit=tracing`) / Apple M-series, 500 iterations per case, median latency:
 
-| Test case | Encoder | FastEncoder | FfiEncoder | Speedup (Encoder/FFI) |
-|---|---|---|---|---|
-| v1 (21×21) L | 0.72 ms | 0.38 ms | 0.07 ms | **10×** |
-| v2 (25×25) M | 1.03 ms | 0.52 ms | 0.10 ms | **10×** |
-| v5 (37×37) M | 2.48 ms | 1.18 ms | 0.25 ms | **10×** |
-| v10 (57×57) M | 7.71 ms | 3.35 ms | 0.75 ms | **10×** |
+| Test case | Encoder | FastEncoder | FfiEncoder | NativeEncoderExt | Speedup (Encoder/Ext) |
+|---|---|---|---|---|---|
+| v1 (21×21) L | 0.016 ms | 0.015 ms | 0.003 ms | 0.002 ms | **7×** |
+| v5 (37×37) L | 0.031 ms | 0.031 ms | 0.004 ms | 0.004 ms | **8×** |
+| v10 (57×57) L | 0.061 ms | 0.060 ms | 0.008 ms | 0.009 ms | **7×** |
+| v20 (97×97) L | 0.195 ms | 0.200 ms | 0.025 ms | 0.030 ms | **6.5×** |
 
-All three encoders produce identical, spec-compliant QR codes verified against [nayuki's reference implementation](https://www.nayuki.io/page/qr-code-generator-library).
+Before the 2026-08 optimisation pass pure PHP took 0.425 ms (v1) and 3.2 ms
+(v10); the pure-PHP encoders are now 20–50× faster, so the native tiers matter
+mostly for high-volume generation. Without the JIT pure PHP is ~4× slower.
+
+The C++ library alone encodes v1 in ~1.5 µs, v10 in ~6 µs and v40 in ~80 µs
+(`clib/bench/scanme_bench`); the rest is the PHP boundary.
+
+All four encoders produce identical, spec-compliant QR codes verified against [nayuki's reference implementation](https://www.nayuki.io/page/qr-code-generator-library).
 
 Run the benchmark yourself:
 
 ```bash
 php bench/benchmark_encoder.php        # 200 iterations
 php bench/benchmark_encoder.php 500    # 500 iterations
+php -d extension=php-ext/modules/scanmeqr.so bench/benchmark_all.php 500   # incl. the extension
 ```
 
-See [BENCHMARK.md](BENCHMARK.md) for full results with percentiles.
+See [BENCHMARK.md](BENCHMARK.md) for full results, the C++-only benchmark and
+a description of the SIMD mask-selection kernel.
 
 ### Building the C++ Library (optional)
 
