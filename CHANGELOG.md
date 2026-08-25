@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-26
+
+Performance release (see `OPTIMIZATION_RESULTS_2026-08.md` for before/after
+numbers). Minor bump rather than a patch because three things change what
+callers observe:
+
+- PHP 8.1 is no longer supported (`composer.json` requires `^8.2`)
+- `SvgRenderer` in the default Square style emits one `<path>` of merged
+  horizontal runs instead of one `<rect>` per module — same rendered pixels,
+  ~4.5× smaller files, but different markup for anyone parsing or diffing it
+- `PngRenderer` defaults to zlib level 1, so files are ~1 KB larger at v10;
+  pixels are unchanged and `new PngRenderer(compressionLevel: 6)` restores the
+  previous size
+
 ### Added
 
 - `clib/bench/scanme_bench` (CMake option `BUILD_BENCH`): C++-only benchmark
@@ -41,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   workflow: issue → feature branch → subagent implementation → review rounds
   → PR → CI → merge, with proof-of-work files under `.workflow/proof_of_work/`
   and a knowledge base under `.workflow/helpers/` (`faq.md`, `decisions.md`)
+- `CONTRIBUTING.md` with contribution guidelines, linked from the README (#196)
 - Workflow helper scripts in `bin/`: `gh-branch` (derive a feature branch
   from an issue), `pick-issue.php` (rank open issues by labels/age/comments),
   `kb-lint.php` (validate the knowledge base and regenerate its tag index)
@@ -115,6 +130,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `bin/gh-branch` is executable directly again — it was missing its PHP
+  shebang, so running it as documented failed (#190, #191)
 - `FastEncoder` produced a sub-optimal (still valid, but different from the
   reference) mask for v20–v27: penalty rules 2 and 4 only popcounted the low
   32 bits of the `hi` word, so modules in the first columns were not counted
@@ -317,7 +334,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive test suite with PHPUnit
 - Full documentation and usage examples
 
-[Unreleased]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.11...HEAD
+[Unreleased]: https://github.com/crazy-goat/ScanMePHP/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.11...v0.5.0
 [0.4.11]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.10...v0.4.11
 [0.4.10]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.9...v0.4.10
 [0.4.9]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.8...v0.4.9
