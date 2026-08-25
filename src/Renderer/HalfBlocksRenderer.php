@@ -9,48 +9,38 @@ use CrazyGoat\ScanMePHP\RenderOptions;
 
 class HalfBlocksRenderer extends AbstractAsciiRenderer
 {
+    /** Indexed by top bit | bottom bit << 1, i.e. the digits '0'..'3'. */
+    private const GLYPHS = [' ', '▀', '▄', '█'];
+    private const GLYPHS_INVERTED = ['█', '▄', '▀', ' '];
+
     public function render(Matrix $matrix, RenderOptions $options): string
     {
         $size = $matrix->getSize();
-        $margin = $options->margin;
-        $sideMargin = $this->getSideMargin();
+        $modules = $matrix->toModuleString();
         $invert = $options->invert;
-        $bgChar = $invert ? '█' : ' ';
-        $result = '';
 
-        for ($i = 0; $i < $margin; $i++) {
-            $result .= $this->createMarginLine($size, $sideMargin, $bgChar) . "\n";
+        // Split the symbol into the even rows (top half of each text line) and
+        // the odd rows (bottom half). size is always odd, so the last line has
+        // an implicit light bottom row — which renders dark when inverted,
+        // exactly like a real light module would.
+        $top = [];
+        $bottom = [];
+        for ($y = 0, $offset = 0; $y < $size; $y += 2, $offset += 2 * $size) {
+            $top[] = substr($modules, $offset, $size);
+            $bottom[] = $y + 1 < $size ? substr($modules, $offset + $size, $size) : str_repeat('0', $size);
         }
 
-        for ($y = 0; $y < $size; $y += 2) {
-            $line = str_repeat($bgChar, $sideMargin);
-            for ($x = 0; $x < $size; $x++) {
-                $top = $matrix->fastGet($x, $y);
-                $bottom = $y + 1 < $size && $matrix->fastGet($x, $y + 1);
-                $top = $invert ? !$top : $top;
-                $bottom = $invert ? !$bottom : $bottom;
-                $line .= match ([$top, $bottom]) {
-                    [false, false] => ' ',
-                    [false, true] => '▄',
-                    [true, false] => '▀',
-                    [true, true] => '█',
-                };
-            }
-            $line .= str_repeat($bgChar, $sideMargin);
-            $result .= $line . "\n";
-        }
+        // Byte-wise OR merges both halves into one digit per column:
+        // '0'|'0'='0', '1'|'0'='1', '0'|'2'='2', '1'|'2'='3' ("\n"|"\n"="\n").
+        $pairs = implode("\n", $top) | strtr(implode("\n", $bottom), '1', '2');
+        $glyphs = $invert ? self::GLYPHS_INVERTED : self::GLYPHS;
+        // The space glyph is one byte, so its pass can use the byte-table strtr().
+        $space = $invert ? '3' : '0';
+        $pairs = strtr($pairs, $space, ' ');
+        $digits = ['0', '1', '2', '3'];
+        unset($digits[(int) $space], $glyphs[(int) $space]);
+        $block = str_replace(array_values($digits), array_values($glyphs), $pairs);
 
-        $totalWidth = $size + (2 * $sideMargin);
-        if ($options->label !== null && $options->label !== '') {
-            $result .= str_repeat($bgChar, $totalWidth) . "\n";
-            $result .= $this->centerText(' ' . $options->label . ' ', $totalWidth, $bgChar) . "\n";
-        }
-
-        // Add bottom margin (quiet zone) - fixes issue #35
-        for ($i = 0; $i < $margin; $i++) {
-            $result .= $this->createMarginLine($size, $sideMargin, $bgChar) . "\n";
-        }
-
-        return rtrim($result, "\n");
+        return $this->assemble($block, $size, $options, $invert ? '█' : ' ');
     }
 }

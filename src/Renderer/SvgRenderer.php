@@ -69,99 +69,115 @@ class SvgRenderer implements RendererInterface
         );
     }
 
+    /**
+     * Emit the dark modules (light ones when inverted).
+     *
+     * Works on the matrix module string: rows are joined with "\n" so one
+     * preg_match_all() over the whole symbol yields every run of dark modules
+     * with its offset, and offset → (x, y) is a division by size + 1.
+     * Square style draws all runs as one <path> (each run a closed sub-path,
+     * so abutting modules cannot show anti-aliasing seams and the output is
+     * ~5× smaller than one <rect> per module); Rounded/Dot stay one element
+     * per module. Finder-pattern modules keep per-module rounded rects.
+     */
     private function generateModules(Matrix $matrix, int $margin, string $color, ModuleStyle $style, bool $invert): string
     {
         $size = $matrix->getSize();
-        $escapedColor = $this->escapeColor($color);
+        $stride = $size + 1;
         $mod = $this->moduleSize;
-        $result = '';
+        $escapedColor = $this->escapeColor($color);
 
-        for ($y = 0; $y < $size; $y++) {
-            for ($x = 0; $x < $size; $x++) {
-                $isDark = $matrix->get($x, $y);
-                // When inverted, draw light modules (false) instead of dark (true)
-                $shouldDraw = $invert ? !$isDark : $isDark;
-                if ($shouldDraw) {
-                    $result .= $this->generateModule(
-                        $x + $margin,
-                        $y + $margin,
-                        $escapedColor,
-                        $style,
-                        $this->isFinderPattern($matrix, $x, $y),
-                        $mod
-                    ) . "\n";
+        $modules = $matrix->toModuleString();
+        if ($invert) {
+            $modules = strtr($modules, '01', '10');
+        }
+
+        // Pixel coordinates as strings, looked up instead of converted per module.
+        $coord = [];
+        for ($i = 0; $i < $size; $i++) {
+            $coord[$i] = (string) (($i + $margin) * $mod);
+        }
+
+        // Finder patterns (7×7 corners) are drawn separately with rounded corners.
+        $finderRadius = sprintf('%.1f', $mod * 0.15);
+        $finderTail = '" width="' . $mod . '" height="' . $mod . '" fill="' . $escapedColor
+            . '" rx="' . $finderRadius . '" ry="' . $finderRadius . '"/>' . "\n";
+        $result = '';
+        $blank = '0000000';
+        $rows = [];
+        for ($y = 0, $offset = 0; $y < $size; $y++, $offset += $size) {
+            $row = substr($modules, $offset, $size);
+            if ($y < 7 || $y >= $size - 7) {
+                $result .= $this->finderModules($row, 0, $coord[$y], $coord, $finderTail);
+                $row = substr_replace($row, $blank, 0, 7);
+                if ($y < 7) {
+                    $result .= $this->finderModules($row, $size - 7, $coord[$y], $coord, $finderTail);
+                    $row = substr_replace($row, $blank, $size - 7, 7);
                 }
             }
+            $rows[] = $row;
+        }
+        $joined = implode("\n", $rows);
+
+        preg_match_all($style === ModuleStyle::Square ? '/1+/' : '/1/', $joined, $matches, PREG_OFFSET_CAPTURE);
+        if ($matches[0] === []) {
+            return $result;
+        }
+
+        switch ($style) {
+            case ModuleStyle::Square:
+                // "h<w>v<mod>h-<w>z" per run length, computed once.
+                $segment = [];
+                for ($w = 1; $w <= $size; $w++) {
+                    $segment[$w] = 'h' . ($w * $mod) . 'v' . $mod . 'h-' . ($w * $mod) . 'z';
+                }
+                $d = '';
+                foreach ($matches[0] as [$run, $offset]) {
+                    $d .= 'M' . $coord[$offset % $stride] . ' ' . $coord[intdiv($offset, $stride)] . $segment[\strlen($run)];
+                }
+                $result .= '  <path fill="' . $escapedColor . '" d="' . $d . '"/>' . "\n";
+                break;
+
+            case ModuleStyle::Rounded:
+                $radius = sprintf('%.1f', $mod * 0.3);
+                $tail = '" width="' . $mod . '" height="' . $mod . '" fill="' . $escapedColor
+                    . '" rx="' . $radius . '" ry="' . $radius . '"/>' . "\n";
+                foreach ($matches[0] as [, $offset]) {
+                    $result .= '  <rect x="' . $coord[$offset % $stride] . '" y="' . $coord[intdiv($offset, $stride)] . $tail;
+                }
+                break;
+
+            case ModuleStyle::Dot:
+                $centre = [];
+                $half = intdiv($mod, 2);
+                foreach ($coord as $i => $px) {
+                    $centre[$i] = (string) ((int) $px + $half);
+                }
+                $tail = '" r="' . sprintf('%.1f', $mod * 0.4) . '" fill="' . $escapedColor . '"/>' . "\n";
+                foreach ($matches[0] as [, $offset]) {
+                    $result .= '  <circle cx="' . $centre[$offset % $stride] . '" cy="' . $centre[intdiv($offset, $stride)] . $tail;
+                }
+                break;
         }
 
         return $result;
     }
 
-    private function generateModule(int $x, int $y, string $color, ModuleStyle $style, bool $isFinder, int $size): string
+    /**
+     * Rounded rects for the seven finder-pattern columns starting at $x0 of one row.
+     *
+     * @param list<string> $coord Pixel coordinate per module index
+     */
+    private function finderModules(string $row, int $x0, string $py, array $coord, string $tail): string
     {
-        $px = $x * $size;
-        $py = $y * $size;
-
-        // Finder patterns always use rounded corners for better visual
-        if ($isFinder) {
-            $radius = $size * 0.15;
-            return sprintf(
-                '  <rect x="%d" y="%d" width="%d" height="%d" fill="%s" rx="%.1f" ry="%.1f"/>',
-                $px,
-                $py,
-                $size,
-                $size,
-                $color,
-                $radius,
-                $radius
-            );
+        $out = '';
+        for ($x = $x0, $end = $x0 + 7; $x < $end; $x++) {
+            if ($row[$x] === '1') {
+                $out .= '  <rect x="' . $coord[$x] . '" y="' . $py . $tail;
+            }
         }
 
-        return match ($style) {
-            ModuleStyle::Square => sprintf(
-                '  <rect x="%d" y="%d" width="%d" height="%d" fill="%s"/>',
-                $px,
-                $py,
-                $size,
-                $size,
-                $color
-            ),
-            ModuleStyle::Rounded => sprintf(
-                '  <rect x="%d" y="%d" width="%d" height="%d" fill="%s" rx="%.1f" ry="%.1f"/>',
-                $px,
-                $py,
-                $size,
-                $size,
-                $color,
-                $size * 0.3,
-                $size * 0.3
-            ),
-            ModuleStyle::Dot => sprintf(
-                '  <circle cx="%d" cy="%d" r="%.1f" fill="%s"/>',
-                $px + $size / 2,
-                $py + $size / 2,
-                $size * 0.4,
-                $color
-            ),
-        };
-    }
-
-    private function isFinderPattern(Matrix $matrix, int $x, int $y): bool
-    {
-        $size = $matrix->getSize();
-        $finderSize = 7;
-
-        // Top-left finder pattern
-        if ($x < $finderSize && $y < $finderSize) {
-            return true;
-        }
-
-        // Top-right finder pattern
-        if ($x >= $size - $finderSize && $y < $finderSize) {
-            return true;
-        }
-        // Bottom-left finder pattern
-        return $x < $finderSize && $y >= $size - $finderSize;
+        return $out;
     }
 
     private function generateLabel(string $label, int $totalSize, int $matrixSize, int $margin): string
