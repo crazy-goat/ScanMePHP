@@ -33,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `PngEncoder::encodeScanlines()`: encode pre-filtered scanline bytes
 - `tests/RendererTest.php`: pins every renderer to a naive per-module
   reference and to identical output for bool[] / int[] / string matrices
+- `bench/benchmark_e2e.php`: component + end-to-end benchmark that can run
+  against another checkout; `OPTIMIZATION_RESULTS_2026-08.md` holds the
+  before/after report of the 2026-08 pass
 
 - Agent workflow (`.workflow/workflow.md`) adapted from the workerman-bundle
   workflow: issue → feature branch → subagent implementation → review rounds
@@ -52,13 +55,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Renderers rewritten around `Matrix::toModuleString()` and whole-matrix
   string operations (`substr`/`strtr`/`str_replace`/`preg_match_all`) instead
   of one `Matrix::get()` call per module. v10 / v27 render time (µs):
-  FullBlocks 52→15 / 211→70, HalfBlocks 82→12 / 334→47, Simple 50→13 /
-  209→66, HtmlDiv 320→48 / 1210→190, HtmlTable 325→43 / 1210→400,
-  Svg 225→83 / 955→325, Png 3100→125 / 12500→580. ASCII and HTML output is
-  byte-identical
+  FullBlocks 47→13 / 232→74, HalfBlocks 85→11 / 403→56, Simple 47→13 /
+  235→72, HtmlDiv 332→45 / 1363→199, HtmlTable 338→43 / 1409→314,
+  Svg 251→80 / 1166→376, Png 3161→123 / 14181→633. ASCII and HTML output is
+  byte-identical. Full before/after report incl. end-to-end numbers in
+  `OPTIMIZATION_RESULTS_2026-08.md`
 - `SvgRenderer` (Square style) merges horizontal runs of dark modules into a
   single `<path>` instead of one `<rect>` per module — same pixels when
-  rasterised, ~4.5× smaller files (v10: 105 → 23 KB). Finder patterns keep
+  rasterised, ~4.5× smaller files (v10: 103 → 22 KB). Finder patterns keep
   their per-module rounded `<rect>`s; Rounded/Dot styles emit the same
   elements as before (finder rects now come first)
 - `PngRenderer` stores the `moduleSize − 1` repeated scanlines of each module

@@ -48,19 +48,20 @@ as a `'0'/'1'` module string and use C-level string functions on it — a row is
 a `substr()`, glyphs and HTML cells are a `strtr()`/`str_replace()`, runs of
 dark modules are one `preg_match_all()`, PNG pixel bits are packed by GMP (or
 `bindec()` in 56-bit chunks). Same environment as above, µs per render,
-`margin: 4`, `moduleSize: 10`:
+`margin: 4`, `moduleSize: 10`, before = `main` at 9ca32d5 (full before/after
+report incl. end-to-end numbers: `OPTIMIZATION_RESULTS_2026-08.md`):
 
 | Renderer | v10 before | v10 after | v27 before | v27 after | Output |
 |---|---|---|---|---|---|
-| `FullBlocksRenderer` | 52 | **15** | 211 | **70** | identical |
-| `HalfBlocksRenderer` | 82 | **12** | 334 | **47** | identical |
-| `SimpleRenderer` | 50 | **13** | 209 | **66** | identical |
-| `HtmlDivRenderer` | 320 | **48** | 1 210 | **190** | identical |
-| `HtmlTableRenderer` | 325 | **43** | 1 210 | **400** | identical |
-| `SvgRenderer` (Square) | 225 | **83** | 955 | **325** | one `<path>` of horizontal runs, 105 → 23 KB (v10) |
-| `SvgRenderer` (Rounded) | 420 | **125** | 1 950 | **540** | same elements, different order |
-| `SvgRenderer` (Dot) | 305 | **125** | 1 300 | **500** | same elements, different order |
-| `PngRenderer` | 3 100 | **125** | 12 500 | **580** | same pixels; 1.4 → 2.4 KB at the new default zlib level 1 |
+| `FullBlocksRenderer` | 47 | **13.5** | 232 | **74** | identical |
+| `HalfBlocksRenderer` | 85 | **10.6** | 403 | **56** | identical |
+| `SimpleRenderer` | 47 | **13.2** | 235 | **72** | identical |
+| `HtmlDivRenderer` | 332 | **45** | 1 363 | **199** | identical |
+| `HtmlTableRenderer` | 338 | **43** | 1 409 | **314** | identical |
+| `SvgRenderer` (Square) | 251 | **80** | 1 166 | **376** | one `<path>` of horizontal runs, 103 → 22 KB (v10) |
+| `SvgRenderer` (Rounded) | 470 | **127** | 2 334 | **623** | same elements, different order |
+| `SvgRenderer` (Dot) | 344 | **128** | 1 658 | **584** | same elements, different order |
+| `PngRenderer` | 3 161 | **123** | 14 181 | **633** | same pixels; 1.4 → 2.4 KB at the new default zlib level 1 |
 
 - **SVG**: Square modules are merged per row into runs and emitted as one `<path d="M… h… v… h-… z …">` — abutting sub-paths of a single path rasterise without anti-aliasing seams, and `rsvg-convert` renders the old and new files to identical pixels. Finder patterns keep their per-module rounded `<rect>`s in every style
 - **PNG**: only the first of the `moduleSize` identical scanlines of a module row is stored raw; the rest use the PNG *Up* filter and are all zeros, which deflate handles almost for free. With that, zlib level 1 (new default; `new PngRenderer(compressionLevel: 6)` restores the old size) is 7× faster than level 6 at v10 (31 vs 206 µs) for a 2.4 vs 1.5 KB file
