@@ -53,6 +53,9 @@ When you install or update the package via Composer, the library will automatica
 3. Fall back to FFI library if extension is not available — **90–130× faster**
 4. Use pure PHP encoder as final fallback — works everywhere
 
+If no binary matches your platform — arm64 Linux, an unusual PHP build — the extension can be
+compiled on the spot with [PIE](https://github.com/php/pie): `pie install crazy-goat/qrcode-ext`.
+
 ### PHP Extension Installation (Recommended)
 
 The PHP extension provides the best performance. The Composer plugin will attempt to download it automatically.
@@ -100,31 +103,44 @@ During `composer install` or `composer update`, the plugin will:
    php -m | grep scanmeqr
    ```
 
+#### Installing with PIE
+
+The extension is published as a [PIE](https://github.com/php/pie) package, which builds it from
+source for whatever PHP you are running — including platforms no prebuilt binary covers, such as
+arm64 Linux:
+
+```bash
+composer require crazy-goat/scanmephp
+pie install crazy-goat/qrcode-ext
+```
+
+Both halves are needed: the extension builds a `CrazyGoat\ScanMePHP\Matrix` and can only throw
+without the library loaded. Building needs a C++20 compiler and takes a few seconds; there is
+nothing else to install, since the C++ core is compiled into the extension rather than linked
+against `libscanme_qr`.
+
+[crazy-goat/qrcode-ext](https://github.com/crazy-goat/qrcode-ext) is generated from `php-ext/`
+and `clib/` by `bin/build-ext-mirror.sh` — issues and pull requests belong in this repository.
+
 #### Building from Source
 
 Requirements:
 - PHP 8.2+ with `php-dev`/`phpize`
-- CMake 3.10+
-- C++ compiler (g++ or clang++)
+- C++20 compiler (GCC 10+ or Clang 12+)
 - Make
 
 ```bash
-# Build the C++ library first
-cd clib
-cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j$(nproc)
-cd ..
-
-# Build the PHP extension
 cd php-ext
 phpize
-./configure --with-scanmeqr="$PWD/../clib"
+./configure          # finds ../clib on its own
 make -j$(nproc)
 make install
 cd ..
 ```
 
 Then add `extension=scanmeqr.so` to your `php.ini`.
+
+CMake is only needed for the FFI library and the C++ test suite; the extension does not use it.
 
 ### FFI Library Installation
 

@@ -3,7 +3,7 @@
 #include "matrix.hpp"
 #include "mask.hpp"
 #include "tables.hpp"
-#include "../include/scanme_qr.h"
+#include "scanme_qr.h"
 #include <cstring>
 #include <stdexcept>
 #include <algorithm>

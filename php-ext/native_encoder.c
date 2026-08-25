@@ -77,7 +77,7 @@ static void scanme_qr_native_encoder_free(zend_object *object)
 static int get_ecl_from_enum(zval *ecl_obj)
 {
     zval retval;
-    zval *value_prop = zend_read_property(Z_OBJCE_P(ecl_obj), Z_OBJ_P(ecl_obj), "value", sizeof("value") - 1, 0, &retval);
+    zval *value_prop = zend_read_property(Z_OBJCE_P(ecl_obj), Z_OBJ_P(ecl_obj), "value", sizeof("value") - 1, 1, &retval);
     
     if (!value_prop || Z_TYPE_P(value_prop) != IS_LONG) {
         return -1;

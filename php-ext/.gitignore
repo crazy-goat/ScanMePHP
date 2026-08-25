@@ -18,3 +18,20 @@ config.h*
 config.nice
 *.la
 *.lai
+
+# The C++ core, symlinked in from ../clib by configure (see config.m4). Real
+# files with these names are what the generated crazy-goat/qrcode-ext package
+# ships; here they are links and must never be committed.
+/encoder.cpp
+/reed_solomon.cpp
+/matrix.cpp
+/mask.cpp
+/mask_kernel_generic.cpp
+/mask_kernel_avx2.cpp
+/mask_kernel_avx512.cpp
+tests/*.diff
+tests/*.out
+tests/*.exp
+tests/*.log
+tests/*.php
+configure.ac

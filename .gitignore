@@ -16,3 +16,6 @@ bench/benchmark_*.json
 
 # Local security audit working material
 review-reports/
+
+# Assembled by bin/build-ext-mirror.sh; the published copy lives in crazy-goat/qrcode-ext.
+/build/
