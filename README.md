@@ -506,3 +506,7 @@ Generated output files are saved to `examples/generated-assets/`.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
