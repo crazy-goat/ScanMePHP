@@ -9,7 +9,7 @@ use CrazyGoat\ScanMePHP\FastEncoder;
 use CrazyGoat\ScanMePHP\FfiEncoder;
 use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
 
-$libraryPath = __DIR__ . '/../clib/build/libscanme_qr.so';
+$libraryPath = FfiEncoder::localBuildPath();
 
 $iterations = isset($argv[1]) ? (int) $argv[1] : 200;
 
@@ -18,7 +18,7 @@ $testCases = [
     ['label' => 'v2  (25x25)  M', 'data' => 'https://example.com',     'ecl' => ErrorCorrectionLevel::Medium],
     ['label' => 'v3  (29x29)  H', 'data' => 'https://example.com',     'ecl' => ErrorCorrectionLevel::High],
     ['label' => 'v5  (37x37)  M', 'data' => 'https://scanmephp.example.com/very/long/url/path?query=value&other=123', 'ecl' => ErrorCorrectionLevel::Medium],
-    ['label' => 'v10 (57x57)  M', 'data' => str_repeat('https://example.com/', 13), 'ecl' => ErrorCorrectionLevel::Medium],
+    ['label' => 'v12 (65x65)  M', 'data' => str_repeat('https://example.com/', 13), 'ecl' => ErrorCorrectionLevel::Medium],
     ['label' => 'v10 (57x57)  L', 'data' => str_repeat('https://example.com/', 13), 'ecl' => ErrorCorrectionLevel::Low],
 ];
 
