@@ -94,11 +94,14 @@ jobs:
         make -j$(nproc)
 
     # Runs the nayuki fixtures and the mask-penalty equivalence test on x86-64,
-    # once per SIMD kernel (generic / avx2 / avx512), then prints the C++
-    # micro-benchmark so per-kernel timings are visible in the job log.
+    # once per SIMD kernel (generic / avx2 / avx512), each followed by the C++
+    # micro-benchmark on the same kernel — that is the only place the kernels
+    # are timed against each other on identical hardware (dev machines are
+    # arm64, and the hosted runner pool is mixed, so comparing numbers across
+    # jobs compares CPUs, not kernels).
     # A kernel the runner's CPU cannot execute reports "SKIP" and passes —
-    # forcing an unsupported ISA would SIGILL, so hosted runners without
-    # AVX-512 validate only the kernels they can actually run.
+    # forcing an unsupported ISA would SIGILL, so a runner without AVX-512
+    # validates only the kernels it can actually run.
     - name: Test C++ library (all SIMD kernels)
       working-directory: clib/build
       run: |
@@ -106,8 +109,8 @@ jobs:
         for k in generic avx2 avx512; do
           echo "== kernel: $k"
           SCANME_MASK_KERNEL=$k ./tests/test_penalty_equivalence 4 || exit 1
+          SCANME_MASK_KERNEL=$k ./bench/scanme_bench 200 || exit 1
         done
-        ./bench/scanme_bench 300
 
     - name: Run test suite
       run: composer run-script test

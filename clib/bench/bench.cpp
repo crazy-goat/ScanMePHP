@@ -75,6 +75,20 @@ int main(int argc, char** argv) {
     int iterations = argc > 1 ? std::atoi(argv[1]) : 1000;
     bool csv = argc > 2 && std::strcmp(argv[2], "csv") == 0;
 
+    // SCANME_MASK_KERNEL forces a kernel with no CPU check; report and skip
+    // rather than SIGILL when this machine cannot run the requested one.
+    if (const char* forced = std::getenv("SCANME_MASK_KERNEL")) {
+        if (!scanme::mask_kernel_supported(forced)) {
+            if (std::strcmp(forced, "generic") != 0 && std::strcmp(forced, "avx2") != 0 &&
+                std::strcmp(forced, "avx512") != 0) {
+                std::printf("unknown mask kernel '%s' (expected generic|avx2|avx512)\n", forced);
+                return 1;
+            }
+            std::printf("SKIP: mask kernel '%s' is not available in this build or on this CPU\n", forced);
+            return 0;
+        }
+    }
+
     std::vector<Case> cases = {
         {"v1",  "https://ex.io",                    0},
         {"v2",  "https://example.com",              1},
