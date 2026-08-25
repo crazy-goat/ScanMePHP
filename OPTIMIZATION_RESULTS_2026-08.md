@@ -124,11 +124,15 @@ rest is rendering and, for PNG, `gzcompress()`.
   `FfiEncoder`/`NativeEncoderExt` (77–86 µs) for large symbols.
 - SVG Rounded/Dot styles are still one element per module; the Square path
   trick does not apply to them.
-- The x86-64 AVX2/AVX-512 mask kernels were validated for correctness only
-  (Rosetta locally; AVX2 also on the CI runner). Their speed on real x86
-  hardware is unmeasured, and AVX-512 cannot run on CPUs that lack it — the
-  CI step reports such a kernel as `SKIP` rather than crashing. The numbers
-  above are the arm64 `generic` kernel.
+- All numbers above are the arm64 `generic` kernel. The x86-64 AVX2/AVX-512
+  kernels are correctness-validated in CI (640 matrices each, 0 mismatches);
+  their *speed* on x86 is only visible in the CI job log, where the
+  micro-benchmark now runs once per supported kernel. Do not compare those
+  timings across jobs: the hosted runner pool is mixed — in one run the PHP
+  8.2/8.3 jobs had AVX-512 and the 8.4 job did not (it logs `SKIP`) — so
+  cross-job differences are CPU differences, not kernel differences. For
+  scale: a v10 symbol took ~14 µs on an AVX-512 runner and ~19 µs on an
+  AVX2-only one, against 7 µs on the M-series dev machine.
 - `HtmlTableRenderer`/`HtmlDivRenderer` at v27+ are limited by output size
   (1–3 MB of markup), not by module processing.
 
