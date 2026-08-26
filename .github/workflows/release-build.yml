@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - 'v*'
+  # Dry run: builds every binary without publishing anything, so a toolchain
+  # break is found before a tag exists rather than after. Three releases in a
+  # row were tagged with no release behind them because this workflow is the
+  # only place anything but Ubuntu/PHP 8.2-8.4 gets built.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -97,9 +102,6 @@ jobs:
         include:
           - variant: glibc
             container: ubuntu:22.04
-            php-version: '8.1'
-          - variant: glibc
-            container: ubuntu:22.04
             php-version: '8.2'
           - variant: glibc
             container: ubuntu:22.04
@@ -107,9 +109,6 @@ jobs:
           - variant: glibc
             container: ubuntu:22.04
             php-version: '8.4'
-          - variant: musl
-            container: alpine:3.19
-            php-version: '8.1'
           - variant: musl
             container: alpine:3.19
             php-version: '8.2'
@@ -177,7 +176,7 @@ jobs:
     strategy:
       matrix:
         arch: [x86_64, arm64]
-        php-version: ['8.1', '8.2', '8.3', '8.4']
+        php-version: ['8.2', '8.3', '8.4']
     steps:
       - uses: actions/checkout@v4
 
@@ -207,6 +206,7 @@ jobs:
   release:
     name: Create Release
     needs: [build-ffi-linux, build-ffi-macos, build-ext-linux, build-ext-macos]
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
@@ -239,28 +239,24 @@ jobs:
 
             ## PHP Extension Binaries
 
-            Precompiled PHP extension binaries are attached to this release for PHP 8.1, 8.2, 8.3, and 8.4:
+            Precompiled PHP extension binaries are attached to this release for PHP 8.2, 8.3, and 8.4:
 
             **Linux (glibc)** - Ubuntu, Debian, etc.:
-            - `php-ext-linux-glibc-x86_64-php81.so` - PHP 8.1
             - `php-ext-linux-glibc-x86_64-php82.so` - PHP 8.2
             - `php-ext-linux-glibc-x86_64-php83.so` - PHP 8.3
             - `php-ext-linux-glibc-x86_64-php84.so` - PHP 8.4
 
             **Linux (musl)** - Alpine Linux:
-            - `php-ext-linux-musl-x86_64-php81.so` - PHP 8.1
             - `php-ext-linux-musl-x86_64-php82.so` - PHP 8.2
             - `php-ext-linux-musl-x86_64-php83.so` - PHP 8.3
             - `php-ext-linux-musl-x86_64-php84.so` - PHP 8.4
 
             **macOS Intel**:
-            - `php-ext-macos-x86_64-php81.so` - PHP 8.1
             - `php-ext-macos-x86_64-php82.so` - PHP 8.2
             - `php-ext-macos-x86_64-php83.so` - PHP 8.3
             - `php-ext-macos-x86_64-php84.so` - PHP 8.4
 
             **macOS Apple Silicon**:
-            - `php-ext-macos-arm64-php81.so` - PHP 8.1
             - `php-ext-macos-arm64-php82.so` - PHP 8.2
             - `php-ext-macos-arm64-php83.so` - PHP 8.3
             - `php-ext-macos-arm64-php84.so` - PHP 8.4
@@ -283,7 +279,6 @@ jobs:
 
             | PHP Version | Linux glibc | Linux musl | macOS x86_64 | macOS arm64 |
             |-------------|-------------|------------|--------------|-------------|
-            | 8.1 | ✅ | ✅ | ✅ | ✅ |
             | 8.2 | ✅ | ✅ | ✅ | ✅ |
             | 8.3 | ✅ | ✅ | ✅ | ✅ |
             | 8.4 | ✅ | ✅ | ✅ | ✅ |

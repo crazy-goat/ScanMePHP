@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-08-26
+
+v0.5.1 has no binaries behind it: every extension build failed, so `Create
+Release` — which needs them all — was skipped. PHP 8.1 was the cause, and since
+Packagist had already published v0.5.1 the tag could not be moved. Installing
+0.5.1 from Composer is fine and gets the pure-PHP encoder; 0.5.2 is the version
+with binaries.
+
+### Removed
+
+- Prebuilt extension binaries for PHP 8.1. `composer.json` has required `^8.2`
+  since 0.5.0 and CI only ever tested 8.2–8.4, so those four binaries were built
+  for a PHP the library refuses to install on. They also stopped building: 8.1's
+  `PHP_CXX_COMPILE_STDCXX` does not accept `20`, and the C++ core needs C++20.
+  Nothing in CI covered that, because the release matrix built a PHP version CI
+  did not test.
+
+### Fixed
+
+- `config.m4` tests for `-std=c++20` directly instead of going through
+  `PHP_CXX_COMPILE_STDCXX`, whose accepted arguments vary with the PHP being
+  built against.
+
 ## [0.5.1] - 2026-08-26
 
 Packagist serves v0.5.0 from `360ee07`, one commit before the tag: v0.5.0 was
@@ -386,7 +409,8 @@ callers observe:
 - Comprehensive test suite with PHPUnit
 - Full documentation and usage examples
 
-[Unreleased]: https://github.com/crazy-goat/ScanMePHP/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/crazy-goat/ScanMePHP/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/crazy-goat/ScanMePHP/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/crazy-goat/ScanMePHP/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.11...v0.5.0
 [0.4.11]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.10...v0.4.11

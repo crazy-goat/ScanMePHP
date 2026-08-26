@@ -34,7 +34,24 @@ PHP_ARG_WITH([scanmeqr-clib],
 if test "$PHP_SCANMEQR" != "no"; then
 
   PHP_REQUIRE_CXX()
-  PHP_CXX_COMPILE_STDCXX([20], [mandatory], [SCANMEQR_STDCXX])
+
+  dnl Tested directly rather than through PHP_CXX_COMPILE_STDCXX, whose accepted
+  dnl arguments depend on the PHP being built against: 8.1's copy knows nothing
+  dnl about 20 and fails at autoconf time with "invalid first argument `20'".
+  dnl The core needs C++20 (std::span, <bit>), so there is no lower fallback.
+  AC_MSG_CHECKING([whether $CXX accepts -std=c++20])
+  AC_LANG_PUSH([C++])
+  scanmeqr_saved_cxxflags="$CXXFLAGS"
+  CXXFLAGS="$scanmeqr_saved_cxxflags -std=c++20"
+  AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <span>]], [[]])],
+    [SCANMEQR_STDCXX="-std=c++20"], [SCANMEQR_STDCXX=""])
+  CXXFLAGS="$scanmeqr_saved_cxxflags"
+  AC_LANG_POP([C++])
+  if test -z "$SCANMEQR_STDCXX"; then
+    AC_MSG_RESULT([no])
+    AC_MSG_ERROR([the C++ core needs C++20; GCC 10+ or Clang 12+ is required.])
+  fi
+  AC_MSG_RESULT([yes])
 
   dnl Every kernel is built from the same header with a different
   dnl SCANME_KERNEL_NS and a different -m flag set; mask.cpp picks between them
