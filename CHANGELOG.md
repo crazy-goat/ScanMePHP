@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-26
+
+Packagist serves v0.5.0 from `360ee07`, one commit before the tag: v0.5.0 was
+re-tagged after its first release build failed on Windows, and Packagist holds
+published versions immutable. Nothing a caller executes differs between the two
+— the commit in between changed only comments, workflows, the README and the
+CMake flags — but the way to bring the two back in line is a new tag, which is
+this one.
+
 ### Added
 
 - The extension is published as a PIE package,
@@ -377,7 +386,8 @@ callers observe:
 - Comprehensive test suite with PHPUnit
 - Full documentation and usage examples
 
-[Unreleased]: https://github.com/crazy-goat/ScanMePHP/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/crazy-goat/ScanMePHP/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/crazy-goat/ScanMePHP/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.11...v0.5.0
 [0.4.11]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.10...v0.4.11
 [0.4.10]: https://github.com/crazy-goat/ScanMePHP/compare/v0.4.9...v0.4.10
