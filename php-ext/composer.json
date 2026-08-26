@@ -1,0 +1,27 @@
+{
+    "name": "crazy-goat/qrcode-ext",
+    "description": "Native PHP extension backing crazy-goat/scanmephp — the C++ QR encoder behind NativeEncoder",
+    "type": "php-ext",
+    "license": "MIT",
+    "homepage": "https://github.com/crazy-goat/ScanMePHP",
+    "keywords": ["qr", "qrcode", "barcode", "generator", "extension", "simd"],
+    "require": {
+        "php": ">=8.2"
+    },
+    "suggest": {
+        "crazy-goat/scanmephp": "The PHP API this extension accelerates; on its own the extension exposes only NativeEncoderCore, which builds a CrazyGoat\\ScanMePHP\\Matrix and therefore needs the library loaded"
+    },
+    "php-ext": {
+        "extension-name": "scanmeqr",
+        "os-families-exclude": [
+            "windows"
+        ],
+        "configure-options": [
+            {
+                "name": "with-scanmeqr-clib",
+                "description": "Directory holding the C++ core as src/ and include/. Only meaningful when building from a ScanMePHP checkout; this package carries the sources and ignores it.",
+                "needs-value": true
+            }
+        ]
+    }
+}

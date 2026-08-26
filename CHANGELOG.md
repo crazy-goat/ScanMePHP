@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The extension is published as a PIE package,
+  [crazy-goat/qrcode-ext](https://github.com/crazy-goat/qrcode-ext), so it can be
+  built from source on platforms no prebuilt binary covers:
+  `pie install crazy-goat/qrcode-ext`. The repository is generated from `php-ext/`
+  and `clib/` by `bin/build-ext-mirror.sh`; it exists separately only because PIE
+  requires the package name to differ from the library's and Packagist reads
+  `composer.json` at a repository root.
+- `php-ext/tests/*.phpt`, which exercise the extension without the Composer
+  package installed — the mirror ships them and `make test` runs them.
+
+### Changed
+
+- The extension compiles the C++ core into itself instead of linking a prebuilt
+  `libscanme_qr`, so `phpize && ./configure && make` is now the whole build and
+  CMake is needed only for the FFI library and the C++ tests. On x86-64 the two
+  SIMD kernels are still the only files compiled with `-mavx2` / `-mavx512f`;
+  applying those flags to the whole extension would let the compiler emit
+  instructions the runtime dispatcher never checked for.
+- `./configure --with-scanmeqr=DIR` is now `--with-scanmeqr-clib=DIR`, and it
+  defaults to `../clib` — the old name is taken by `--enable-scanmeqr`, which PIE
+  needs to default to on.
+- The extension reports its own version as the library's (`0.5.1`) instead of a
+  frozen `1.0.0`; `bin/build-ext-mirror.sh` refuses to publish a tag that does not
+  match it.
+- CI builds the extension and assembles the PIE package on every run. Both were
+  previously built only by `release-build.yml`, which fires on a tag — so a break
+  in either was discovered with the release already tagged.
+
+### Fixed
+
+- `encodeRaw()` no longer emits an "Undefined property" warning before throwing
+  when handed an object that is not an int-backed enum.
+
 ## [0.5.0] - 2026-08-26
 
 Performance release (see `OPTIMIZATION_RESULTS_2026-08.md` for before/after

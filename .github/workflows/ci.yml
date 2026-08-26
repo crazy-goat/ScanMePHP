@@ -112,5 +112,35 @@ jobs:
           SCANME_MASK_KERNEL=$k ./bench/scanme_bench 200 || exit 1
         done
 
+    # Built the way PIE builds it: no CMake, no libscanme_qr, the C++ core
+    # compiled straight into the extension. Until this ran here, php-ext was
+    # only ever built by release-build.yml, so a break in it surfaced with the
+    # release already tagged.
+    - name: Build PHP extension
+      working-directory: php-ext
+      run: |
+        phpize
+        ./configure
+        make -j$(nproc)
+
+    - name: Test PHP extension
+      working-directory: php-ext
+      run: make test TESTS=tests NO_INTERACTION=1
+
+    # The flattened layout the mirror ships takes the other branch of config.m4
+    # and resolves its includes differently, so building it is the only way to
+    # know the published package works.
+    - name: Assemble and build the PIE package
+      run: bash bin/build-ext-mirror.sh
+
     - name: Run test suite
       run: composer run-script test
+
+    # continue-on-error until #201 is fixed: the suite corrupts memory and
+    # segfaults on roughly half of all runs, on main as much as here, and this
+    # second pass doubles the exposure. The output still lands in the log, so a
+    # failure this step introduces is visible; it just does not block a PR on a
+    # crash that predates it.
+    - name: Run test suite with the extension loaded
+      continue-on-error: true
+      run: php -d extension=$GITHUB_WORKSPACE/php-ext/modules/scanmeqr.so vendor/bin/phpunit

@@ -14,6 +14,13 @@ extern "C" {
   #else
     #define SCANME_QR_API __declspec(dllimport)
   #endif
+#elif defined(SCANME_QR_NO_EXPORT)
+  /* The php extension compiles this core into itself rather than linking
+     libscanme_qr, and PHP dlopens extensions into the global namespace: leaving
+     the C API at default visibility would let it interpose on the identically
+     named entry points in libscanme_qr.so, so a process using both the
+     extension and FFI would run one library's code against the other's. */
+  #define SCANME_QR_API
 #else
   #define SCANME_QR_API __attribute__((visibility("default")))
 #endif
