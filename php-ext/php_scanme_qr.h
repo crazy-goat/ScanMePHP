@@ -22,7 +22,7 @@
 extern zend_module_entry scanme_qr_module_entry;
 #define phpext_scanme_qr_ptr &scanme_qr_module_entry
 
-#define PHP_SCANME_QR_VERSION "0.5.1"
+#define PHP_SCANME_QR_VERSION "0.5.2"
 
 #if defined(ZTS) && defined(COMPILE_DL_SCANME_QR)
 ZEND_TSRMLS_CACHE_EXTERN()
