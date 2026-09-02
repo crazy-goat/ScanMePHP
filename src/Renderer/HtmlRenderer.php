@@ -8,6 +8,7 @@ use CrazyGoat\ScanMePHP\ModuleShape;
 use CrazyGoat\ScanMePHP\Options\RenderOptionsInterface;
 use CrazyGoat\ScanMePHP\Renderer\Options\HtmlOptions;
 use CrazyGoat\ScanMePHP\Symbol;
+use CrazyGoat\ScanMePHP\TextRegion;
 
 /**
  * Renders a symbol as an HTML grid, one element per module.
@@ -40,6 +41,7 @@ final class HtmlRenderer implements RendererInterface
             text: true,
             color: true,
             nonUniformRows: true,
+            positionedText: true,
             optionsClass: HtmlOptions::class,
         );
     }
@@ -54,11 +56,17 @@ final class HtmlRenderer implements RendererInterface
         $foreground = $this->escapeColor($options->getEffectiveForegroundColor());
         $table = $this->mode === HtmlMode::Table;
 
-        $pixelWidth = $layout->totalWidth * $mod;
         $left = $this->spacer($layout->quietZone->left, $mod, $background);
         $right = $this->spacer($layout->quietZone->right, $mod, $background);
 
-        $markup = $table
+        $lines = $options->resolveTextLines($symbol);
+
+        $markup = '';
+        foreach ($lines['above'] as $band) {
+            $markup .= $this->band($band, $layout, $mod, $foreground, $background);
+        }
+
+        $markup .= $table
             ? '<table style="border-collapse:collapse;border-spacing:0;background:' . $background . '">'
             : '<div style="display:inline-block;background:' . $background . ';padding:0;line-height:0">';
 
@@ -86,10 +94,8 @@ final class HtmlRenderer implements RendererInterface
         $markup .= $this->quietRow($layout, $mod, $layout->quietZone->bottom, $background);
         $markup .= $table ? '</table>' : '</div>';
 
-        foreach ([$options->resolveText($symbol), $options->label] as $line) {
-            if ($line !== null && $line !== '') {
-                $markup .= $this->caption($line, $pixelWidth, $mod, $foreground, $background);
-            }
+        foreach ($lines['below'] as $band) {
+            $markup .= $this->band($band, $layout, $mod, $foreground, $background);
         }
 
         if (!$options->fullDocument) {
@@ -163,12 +169,38 @@ final class HtmlRenderer implements RendererInterface
             : '<div style="' . $style . '"></div>';
     }
 
-    private function caption(string $text, int $widthPx, int $mod, string $foreground, string $background): string
-    {
-        return '<div style="width:' . $widthPx . 'px;text-align:center;font-family:Arial,sans-serif;font-size:'
-            . (int) ($mod * 1.5) . 'px;padding:' . (int) ($mod * 0.5) . 'px 0;background:' . $background
-            . ';color:' . $foreground . '">'
-            . htmlspecialchars($text, ENT_QUOTES | ENT_HTML5, 'UTF-8') . '</div>';
+    /**
+     * One band of text: a block the width of the symbol, with each line
+     * absolutely placed over the columns it belongs to.
+     *
+     * A single full-width line — the ordinary case — lands centred on the
+     * symbol, which is what text-align:center did before. Positioning is what
+     * lets an add-on's digits sit over the add-on rather than over the middle
+     * of the label.
+     *
+     * @param list<TextRegion> $regions
+     */
+    private function band(
+        array $regions,
+        Layout $layout,
+        int $mod,
+        string $foreground,
+        string $background
+    ): string {
+        $height = $mod * 2;
+
+        $markup = '<div style="position:relative;width:' . $layout->totalWidth * $mod . 'px;height:'
+            . $height . 'px;background:' . $background . '">';
+
+        foreach ($regions as $region) {
+            $markup .= '<span style="position:absolute;left:' . $layout->columnOffset($region->centre()) * $mod
+                . 'px;transform:translateX(-50%);font-family:Arial,sans-serif;font-size:'
+                . (int) ($mod * 1.5) . 'px;line-height:' . $height . 'px;white-space:nowrap;color:'
+                . $foreground . '">'
+                . htmlspecialchars($region->text, ENT_QUOTES | ENT_HTML5, 'UTF-8') . '</span>';
+        }
+
+        return $markup . '</div>';
     }
 
     private function escapeColor(string $color): string

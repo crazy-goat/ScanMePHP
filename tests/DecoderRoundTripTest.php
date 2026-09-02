@@ -12,13 +12,12 @@ use CrazyGoat\ScanMePHP\Generator\Code39\Charset;
 use CrazyGoat\ScanMePHP\Generator\Code39\Code39Options;
 use CrazyGoat\ScanMePHP\Generator\Code93\Charset as Code93Charset;
 use CrazyGoat\ScanMePHP\Generator\DataMatrix\DataMatrixOptions;
-use CrazyGoat\ScanMePHP\Generator\Ean\Patterns;
+use CrazyGoat\ScanMePHP\Generator\Ean\Composite;
 use CrazyGoat\ScanMePHP\Generator\Itf\ItfOptions;
 use CrazyGoat\ScanMePHP\Generator\Itf\Patterns as ItfPatterns;
 use CrazyGoat\ScanMePHP\Generator\Itf14\Backend\PhpBackend as Itf14Backend;
 use CrazyGoat\ScanMePHP\Generator\Itf14\Itf14Options;
 use CrazyGoat\ScanMePHP\Generator\Qr\QrOptions;
-use CrazyGoat\ScanMePHP\QuietZone;
 use CrazyGoat\ScanMePHP\Renderer\Options\PngOptions;
 use CrazyGoat\ScanMePHP\Scanme;
 use CrazyGoat\ScanMePHP\Symbol;
@@ -69,8 +68,8 @@ class DecoderRoundTripTest extends TestCase
      * An add-on is not an article number — it is a fragment printed beside
      * one — and zxing-cpp has no reader for a lone EAN-2 or EAN-5, only an
      * option to pick one up next to a main symbol. So these two are gated by
-     * testAnAddOnScansBackBesideAnEan13() instead of by a case of their own,
-     * and listing them here is what keeps that substitution deliberate: a
+     * testAnAddOnScansBackBesideAMainSymbol() instead of by a case of their
+     * own, and listing them here is what keeps that substitution deliberate: a
      * symbology may be absent from FORMAT_NAMES only by appearing in this
      * list, never by being forgotten.
      *
@@ -843,77 +842,98 @@ class DecoderRoundTripTest extends TestCase
         );
     }
 
-    /**
-     * @return iterable<string, array{string, string, string}>
-     */
+    /** @return iterable<string, array{string, string, string, string}> */
     public static function addOnProvider(): iterable
     {
         // One EAN-2 per parity pattern the modulo-4 table can select, and one
         // EAN-5 per weighted checksum that the standard's table indexes.
         foreach (['00', '01', '02', '03'] as $addOn) {
-            yield "ean-2 {$addOn}" => [Symbology::Ean2->value, $addOn, '5901234123457'];
+            yield "ean-2 {$addOn}" => [Symbology::Ean2->value, $addOn, Symbology::Ean13->value, '5901234123457'];
         }
 
         foreach (['00000', '00001', '00002', '51234', '90000', '99999'] as $addOn) {
-            yield "ean-5 {$addOn}" => [Symbology::Ean5->value, $addOn, '9788375780642'];
+            yield "ean-5 {$addOn}" => [Symbology::Ean5->value, $addOn, Symbology::Ean13->value, '9788375780642'];
         }
+
+        // And each main symbology an add-on may be printed beside. UPC-A and
+        // UPC-E normalise to thirteen digits on the reading side, so the
+        // expected text is built from what the composite says, not from what
+        // was asked for.
+        yield 'upc-a with ean-2' => [Symbology::Ean2->value, '12', Symbology::UpcA->value, '036000291452'];
+        yield 'upc-a with ean-5' => [Symbology::Ean5->value, '51299', Symbology::UpcA->value, '036000291452'];
+        yield 'upc-e with ean-2' => [Symbology::Ean2->value, '12', Symbology::UpcE->value, '04252614'];
     }
 
     /**
-     * The real gate on the add-on bars: a scanner reads them beside an EAN-13.
+     * The real gate on the add-on bars: a scanner reads them beside a main
+     * symbol, in a composite the library now assembles.
      *
      * There is no way to ask zxing-cpp to read an add-on on its own, so the
-     * symbol handed to it here is a composite assembled in the test — our
-     * EAN-13 modules, the spec's separation, then our add-on modules — and the
-     * decoder is told to refuse anything without an add-on. That means a
-     * result at all proves the add-on decoded, and the text proves it decoded
-     * as the digits we asked for.
+     * symbol handed to it here is Composite::of()'s output and the decoder is
+     * told to refuse anything without an add-on. A result at all proves the
+     * add-on decoded, and the text proves it decoded as the digits asked for.
      *
-     * The composition lives in the test rather than in the library because
-     * placing an add-on properly needs a shorter bar height and its own
-     * human-readable line above the bars, which Symbol cannot yet express.
+     * This used to assemble the composite by hand, because Symbol could not
+     * express the placement. It can now, so the test exercises the same code
+     * a caller would.
      */
     #[DataProvider('addOnProvider')]
-    public function testAnAddOnScansBackBesideAnEan13(
+    public function testAnAddOnScansBackBesideAMainSymbol(
         string $symbology,
         string $addOn,
+        string $mainSymbology,
         string $main
     ): void {
         $this->requireDecoder();
 
         $scanme = Scanme::create();
-        $mainSymbol = $scanme->generate($main, Symbology::Ean13->value);
-        $addOnSymbol = $scanme->generate($addOn, $symbology);
-
-        // Row 0 of the EAN-13 is the bars; row 1 is only guard descenders,
-        // which a decoder does not need and a single-row composite cannot
-        // carry. The add-on has no descenders at all.
-        $bars = substr($mainSymbol->toModuleString(), 0, $mainSymbol->getWidth())
-            // ISO/IEC 15420 asks for at least seven modules between the two.
-            // The add-on's own guard opens with a space, so this is eight.
-            . str_repeat('0', 7)
-            . $addOnSymbol->toModuleString();
-
-        $composite = Symbol::linear(
-            modules: $bars,
-            quietZone: new QuietZone(left: 11, right: 5),
-            barHeight: Patterns::BAR_HEIGHT,
+        $composite = Composite::of(
+            $scanme->generate($main, $mainSymbology),
+            $scanme->generate($addOn, $symbology)
         );
 
         $png = $scanme->renderSymbol($composite, 'png', new PngOptions(moduleSize: 6));
-        $symbols = Decoder::decode($png, 'EAN13', 'require');
+        $symbols = Decoder::decode($png, 'EAN13,UPCA,UPCE,EAN8', 'require');
 
         self::assertCount(
             1,
             $symbols,
-            sprintf('no EAN-13 with an add-on was read for %s %s', $symbology, $addOn)
+            sprintf('no %s with an add-on was read for %s %s', $mainSymbology, $symbology, $addOn)
         );
         self::assertTrue($symbols[0]['valid']);
-        self::assertSame(
-            $main . $addOn,
+        // The add-on's digits are the tail of what a scanner reports. The
+        // head is the main article number in the form the decoder normalises
+        // to, which differs between UPC-A and EAN-13 and is pinned on its own
+        // in testTheMainHalfOfACompositeIsUnchangedByTheAddOn().
+        self::assertStringEndsWith(
+            $addOn,
             $symbols[0]['text'],
             sprintf('%s %s beside %s', $symbology, $addOn, $main)
         );
+    }
+
+    /**
+     * The main half of a composite reads back as the article number it always
+     * was — the add-on does not change what the main symbol says, only what is
+     * appended to it.
+     */
+    public function testTheMainHalfOfACompositeIsUnchangedByTheAddOn(): void
+    {
+        $this->requireDecoder();
+
+        $scanme = Scanme::create();
+        $main = $scanme->generate('9788375780642', Symbology::Ean13);
+        $composite = Composite::of($main, $scanme->generate('51299', Symbology::Ean5));
+
+        $alone = Decoder::decode($this->renderForScanning('9788375780642', Symbology::Ean13->value));
+        $withAddOn = Decoder::decode(
+            $scanme->renderSymbol($composite, 'png', new PngOptions(moduleSize: 6)),
+            'EAN13',
+            'require'
+        );
+
+        self::assertSame('9788375780642', $alone[0]['text']);
+        self::assertSame('978837578064251299', $withAddOn[0]['text']);
     }
 
     /**
