@@ -2,7 +2,7 @@
 
 **A universal barcode library for PHP — with optional native C++ acceleration for QR.**
 
-Seven symbologies, seven output formats, one call. No dependencies, no GD, no
+Nine symbologies, seven output formats, one call. No dependencies, no GD, no
 Imagick, no extensions required — then go **7–9× faster** on QR with a single
 C++ library if you generate them in volume.
 
@@ -19,7 +19,7 @@ echo $scanme->render('5901234123457', 'ean13', 'png');
 
 ## Why ScanMePHP?
 
-**📇 Seven symbologies, one API**
+**📇 Nine symbologies, one API**
 
 | Symbology | Accepts | Notes |
 | --- | --- | --- |
@@ -30,6 +30,8 @@ echo $scanme->render('5901234123457', 'ean13', 'png');
 | `ean8` | 7 digits, or 8 with a check digit | for packaging that cannot carry an EAN-13 |
 | `upc-a` | 11 digits, or 12 with a check digit | bit for bit an EAN-13 with a leading zero |
 | `upc-e` | 7 or 8 digits, or a UPC-A that compresses | zero-suppressed, parity-carried check digit |
+| `ean2` | exactly 2 digits | add-on: a periodical's issue number |
+| `ean5` | exactly 5 digits | add-on: a book's list price |
 
 Adding your own is a first-class path, not a fork: implement one interface,
 register it, and it resolves by name and alias like everything else.
@@ -238,7 +240,16 @@ $scanme->render('5901234123457', 'ean13', 'svg');
 $scanme->render('96385074', 'ean8', 'svg');
 $scanme->render('036000291452', 'upc-a', 'svg');
 $scanme->render('04252614', 'upc-e', 'svg');
+$scanme->render('52', 'ean2', 'svg');
+$scanme->render('51299', 'ean5', 'svg');
 ```
+
+`ean2` and `ean5` are the add-on symbols printed beside a main barcode — the
+issue number on a magazine, the price on a book. They carry no check digit, so
+the digit count is exact: a third digit is a different add-on, not a checksum,
+and is refused rather than trimmed. This release generates them as symbols in
+their own right; placing one alongside an EAN-13 in a single image is not yet
+done for you.
 
 Aliases resolve too — `ean`, `ean-13`, `upc`, `upca`, `dm`, `ecc200`, `qr`.
 

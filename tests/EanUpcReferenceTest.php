@@ -73,6 +73,11 @@ class EanUpcReferenceTest extends TestCase
                 // Twenty: every (number system, check digit) pair, which is
                 // every parity pattern UPC-E can draw.
                 Symbology::UpcE->value => 20,
+                // All hundred: an EAN-2 has only a hundred possible symbols,
+                // so the modulo-4 parity table is proved rather than sampled.
+                Symbology::Ean2->value => 100,
+                // Ten parity patterns, one symbol each, plus three edges.
+                Symbology::Ean5->value => 13,
             ],
             $covered
         );

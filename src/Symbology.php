@@ -25,6 +25,8 @@ enum Symbology: string
     case Ean8 = 'ean8';
     case UpcA = 'upc-a';
     case UpcE = 'upc-e';
+    case Ean2 = 'ean2';
+    case Ean5 = 'ean5';
     case DataMatrix = 'data-matrix';
 
     /** The name the registry resolves, for either accepted form. */
