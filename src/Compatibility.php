@@ -48,9 +48,25 @@ final class Compatibility
         }
 
         $wantsText = !$options instanceof AbstractRenderOptions || $options->showText;
-        if ($wantsText && $symbol->getText() !== null && !$capabilities->text) {
-            $reasons[] = 'the symbology supplies a human-readable interpretation that this renderer '
-                . 'cannot print (pass showText: false to render without it)';
+        $text = $symbol->getText();
+        if ($wantsText && $text !== null) {
+            if (!$capabilities->text) {
+                $reasons[] = 'the symbology supplies a human-readable interpretation that this renderer '
+                    . 'cannot print (pass showText: false to render without it)';
+            } else {
+                $unprintable = $capabilities->unprintableCharacters($text);
+                if ($unprintable !== []) {
+                    $reasons[] = sprintf(
+                        'its font has no glyph for %s in the human-readable interpretation '
+                        . '(pass showText: false to render without it)',
+                        implode(' ', array_map(
+                            static fn (string $character): string
+                                => sprintf('%s (0x%02X)', $character, \ord($character)),
+                            $unprintable
+                        ))
+                    );
+                }
+            }
         }
 
         if (!$symbol->hasUniformRows() && !$capabilities->nonUniformRows) {

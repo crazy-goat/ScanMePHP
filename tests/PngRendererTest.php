@@ -6,6 +6,8 @@ use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
 use CrazyGoat\ScanMePHP\Exception\RenderException;
 use CrazyGoat\ScanMePHP\Generator\Qr\QrGenerator;
 use CrazyGoat\ScanMePHP\Generator\Qr\QrOptions;
+use CrazyGoat\ScanMePHP\QuietZone;
+use CrazyGoat\ScanMePHP\Renderer\BitmapFont;
 use CrazyGoat\ScanMePHP\Renderer\Options\PngOptions;
 use CrazyGoat\ScanMePHP\Renderer\PngRenderer;
 use CrazyGoat\ScanMePHP\Symbol;
@@ -109,12 +111,124 @@ class PngRendererTest extends TestCase
         }
     }
 
-    public function testLabelIsRefusedRatherThanDroppedSilently(): void
+    public function testLabelIsDrawnFromTheBuiltInFont(): void
     {
+        $symbol = $this->symbol();
+        $bare = $this->render(new PngOptions(moduleSize: 2));
+        // Short enough to fit under the symbol; a wider one widens the canvas,
+        // which the next test covers.
+        $labelled = $this->render(new PngOptions(moduleSize: 2, label: '42'));
+
+        $bareHeader = unpack('Nwidth/Nheight', substr($bare, 16, 8));
+        $labelledHeader = unpack('Nwidth/Nheight', substr($labelled, 16, 8));
+
+        $this->assertGreaterThan(
+            BitmapFont::measure('42'),
+            $symbol->getWidth() + 8,
+            'the label must be narrower than the symbol for this case'
+        );
+        $this->assertSame($bareHeader['width'], $labelledHeader['width'], 'so the width is unchanged');
+        $this->assertSame(
+            $bareHeader['height'] + (BitmapFont::HEIGHT + 1) * 2,
+            $labelledHeader['height'],
+            'one text line plus its gap'
+        );
+        $this->assertNotFalse(imagecreatefromstring($labelled));
+        $this->assertSame($symbol->getWidth() + 8, $bareHeader['width'] / 2);
+    }
+
+    public function testALabelTheFontCannotDrawIsRefusedRatherThanLeftWithHoles(): void
+    {
+        // The symbol's own text is vetted by Compatibility before render() is
+        // reached, but a caption comes straight from the options.
         $this->expectException(RenderException::class);
-        $this->expectExceptionMessage('requires a font engine');
+        $this->expectExceptionMessage('no glyph for i (0x69)');
 
         $this->render(new PngOptions(label: 'Ticket 42'));
+    }
+
+    public function testAWideLabelWidensTheCanvasRatherThanBeingClipped(): void
+    {
+        $narrow = (new PngRenderer())->render(
+            Symbol::linear('10110010', QuietZone::none(), 20),
+            new PngOptions(moduleSize: 1, label: 'A VERY LONG CAPTION INDEED')
+        );
+        $header = unpack('Nwidth/Nheight', substr($narrow, 16, 8));
+
+        // Losing part of an article number would be worse than an image a few
+        // modules wider than the symbol.
+        $this->assertSame(BitmapFont::measure('A VERY LONG CAPTION INDEED'), $header['width']);
+        $this->assertGreaterThan(8, $header['width']);
+    }
+
+    public function testTheFontCoversDigitsUppercaseAndCommonPunctuation(): void
+    {
+        $characters = BitmapFont::characters();
+
+        foreach (array_merge(range('0', '9'), range('A', 'Z'), [' ', '-', '.', '/']) as $expected) {
+            $this->assertContains($expected, $characters, "font must have '$expected'");
+        }
+
+        // Lowercase is deliberately absent, and must be reported rather than
+        // silently drawn as a gap.
+        $this->assertSame(['a'], BitmapFont::missing('AaA'));
+        $this->assertFalse(BitmapFont::supports('abc'));
+        $this->assertTrue(BitmapFont::supports('5901234123457'));
+    }
+
+    public function testEveryGlyphIsTheDeclaredSizeAndOnlySpaceIsBlank(): void
+    {
+        foreach (BitmapFont::characters() as $character) {
+            $rows = BitmapFont::rasterise($character);
+
+            $this->assertCount(BitmapFont::HEIGHT, $rows, "glyph '$character' row count");
+            foreach ($rows as $row) {
+                $this->assertSame(BitmapFont::WIDTH, \strlen($row), "glyph '$character' row width");
+                $this->assertMatchesRegularExpression('/^[01]+$/', $row);
+            }
+
+            $dark = substr_count(implode('', $rows), '1');
+            if ($character === ' ') {
+                $this->assertSame(0, $dark, 'space must be blank');
+            } else {
+                $this->assertGreaterThan(0, $dark, "glyph '$character' must not be blank");
+            }
+        }
+    }
+
+    public function testGlyphsAreDistinctSoTextStaysReadable(): void
+    {
+        $seen = [];
+        foreach (BitmapFont::characters() as $character) {
+            if ($character === ' ') {
+                continue;
+            }
+            $bitmap = implode('/', BitmapFont::rasterise($character));
+            $this->assertArrayNotHasKey(
+                $bitmap,
+                $seen,
+                sprintf("'%s' and '%s' render identically", $character, $seen[$bitmap] ?? '')
+            );
+            $seen[$bitmap] = $character;
+        }
+    }
+
+    public function testMeasuredWidthMatchesTheRasterisedWidth(): void
+    {
+        foreach (['5901234123457', 'A', 'AB', 'ABC-123 4/5', ''] as $text) {
+            $expected = BitmapFont::measure($text);
+            $rows = $text === '' ? [''] : BitmapFont::rasterise($text);
+
+            $this->assertSame($expected, \strlen($rows[0]), "width of '$text'");
+        }
+    }
+
+    public function testRasterisingAnUnsupportedCharacterFailsLoudly(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('no glyph for');
+
+        BitmapFont::rasterise('lowercase');
     }
 
     public function testAbsentLabelIsFine(): void

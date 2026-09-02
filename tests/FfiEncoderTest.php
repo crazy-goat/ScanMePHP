@@ -143,6 +143,48 @@ class FfiEncoderTest extends TestCase
         $this->assertSame($m1->getData(), $m2->getData());
     }
 
+    /**
+     * Regression guard: FfiEncoder used to call FFI::cdef() once per instance.
+     *
+     * PHP frees a cdef's type table together with its FFI object, so a process
+     * that created and dropped many bindings to the same library could end up
+     * reading a cdata field through a freed type and die with SIGBUS
+     * (EXC_BAD_ACCESS in zend_ffi_cdata_read_field). It surfaced once the
+     * facade was built per test, but any worker generating symbols in a
+     * long-lived process would have hit it.
+     *
+     * Nothing can assert "did not crash" from inside the crashing process —
+     * completing this loop is the assertion. The identity check pins the cause.
+     */
+    public function testTheFfiBindingIsSharedSoDroppedInstancesCannotDangle(): void
+    {
+        $binding = static function (FfiEncoder $encoder): object {
+            $property = new \ReflectionProperty(FfiEncoder::class, 'ffi');
+
+            return $property->getValue($encoder);
+        };
+
+        $first = new FfiEncoder(self::$libraryPath);
+        $this->assertSame(
+            $binding($first),
+            $binding(new FfiEncoder(self::$libraryPath)),
+            'two encoders for one library must share the binding'
+        );
+
+        for ($i = 0; $i < 60; $i++) {
+            $encoder = new FfiEncoder(self::$libraryPath);
+            $matrix = $encoder->encode('https://example.com/' . $i, ErrorCorrectionLevel::Medium);
+            $this->assertSame(25, $matrix->getSize());
+            unset($encoder, $matrix);
+        }
+
+        // Still usable after 60 instances have come and gone.
+        $this->assertSame(
+            25,
+            $first->encode('https://example.com', ErrorCorrectionLevel::Medium)->getSize()
+        );
+    }
+
     public function testLibraryVersion(): void
     {
         $encoder = new FfiEncoder(self::$libraryPath);
