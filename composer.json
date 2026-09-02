@@ -60,7 +60,7 @@
         ],
         "lint:cs": "php-cs-fixer fix --dry-run --diff --allow-risky=yes",
         "lint:cs-fix": "php-cs-fixer fix --allow-risky=yes",
-        "lint:phpstan": "phpstan analyse",
+        "lint:phpstan": "phpstan analyse --memory-limit=512M",
         "lint:rector": "rector process --dry-run",
         "lint:rector-fix": "rector process",
         "lint:kb": "php bin/kb-lint.php",

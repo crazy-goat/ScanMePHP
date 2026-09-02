@@ -588,6 +588,9 @@ The round-trip suite skips when the decoder is absent, unless
 `SCANME_REQUIRE_DECODER=1` is set — which CI does, because a gate that silently
 disappears is worse than no gate at all.
 
+Both commands run on every pull request: `composer lint` on PHP 8.2 and the
+suite on 8.2, 8.3 and 8.4.
+
 ## Examples
 
 Seven runnable examples live in [`examples/`](examples/), each printing what it

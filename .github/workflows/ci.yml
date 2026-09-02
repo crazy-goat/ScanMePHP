@@ -50,6 +50,48 @@ jobs:
               core.info(`Could not verify permissions for ${actor}. Skipping CI.`);
             }
 
+  # php-cs-fixer, PHPStan, Rector and kb-lint. Until this job existed the lint
+  # gate was a local habit: `composer lint` was clean on every branch because
+  # somebody remembered to run it, and nothing would have said so if they had
+  # not.
+  #
+  # Deliberately not in the test matrix. It builds no C++, loads no extension
+  # and installs no decoder, so it finishes in a fraction of the time and
+  # reports a lint failure as a lint failure rather than as one red cell in a
+  # matrix that also compiles a native library. PHPStan is pinned to the whole
+  # supported PHP range in phpstan.neon, so running it once here answers for
+  # 8.2 through 8.4 rather than only for the interpreter installed below.
+  lint:
+    needs: check-permissions
+    if: needs.check-permissions.outputs.has-permissions == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        # The floor composer.json promises: where a call that only exists in a
+        # later version shows up as an error rather than as a passing build.
+        php-version: '8.2'
+        coverage: none
+        extensions: ffi, gd
+
+    - name: Cache Composer packages
+      uses: actions/cache@v3
+      with:
+        path: vendor
+        key: ${{ runner.os }}-php-lint-${{ hashFiles('**/composer.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-php-lint-
+
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-progress
+
+    - name: Run the lint gate
+      run: composer run-script lint
+
   test:
     needs: check-permissions
     if: needs.check-permissions.outputs.has-permissions == 'true'
