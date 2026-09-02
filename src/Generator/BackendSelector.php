@@ -105,6 +105,31 @@ final class BackendSelector
         return $this->backends;
     }
 
+    /**
+     * The highest-priority available backend satisfying an extra requirement.
+     *
+     * Symbologies use this when one call cannot go to the otherwise-fastest
+     * implementation: QR's native and FFI backends cannot honour a forced
+     * symbol version, so that one request falls back to a pure-PHP backend
+     * while everything else keeps the fast path.
+     *
+     * @param callable(BackendInterface): bool $predicate
+     */
+    public function bestMatching(callable $predicate): ?BackendInterface
+    {
+        $best = null;
+        foreach ($this->backends as $backend) {
+            if (!$predicate($backend) || !$backend->isAvailable()) {
+                continue;
+            }
+            if ($best === null || $backend->getPriority() > $best->getPriority()) {
+                $best = $backend;
+            }
+        }
+
+        return $best;
+    }
+
     /** @return list<BackendInterface> */
     public function available(): array
     {

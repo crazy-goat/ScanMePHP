@@ -12,6 +12,9 @@ use CrazyGoat\ScanMePHP\Encoding\ReedSolomon;
 use CrazyGoat\ScanMePHP\Exception\DataTooLargeException;
 use CrazyGoat\ScanMePHP\Exception\InvalidDataException;
 
+/**
+ * @internal Backend of the qrcode generator; use Scanme instead.
+ */
 class Encoder implements EncoderInterface
 {
     private readonly DataEncoder $dataEncoder;

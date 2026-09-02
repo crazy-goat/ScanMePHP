@@ -8,6 +8,9 @@ use CrazyGoat\ScanMePHP\Encoding\Mode;
 use CrazyGoat\ScanMePHP\Exception\InvalidDataException;
 use FFI;
 
+/**
+ * @internal Backend of the qrcode generator; use Scanme instead.
+ */
 class FfiEncoder implements EncoderInterface
 {
     private readonly FFI $ffi;

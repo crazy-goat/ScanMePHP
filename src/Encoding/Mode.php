@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP\Encoding;
 
+/**
+ * @internal Part of the QR encoding pipeline.
+ */
 enum Mode: int
 {
     case Numeric = 1;       // Mode indicator: 0001

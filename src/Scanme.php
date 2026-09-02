@@ -99,7 +99,7 @@ final class Scanme
             && !$options instanceof $capabilities->optionsClass
         ) {
             throw UnsupportedOptionsException::wrongType(
-                $renderer->getFormat() . ' renderer',
+                'the ' . $renderer->getFormat() . ' renderer',
                 $capabilities->optionsClass,
                 $options::class
             );
@@ -107,8 +107,10 @@ final class Scanme
 
         $reasons = Compatibility::check($symbol, $renderer);
         if ($reasons !== []) {
+            $symbology = $symbol->getMetadataValue('symbology');
+
             throw IncompatibleRendererException::because(
-                (string) ($symbol->getMetadataValue('symbology') ?? 'this'),
+                \is_string($symbology) ? $symbology : null,
                 $renderer->getFormat(),
                 $reasons
             );
@@ -159,7 +161,7 @@ final class Scanme
             && !$options instanceof $capabilities->optionsClass
         ) {
             throw UnsupportedOptionsException::wrongType(
-                $capabilities->title,
+                'the ' . $capabilities->title . ' generator',
                 $capabilities->optionsClass,
                 $options::class
             );

@@ -15,13 +15,16 @@ use Exception;
  */
 class IncompatibleRendererException extends Exception
 {
-    /** @param list<string> $reasons */
-    public static function because(string $symbology, string $format, array $reasons): self
+    /**
+     * @param string|null $symbology Name the symbol reports, when it reports one
+     * @param list<string> $reasons
+     */
+    public static function because(?string $symbology, string $format, array $reasons): self
     {
         return new self(sprintf(
-            'The "%s" renderer cannot render a %s symbol: %s',
+            'The "%s" renderer cannot render %s: %s',
             $format,
-            $symbology,
+            $symbology === null ? 'this symbol' : 'a ' . $symbology . ' symbol',
             implode('; ', $reasons)
         ));
     }

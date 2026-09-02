@@ -7,6 +7,9 @@ namespace CrazyGoat\ScanMePHP\Encoding;
 use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
 use CrazyGoat\ScanMePHP\Matrix;
 
+/**
+ * @internal Part of the QR encoding pipeline.
+ */
 class MatrixBuilder
 {
     public function build(

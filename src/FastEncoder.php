@@ -20,6 +20,9 @@ use CrazyGoat\ScanMePHP\Exception\InvalidDataException;
  *
  * Falls back to the standard Encoder for URLs exceeding v27 capacity.
  */
+/**
+ * @internal Backend of the qrcode generator; use Scanme instead.
+ */
 class FastEncoder implements EncoderInterface
 {
     public const MAX_VERSION = 27;

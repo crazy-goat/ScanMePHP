@@ -43,11 +43,12 @@ class UnsupportedOptionsException extends Exception
         ));
     }
 
-    public static function wrongType(string $symbology, string $expected, string $given): self
+    /** @param string $consumer What was asked to read them, e.g. 'the svg renderer' */
+    public static function wrongType(string $consumer, string $expected, string $given): self
     {
         return new self(sprintf(
-            'The %s generator expects options of type %s, got %s',
-            $symbology,
+            '%s expects options of type %s, got %s',
+            ucfirst($consumer),
             $expected,
             $given
         ));
