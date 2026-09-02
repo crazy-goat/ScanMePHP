@@ -2,288 +2,149 @@
 
 declare(strict_types=1);
 
+use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
 use CrazyGoat\ScanMePHP\Exception\RenderException;
-use CrazyGoat\ScanMePHP\QRCode;
-use CrazyGoat\ScanMePHP\QRCodeConfig;
+use CrazyGoat\ScanMePHP\Generator\Qr\QrGenerator;
+use CrazyGoat\ScanMePHP\Generator\Qr\QrOptions;
+use CrazyGoat\ScanMePHP\Renderer\Options\PngOptions;
 use CrazyGoat\ScanMePHP\Renderer\PngRenderer;
+use CrazyGoat\ScanMePHP\Symbol;
 use PHPUnit\Framework\TestCase;
 
+/**
+ * The PNG container itself. Pixel correctness is covered by RendererTest,
+ * which samples every module against the symbol; here the concern is that we
+ * emit a structurally valid file, since this encoder is hand-rolled rather
+ * than delegated to GD.
+ */
 class PngRendererTest extends TestCase
 {
-    private const PNG_SIGNATURE = "\x89PNG\r\n\x1a\n";
+    private const URL = 'https://example.com';
 
-    public function testOutputStartsWithPngSignature(): void
+    private function symbol(?QrOptions $options = null): Symbol
     {
-        $config = new QRCodeConfig(engine: new PngRenderer());
-        $qr = new QRCode('https://example.com', $config);
-        $output = $qr->render();
-
-        $this->assertStringStartsWith(self::PNG_SIGNATURE, $output);
+        return (new QrGenerator())->generate(self::URL, $options ?? new QrOptions());
     }
 
-    public function testGetContentTypeReturnsImagePng(): void
+    private function render(?PngOptions $options = null): string
     {
-        $renderer = new PngRenderer();
-        $this->assertEquals('image/png', $renderer->getContentType());
+        return (new PngRenderer())->render($this->symbol(), $options ?? new PngOptions());
     }
 
-    public function testDataUriStartsWithPngMimeType(): void
+    public function testStartsWithThePngSignature(): void
     {
-        $config = new QRCodeConfig(engine: new PngRenderer());
-        $qr = new QRCode('https://example.com', $config);
-        $dataUri = $qr->getDataUri();
-
-        $this->assertStringStartsWith('data:image/png;base64,', $dataUri);
+        $this->assertStringStartsWith("\x89PNG\r\n\x1a\n", $this->render());
     }
 
-    public function testOutputContainsRequiredPngChunks(): void
+    public function testCarriesTheRequiredChunksInOrder(): void
     {
-        $config = new QRCodeConfig(engine: new PngRenderer());
-        $qr = new QRCode('https://example.com', $config);
-        $output = $qr->render();
+        $png = $this->render();
 
-        $this->assertStringContainsString('IHDR', $output);
-        $this->assertStringContainsString('IDAT', $output);
-        $this->assertStringContainsString('IEND', $output);
+        $ihdr = strpos($png, 'IHDR');
+        $idat = strpos($png, 'IDAT');
+        $iend = strpos($png, 'IEND');
+
+        $this->assertNotFalse($ihdr);
+        $this->assertNotFalse($idat);
+        $this->assertNotFalse($iend);
+        $this->assertLessThan($idat, $ihdr, 'IHDR must precede IDAT');
+        $this->assertLessThan($iend, $idat, 'IDAT must precede IEND');
+        $this->assertSame(\strlen($png) - 12, $iend - 4, 'IEND must be the final chunk');
     }
 
-    public function testOutputIsValidPngDecodableByGd(): void
+    public function testIhdrDeclaresOneBitGrayscale(): void
     {
-        if (!extension_loaded('gd')) {
-            $this->markTestSkipped('GD extension not available for validation');
+        $png = $this->render();
+        $header = unpack('Nwidth/Nheight/CbitDepth/CcolorType/Ccompression/Cfilter/Cinterlace', substr($png, 16, 13));
+
+        $this->assertSame(1, $header['bitDepth']);
+        $this->assertSame(0, $header['colorType'], 'colour type 0 is grayscale');
+        $this->assertSame(0, $header['compression']);
+        $this->assertSame(0, $header['filter']);
+        $this->assertSame(0, $header['interlace']);
+    }
+
+    public function testEveryChunkCrcIsCorrect(): void
+    {
+        $png = $this->render();
+        $offset = 8;
+        $seen = [];
+
+        while ($offset < \strlen($png)) {
+            $length = (int) unpack('N', substr($png, $offset, 4))[1];
+            $type = substr($png, $offset + 4, 4);
+            $body = substr($png, $offset + 8, $length);
+            $crc = (int) unpack('N', substr($png, $offset + 8 + $length, 4))[1];
+
+            $this->assertSame(crc32($type . $body), $crc, "CRC of chunk $type");
+            $seen[] = $type;
+            $offset += 12 + $length;
         }
 
-        $config = new QRCodeConfig(engine: new PngRenderer());
-        $qr = new QRCode('https://example.com', $config);
-        $output = $qr->render();
-
-        $image = imagecreatefromstring($output);
-        $this->assertNotFalse($image, 'PNG output should be decodable by GD');
-
-        $width = imagesx($image);
-        $height = imagesy($image);
-        $this->assertGreaterThan(0, $width);
-        $this->assertEquals($width, $height, 'QR code image should be square');
-
-        imagedestroy($image);
+        $this->assertSame(['IHDR', 'IDAT', 'IEND'], $seen);
+        $this->assertSame(\strlen($png), $offset, 'no trailing bytes');
     }
 
-    public function testCustomModuleSize(): void
+    public function testGdDecodesItAtTheDeclaredSize(): void
     {
-        if (!extension_loaded('gd')) {
-            $this->markTestSkipped('GD extension not available for validation');
-        }
+        $symbol = $this->symbol();
+        $png = $this->render(new PngOptions(moduleSize: 4, quietZone: 3));
 
-        $config5 = new QRCodeConfig(engine: new PngRenderer(moduleSize: 5), margin: 0);
-        $qr5 = new QRCode('https://example.com', $config5);
-        $output5 = $qr5->render();
-
-        $config20 = new QRCodeConfig(engine: new PngRenderer(moduleSize: 20), margin: 0);
-        $qr20 = new QRCode('https://example.com', $config20);
-        $output20 = $qr20->render();
-
-        $image5 = imagecreatefromstring($output5);
-        $image20 = imagecreatefromstring($output20);
-
-        $this->assertNotFalse($image5);
-        $this->assertNotFalse($image20);
-
-        // moduleSize 20 should produce image 4x larger than moduleSize 5
-        $this->assertEquals(imagesx($image5) * 4, imagesx($image20));
-
-        imagedestroy($image5);
-        imagedestroy($image20);
+        $image = imagecreatefromstring($png);
+        $this->assertNotFalse($image);
+        $this->assertSame(($symbol->getWidth() + 6) * 4, imagesx($image));
+        $this->assertSame(imagesx($image), imagesy($image));
     }
 
-    public function testLabelThrowsRenderException(): void
+    public function testModuleSizeAndQuietZoneScaleTheImage(): void
+    {
+        $side = $this->symbol()->getWidth();
+
+        foreach ([[1, 0], [3, 2], [10, 4], [7, 11]] as [$moduleSize, $quietZone]) {
+            $png = $this->render(new PngOptions(moduleSize: $moduleSize, quietZone: $quietZone));
+            $header = unpack('Nwidth/Nheight', substr($png, 16, 8));
+
+            $this->assertSame(($side + 2 * $quietZone) * $moduleSize, $header['width']);
+            $this->assertSame($header['width'], $header['height']);
+        }
+    }
+
+    public function testLabelIsRefusedRatherThanDroppedSilently(): void
     {
         $this->expectException(RenderException::class);
-        $this->expectExceptionMessage('PNG renderer does not support labels');
+        $this->expectExceptionMessage('requires a font engine');
 
-        $config = new QRCodeConfig(
-            engine: new PngRenderer(),
-            label: 'Test Label',
-        );
-        $qr = new QRCode('https://example.com', $config);
-        $qr->render();
+        $this->render(new PngOptions(label: 'Ticket 42'));
     }
 
-    public function testEmptyLabelDoesNotThrow(): void
+    public function testAbsentLabelIsFine(): void
     {
-        $config = new QRCodeConfig(
-            engine: new PngRenderer(),
-            label: '',
-        );
-        $qr = new QRCode('https://example.com', $config);
-        $output = $qr->render();
-
-        $this->assertStringStartsWith(self::PNG_SIGNATURE, $output);
-    }
-
-    public function testNullLabelDoesNotThrow(): void
-    {
-        $config = new QRCodeConfig(
-            engine: new PngRenderer(),
-        );
-        $qr = new QRCode('https://example.com', $config);
-        $output = $qr->render();
-
-        $this->assertStringStartsWith(self::PNG_SIGNATURE, $output);
-    }
-
-    public function testSaveToFile(): void
-    {
-        $tempFile = sys_get_temp_dir() . '/test_qr_png_' . uniqid() . '.png';
-
-        try {
-            $config = new QRCodeConfig(engine: new PngRenderer());
-            $qr = new QRCode('https://example.com', $config);
-            $qr->saveToFile($tempFile);
-
-            $this->assertFileExists($tempFile);
-            $content = file_get_contents($tempFile);
-            $this->assertStringStartsWith(self::PNG_SIGNATURE, $content);
-        } finally {
-            if (file_exists($tempFile)) {
-                unlink($tempFile);
-            }
+        foreach ([null, ''] as $label) {
+            $this->assertStringStartsWith("\x89PNG", $this->render(new PngOptions(label: $label)));
         }
     }
 
-    public function testMarginAffectsImageSize(): void
+    public function testEveryErrorCorrectionLevelProducesADecodableImage(): void
     {
-        if (!extension_loaded('gd')) {
-            $this->markTestSkipped('GD extension not available for validation');
-        }
+        $previous = 0;
 
-        $config0 = new QRCodeConfig(engine: new PngRenderer(moduleSize: 1), margin: 0);
-        $qr0 = new QRCode('https://example.com', $config0);
+        foreach (ErrorCorrectionLevel::cases() as $level) {
+            $symbol = $this->symbol(new QrOptions($level));
+            $png = (new PngRenderer())->render($symbol, new PngOptions(moduleSize: 2));
 
-        $config4 = new QRCodeConfig(engine: new PngRenderer(moduleSize: 1), margin: 4);
-        $qr4 = new QRCode('https://example.com', $config4);
-
-        $image0 = imagecreatefromstring($qr0->render());
-        $image4 = imagecreatefromstring($qr4->render());
-
-        $this->assertNotFalse($image0);
-        $this->assertNotFalse($image4);
-
-        // margin=4 adds 8 modules (4 each side), so 8 pixels more at moduleSize=1
-        $this->assertEquals(imagesx($image0) + 8, imagesx($image4));
-
-        imagedestroy($image0);
-        imagedestroy($image4);
-    }
-
-    public function testDifferentErrorCorrectionLevels(): void
-    {
-        foreach (\CrazyGoat\ScanMePHP\ErrorCorrectionLevel::cases() as $level) {
-            $config = new QRCodeConfig(
-                engine: new PngRenderer(),
-                errorCorrectionLevel: $level,
-            );
-            $qr = new QRCode('https://example.com', $config);
-            $output = $qr->render();
-
-            $this->assertStringStartsWith(
-                self::PNG_SIGNATURE,
-                $output,
-                "PNG should be valid for error correction level {$level->name}"
-            );
+            $this->assertNotFalse(imagecreatefromstring($png));
+            $this->assertGreaterThanOrEqual($previous, $symbol->getWidth(), 'more recovery data never shrinks the symbol');
+            $previous = $symbol->getWidth();
         }
     }
 
-    public function testPixelColorsAreCorrect(): void
+    public function testUpFilterKeepsRepeatedRowsCheap(): void
     {
-        if (!extension_loaded('gd')) {
-            $this->markTestSkipped('GD extension not available for validation');
-        }
+        // Scanlines repeat moduleSize times, and the "Up" filter stores every
+        // repeat as zeros, so scaling up must cost far less than linearly.
+        $small = \strlen($this->render(new PngOptions(moduleSize: 2)));
+        $large = \strlen($this->render(new PngOptions(moduleSize: 16)));
 
-        // Use moduleSize=1, margin=0 so pixels map 1:1 to QR modules
-        $config = new QRCodeConfig(engine: new PngRenderer(moduleSize: 1), margin: 0);
-        $qr = new QRCode('https://example.com', $config);
-        $output = $qr->render();
-
-        $image = imagecreatefromstring($output);
-        $this->assertNotFalse($image);
-
-        $matrix = $qr->getMatrix();
-        $size = $matrix->getSize();
-
-        // GD decodes 1-bit grayscale PNG as a palette image (index 0/1),
-        // so we must use imagecolorsforindex() to get actual RGB values.
-        // Verify a sample of pixels match the QR matrix
-        for ($y = 0; $y < $size; $y += 5) {
-            for ($x = 0; $x < $size; $x += 5) {
-                $isDark = $matrix->get($x, $y);
-                $colorIndex = imagecolorat($image, $x, $y);
-                $color = imagecolorsforindex($image, $colorIndex);
-                $red = $color['red'];
-
-                if ($isDark) {
-                    $this->assertLessThanOrEqual(128, $red, "Pixel ($x,$y) should be dark");
-                } else {
-                    $this->assertGreaterThan(128, $red, "Pixel ($x,$y) should be light");
-                }
-            }
-        }
-
-        imagedestroy($image);
-    }
-
-    public function testInvertProducesDifferentOutputThanNormal(): void
-    {
-        $config = new QRCodeConfig(engine: new PngRenderer());
-        $qr = new QRCode('https://example.com', $config);
-        $normal = $qr->render();
-
-        $configInverted = new QRCodeConfig(engine: new PngRenderer(), invert: true);
-        $qrInverted = new QRCode('https://example.com', $configInverted);
-        $inverted = $qrInverted->render();
-
-        $this->assertNotEquals($normal, $inverted, 'Inverted PNG should differ from normal PNG');
-    }
-
-    public function testInvertSwapsPixelColors(): void
-    {
-        if (!extension_loaded('gd')) {
-            $this->markTestSkipped('GD extension not available for validation');
-        }
-
-        $config = new QRCodeConfig(engine: new PngRenderer(moduleSize: 1), margin: 0);
-        $qr = new QRCode('https://example.com', $config);
-
-        $configInverted = new QRCodeConfig(engine: new PngRenderer(moduleSize: 1), margin: 0, invert: true);
-        $qrInverted = new QRCode('https://example.com', $configInverted);
-
-        $image = imagecreatefromstring($qr->render());
-        $imageInverted = imagecreatefromstring($qrInverted->render());
-
-        $this->assertNotFalse($image);
-        $this->assertNotFalse($imageInverted);
-
-        $matrix = $qr->getMatrix();
-        $size = $matrix->getSize();
-
-        for ($y = 0; $y < $size; $y += 5) {
-            for ($x = 0; $x < $size; $x += 5) {
-                $isDark = $matrix->get($x, $y);
-
-                $colorNormal = imagecolorsforindex($image, imagecolorat($image, $x, $y));
-                $colorInverted = imagecolorsforindex($imageInverted, imagecolorat($imageInverted, $x, $y));
-
-                $isNormalDark = $colorNormal['red'] <= 128;
-                $isInvertedDark = $colorInverted['red'] <= 128;
-
-                $this->assertNotEquals(
-                    $isNormalDark,
-                    $isInvertedDark,
-                    "Pixel ($x,$y) should be inverted: normal=" . ($isNormalDark ? 'dark' : 'light') . ', inverted=' . ($isInvertedDark ? 'dark' : 'light')
-                );
-            }
-        }
-
-        imagedestroy($image);
-        imagedestroy($imageInverted);
+        $this->assertLessThan($small * 4, $large, '8× the pixels must not cost 4× the bytes');
     }
 }

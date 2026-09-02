@@ -41,7 +41,7 @@ final class BackendSelector
                 if (!$backend->isAvailable()) {
                     continue;
                 }
-                if ($best === null || $backend->getPriority() > $best->getPriority()) {
+                if (!$best instanceof \CrazyGoat\ScanMePHP\Generator\BackendInterface || $backend->getPriority() > $best->getPriority()) {
                     $best = $backend;
                 }
             }
@@ -56,7 +56,7 @@ final class BackendSelector
     public function require(string $symbology): BackendInterface
     {
         $backend = $this->select();
-        if ($backend === null) {
+        if (!$backend instanceof \CrazyGoat\ScanMePHP\Generator\BackendInterface) {
             throw NoBackendAvailableException::forSymbology($symbology, $this->names());
         }
 
@@ -122,7 +122,7 @@ final class BackendSelector
             if (!$predicate($backend) || !$backend->isAvailable()) {
                 continue;
             }
-            if ($best === null || $backend->getPriority() > $best->getPriority()) {
+            if (!$best instanceof \CrazyGoat\ScanMePHP\Generator\BackendInterface || $backend->getPriority() > $best->getPriority()) {
                 $best = $backend;
             }
         }

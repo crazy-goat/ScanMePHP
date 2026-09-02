@@ -102,7 +102,12 @@ final class HtmlRenderer implements RendererInterface
             . 'align-items:center;min-height:100vh;background:#f0f0f0">' . $markup . '</body></html>';
     }
 
-    /** @return array<string, string> Module byte => cell markup */
+    /**
+     * Module byte => cell markup. The keys are written as '0'/'1' but PHP
+     * stores numeric strings as integer keys; strtr() accepts either.
+     *
+     * @return array<int, string>
+     */
     private function cells(int $widthPx, int $heightPx, string $foreground, string $background): array
     {
         $head = $this->mode === HtmlMode::Table
