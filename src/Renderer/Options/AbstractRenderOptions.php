@@ -40,6 +40,7 @@ abstract class AbstractRenderOptions implements RenderOptionsInterface
         public readonly string $backgroundColor = '#FFFFFF',
         public readonly bool $invert = false,
         public readonly ?string $label = null,
+        public readonly bool $showText = true,
     ) {
         if ($this->moduleSize <= 0) {
             throw InvalidConfigurationException::invalidModuleSize($this->moduleSize);
@@ -96,6 +97,12 @@ abstract class AbstractRenderOptions implements RenderOptionsInterface
         }
 
         return $scaled;
+    }
+
+    /** The human-readable interpretation to print, if any and if wanted. */
+    final public function resolveText(Symbol $symbol): ?string
+    {
+        return $this->showText ? $symbol->getText() : null;
     }
 
     final public function getEffectiveForegroundColor(): string

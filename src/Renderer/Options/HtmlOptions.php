@@ -19,6 +19,7 @@ final class HtmlOptions extends AbstractRenderOptions
         string $backgroundColor = '#FFFFFF',
         bool $invert = false,
         ?string $label = null,
+        bool $showText = true,
         public readonly bool $fullDocument = false,
         public readonly string $title = 'Barcode',
     ) {
@@ -30,6 +31,7 @@ final class HtmlOptions extends AbstractRenderOptions
             $backgroundColor,
             $invert,
             $label,
+            $showText,
         );
     }
 }

@@ -21,6 +21,7 @@ final class PngOptions extends AbstractRenderOptions
         string $backgroundColor = '#FFFFFF',
         bool $invert = false,
         ?string $label = null,
+        bool $showText = true,
         public readonly int $compressionLevel = 1,
     ) {
         if ($this->compressionLevel < 0 || $this->compressionLevel > 9) {
@@ -37,6 +38,7 @@ final class PngOptions extends AbstractRenderOptions
             $backgroundColor,
             $invert,
             $label,
+            $showText,
         );
     }
 }
