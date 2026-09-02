@@ -48,13 +48,21 @@ final class Compatibility
         }
 
         $wantsText = !$options instanceof AbstractRenderOptions || $options->showText;
-        $text = $symbol->getText();
-        if ($wantsText && $text !== null) {
+        $regions = $symbol->getTextRegions();
+        if ($wantsText && $regions !== []) {
             if (!$capabilities->text) {
                 $reasons[] = 'the symbology supplies a human-readable interpretation that this renderer '
                     . 'cannot print (pass showText: false to render without it)';
             } else {
-                $unprintable = $capabilities->unprintableCharacters($text);
+                // Every line, not just the first: a composite's add-on digits
+                // are as much part of the label as the article number, and a
+                // renderer that cannot draw one of them cannot draw the symbol.
+                $unprintable = [];
+                foreach ($regions as $region) {
+                    $unprintable = [...$unprintable, ...$capabilities->unprintableCharacters($region->text)];
+                }
+
+                $unprintable = array_values(array_unique($unprintable));
                 if ($unprintable !== []) {
                     $reasons[] = sprintf(
                         'its font has no glyph for %s in the human-readable interpretation '
@@ -66,6 +74,12 @@ final class Compatibility
                         ))
                     );
                 }
+
+                if (!$capabilities->positionedText && self::needsPositioning($symbol, $regions)) {
+                    $reasons[] = 'the symbol places its human-readable text over particular columns — an '
+                        . 'add-on prints its digits above its own bars — and this renderer only centres '
+                        . 'one line under the whole symbol (pass showText: false to render without it)';
+                }
             }
         }
 
@@ -74,6 +88,23 @@ final class Compatibility
         }
 
         return $reasons;
+    }
+
+    /**
+     * Whether the text is anything other than one line centred underneath,
+     * which is all a renderer without positioning can draw.
+     *
+     * @param list<TextRegion> $regions
+     */
+    private static function needsPositioning(Symbol $symbol, array $regions): bool
+    {
+        if (\count($regions) !== 1) {
+            return true;
+        }
+
+        return $regions[0]->placement !== TextPlacement::Below
+            || $regions[0]->x !== 0
+            || $regions[0]->width !== $symbol->getWidth();
     }
 
     public static function isCompatible(

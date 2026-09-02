@@ -10,6 +10,7 @@ use CrazyGoat\ScanMePHP\Options\RenderOptionsInterface;
 use CrazyGoat\ScanMePHP\Region;
 use CrazyGoat\ScanMePHP\Renderer\Options\SvgOptions;
 use CrazyGoat\ScanMePHP\Symbol;
+use CrazyGoat\ScanMePHP\TextRegion;
 
 final class SvgRenderer implements RendererInterface
 {
@@ -36,6 +37,7 @@ final class SvgRenderer implements RendererInterface
             text: true,
             color: true,
             nonUniformRows: true,
+            positionedText: true,
             optionsClass: SvgOptions::class,
         );
     }
@@ -46,16 +48,16 @@ final class SvgRenderer implements RendererInterface
         $layout = Layout::of($symbol, $options);
         $mod = $options->moduleSize;
 
-        $texts = array_values(array_filter(
-            [$options->resolveText($symbol), $options->label],
-            static fn (?string $line): bool => $line !== null && $line !== ''
-        ));
+        $lines = $options->resolveTextLines($symbol);
 
         $canvasWidth = $layout->totalWidth * $mod;
-        // Text sits below the quiet zone rather than inside it: drawing it into
-        // the symbol's own box would either overlap the bottom quiet zone or
-        // fall outside the viewBox and silently not render at all.
-        $canvasHeight = ($layout->totalHeight + (\count($texts) * self::TEXT_ROWS)) * $mod;
+        // Text sits outside the quiet zone rather than inside it: drawing it
+        // into the symbol's own box would either overlap the quiet zone or fall
+        // outside the viewBox and silently not render at all. An add-on's
+        // digits therefore go above the whole symbol, not into the gap over its
+        // shorter bars — see Ean\Composite.
+        $aboveRows = \count($lines['above']) * self::TEXT_ROWS;
+        $canvasHeight = ($layout->totalHeight + $aboveRows + (\count($lines['below']) * self::TEXT_ROWS)) * $mod;
 
         $svg = sprintf(
             '<?xml version="1.0" encoding="UTF-8"?>' . "\n"
@@ -75,24 +77,46 @@ final class SvgRenderer implements RendererInterface
             $background
         );
 
-        $svg .= $this->modules($symbol, $layout, $options);
+        $svg .= $this->modules($symbol, $layout, $options, $aboveRows);
 
         $foreground = $this->escapeColor($options->getEffectiveForegroundColor());
-        $baseline = $layout->totalHeight;
-        foreach ($texts as $line) {
+
+        $baseline = 0;
+        foreach ($lines['above'] as $line) {
             $baseline += self::TEXT_ROWS;
-            $svg .= sprintf(
-                '  <text x="%d" y="%d" text-anchor="middle" font-family="Arial, sans-serif" '
-                . 'font-size="%.1f" fill="%s">%s</text>' . "\n",
-                intdiv($canvasWidth, 2),
-                ($baseline - 1) * $mod + intdiv($mod, 2),
-                $mod * self::TEXT_SCALE,
-                $foreground,
-                htmlspecialchars($line, ENT_XML1 | ENT_QUOTES, 'UTF-8')
-            );
+            $svg .= $this->line($line, $layout, $baseline, $mod, $foreground);
+        }
+
+        $baseline = $aboveRows + $layout->totalHeight;
+        foreach ($lines['below'] as $line) {
+            $baseline += self::TEXT_ROWS;
+            $svg .= $this->line($line, $layout, $baseline, $mod, $foreground);
         }
 
         return $svg . '</svg>';
+    }
+
+    /**
+     * One band of text: every region on it, each centred on its own columns.
+     *
+     * @param list<TextRegion> $regions
+     */
+    private function line(array $regions, Layout $layout, int $baseline, int $mod, string $colour): string
+    {
+        $svg = '';
+        foreach ($regions as $region) {
+            $svg .= sprintf(
+                '  <text x="%d" y="%d" text-anchor="middle" font-family="Arial, sans-serif" '
+                . 'font-size="%.1f" fill="%s">%s</text>' . "\n",
+                $layout->columnOffset($region->centre()) * $mod,
+                ($baseline - 1) * $mod + intdiv($mod, 2),
+                $mod * self::TEXT_SCALE,
+                $colour,
+                htmlspecialchars($region->text, ENT_XML1 | ENT_QUOTES, 'UTF-8')
+            );
+        }
+
+        return $svg;
     }
 
     /**
@@ -106,7 +130,7 @@ final class SvgRenderer implements RendererInterface
      * ~5× smaller than one <rect> per module; Rounded and Dot stay one element
      * per module.
      */
-    private function modules(Symbol $symbol, Layout $layout, SvgOptions $options): string
+    private function modules(Symbol $symbol, Layout $layout, SvgOptions $options, int $topOffset): string
     {
         $width = $layout->width;
         $stride = $width + 1;
@@ -128,7 +152,9 @@ final class SvgRenderer implements RendererInterface
         $y = [];
         $rowPixelHeight = [];
         foreach ($layout->rowOffsets as $index => $offset) {
-            $y[$index] = (string) ($offset * $mod);
+            // $topOffset is the band reserved for text drawn above the symbol,
+            // which the layout knows nothing about: it measures the symbol.
+            $y[$index] = (string) (($offset + $topOffset) * $mod);
             $rowPixelHeight[$index] = $layout->rowHeights[$index] * $mod;
         }
 

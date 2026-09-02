@@ -43,7 +43,14 @@ final class Symbol
      *        module tall, which is what every matrix symbology wants.
      * @param string|null $text Human-readable interpretation to print beneath
      *        the symbol (the digits under an EAN barcode). Null when the
-     *        symbology has no such convention.
+     *        symbology has no such convention. Shorthand for a single
+     *        full-width TextRegion below the bars; pass $textRegions instead
+     *        when the text is not one centred line, and not both.
+     * @param list<TextRegion> $textRegions Positioned human-readable text, for
+     *        a symbol whose text is not one line centred underneath — an
+     *        EAN-13 with an add-on has the main digits under the main bars and
+     *        the add-on's over its own. Regions at the same placement may not
+     *        overlap, because a renderer draws each placement as one line.
      * @param list<Region> $finderRegions Structurally special module rectangles
      *        a renderer may draw differently; empty for symbologies with none.
      * @param array<string, int|string|bool> $metadata Symbology-specific facts
@@ -58,6 +65,7 @@ final class Symbol
         private readonly QuietZone $quietZone = new QuietZone(),
         ?array $rowHeights = null,
         private readonly ?string $text = null,
+        private readonly array $textRegions = [],
         private readonly array $finderRegions = [],
         private readonly array $metadata = [],
     ) {
@@ -92,6 +100,37 @@ final class Symbol
         foreach ($rowHeights as $rowHeight) {
             if ($rowHeight < 1) {
                 throw new \InvalidArgumentException('Every row height must be at least 1 module');
+            }
+        }
+
+        if ($this->text !== null && $this->textRegions !== []) {
+            throw new \InvalidArgumentException(
+                'Pass either $text or $textRegions, not both: two sources for the same line '
+                . 'would leave which one a renderer draws up to the renderer'
+            );
+        }
+
+        foreach ($this->textRegions as $index => $region) {
+            if ($region->end() > $this->width) {
+                throw new \InvalidArgumentException(sprintf(
+                    'Text region "%s" spans columns %d to %d, past the symbol\'s width of %d',
+                    $region->text,
+                    $region->x,
+                    $region->end() - 1,
+                    $this->width
+                ));
+            }
+
+            foreach (\array_slice($this->textRegions, $index + 1) as $other) {
+                if ($region->overlaps($other)) {
+                    throw new \InvalidArgumentException(sprintf(
+                        'Text regions "%s" and "%s" are both %s the bars and overlap; '
+                        . 'a renderer draws one line per placement',
+                        $region->text,
+                        $other->text,
+                        $region->placement->value
+                    ));
+                }
             }
         }
 
@@ -209,9 +248,55 @@ final class Symbol
         return $this->getModuleHeight() === $this->height;
     }
 
+    /**
+     * The human-readable interpretation, as one string.
+     *
+     * For a symbol built from positioned regions this is every region's text
+     * left to right, which is what a caller asking "what does this say" wants
+     * — a composite answers '9788375780642 51299', main symbol first even
+     * though the add-on's digits sit higher on the label. Where the text goes
+     * is getTextRegions()' business.
+     */
     public function getText(): ?string
     {
-        return $this->text;
+        if ($this->text !== null) {
+            return $this->text;
+        }
+
+        if ($this->textRegions === []) {
+            return null;
+        }
+
+        $ordered = $this->textRegions;
+        usort(
+            $ordered,
+            static fn (TextRegion $a, TextRegion $b): int => [$a->x, $a->placement->value]
+                <=> [$b->x, $b->placement->value]
+        );
+
+        return implode(' ', array_map(
+            static fn (TextRegion $region): string => $region->text,
+            $ordered
+        ));
+    }
+
+    /**
+     * Every line of text to draw, with its placement and span.
+     *
+     * A symbol given a plain $text yields the one region that is equivalent to
+     * it, so a renderer has a single code path and the shorthand costs nothing.
+     *
+     * @return list<TextRegion>
+     */
+    public function getTextRegions(): array
+    {
+        if ($this->textRegions !== []) {
+            return $this->textRegions;
+        }
+
+        return $this->text === null || $this->text === ''
+            ? []
+            : [new TextRegion($this->text, TextPlacement::Below, 0, $this->width)];
     }
 
     /** @return list<Region> */
