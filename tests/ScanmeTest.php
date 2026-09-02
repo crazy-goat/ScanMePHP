@@ -174,10 +174,35 @@ class ScanmeTest extends TestCase
 
     public function testUnknownGeneratorListsWhatIsAvailable(): void
     {
-        $this->expectException(UnknownGeneratorException::class);
-        $this->expectExceptionMessage('Available: code128, data-matrix, ean13, qrcode');
+        // Derived from the registry rather than spelled out: this assertion
+        // broke on every symbology added to the library, which taught nobody
+        // anything. The list is pinned once, in
+        // testTheBuiltInSymbologiesAreExactlyThese.
+        $registered = array_keys($this->scanme->getRegistry()->describeGenerators());
+        sort($registered);
 
-        $this->scanme->render(self::URL, 'aztec', Format::Svg);
+        try {
+            $this->scanme->render(self::URL, 'no-such-symbology', Format::Svg);
+            $this->fail('expected an unknown generator name to be refused');
+        } catch (UnknownGeneratorException $e) {
+            $this->assertStringContainsString(
+                'Available: ' . implode(', ', $registered),
+                $e->getMessage()
+            );
+        }
+    }
+
+    /**
+     * The one place that spells out the built-in set. A symbology is not
+     * shipped until it is listed here and in DecoderRoundTripTest, so adding
+     * one is a two-line change rather than a hunt through the suite.
+     */
+    public function testTheBuiltInSymbologiesAreExactlyThese(): void
+    {
+        $registered = array_keys($this->scanme->getRegistry()->describeGenerators());
+        sort($registered);
+
+        $this->assertSame(['code128', 'data-matrix', 'ean13', 'qrcode'], $registered);
     }
 
     public function testUnknownFormatListsWhatIsAvailable(): void
@@ -232,12 +257,18 @@ class ScanmeTest extends TestCase
     public function testPngReportsTheCharactersItsBuiltInFontLacks(): void
     {
         // The PNG writer has no font engine, so it ships a bitmap font with a
-        // fixed repertoire — enough for article numbers and SKUs, but the
-        // limit is reported per character rather than as a blanket refusal.
+        // fixed repertoire: all of printable ASCII, which is exactly what
+        // Code 128 encodes. Past that the limit is reported per character
+        // rather than as a blanket refusal.
         $capabilities = $this->scanme->getRegistry()->getRenderer(Format::Png)->getCapabilities();
         $this->assertNotNull($capabilities->textCharacters);
         $this->assertSame([], $capabilities->unprintableCharacters('ABC-123 4/5'));
-        $this->assertSame(['a', 'b', 'c'], $capabilities->unprintableCharacters('abcABCa'), 'each reported once');
+        $this->assertSame([], $capabilities->unprintableCharacters('sku-abc {~42%}'));
+        $this->assertSame(
+            ["\xc5", "\xbc"],
+            $capabilities->unprintableCharacters('ważny ważny'),
+            'reported per byte, once each'
+        );
 
         // Renderers that delegate typography to a browser or terminal take any text.
         foreach ([Format::Svg, Format::HtmlDiv, Format::AsciiBlocks] as $format) {
@@ -247,13 +278,17 @@ class ScanmeTest extends TestCase
             );
         }
 
+        // Lowercase used to be refused here; that was the bug the decoder
+        // round-trip suite exposed, so it is now a positive assertion.
         $lowercase = Symbol::linear('101001110010101', new QuietZone(left: 11, right: 7), 60, 'sku-abc');
-
         $this->assertStringContainsString('sku-abc', $this->scanme->renderSymbol($lowercase, Format::Svg));
+        $this->assertNotSame('', $this->scanme->renderSymbol($lowercase, Format::Png));
+
+        $accented = Symbol::linear('101001110010101', new QuietZone(left: 11, right: 7), 60, 'ważny');
 
         $this->expectException(IncompatibleRendererException::class);
-        $this->expectExceptionMessage('no glyph for s (0x73)');
-        $this->scanme->renderSymbol($lowercase, Format::Png);
+        $this->expectExceptionMessage('0xC5');
+        $this->scanme->renderSymbol($accented, Format::Png);
     }
 
     public function testSuppressingTheTextSidestepsTheFontLimit(): void
@@ -409,18 +444,36 @@ class ScanmeTest extends TestCase
         $this->assertTrue($described['qrcode']->hasErrorCorrection());
         $this->assertSame(['qrcode', 'qr'], $described['qrcode']->allNames());
 
+        // Stated as membership rather than as a full list: what matters is
+        // which symbologies can carry a payload, not how many others exist.
+        $all = array_keys($registry->describeGenerators());
+
         // A URL is printable ASCII, so Code 128 can carry it too; the caller
         // picks, rather than having one guessed for them.
-        $this->assertSame(['qrcode', 'code128', 'data-matrix'], $registry->generatorsFor(self::URL));
+        $forUrl = $registry->generatorsFor(self::URL);
+        $this->assertContains('qrcode', $forUrl);
+        $this->assertContains('code128', $forUrl);
+        $this->assertNotContains('ean13', $forUrl, 'EAN-13 takes 12 or 13 digits');
+        $this->assertSame(
+            array_values(array_intersect($all, $forUrl)),
+            $forUrl,
+            'candidates must come back in registration order'
+        );
 
         // Data Matrix escapes bytes above 127, so it carries binary too.
-        $this->assertSame(['qrcode', 'data-matrix'], $registry->generatorsFor("binary\0payload"));
+        $forBinary = $registry->generatorsFor("binary\0payload");
+        $this->assertContains('qrcode', $forBinary);
+        $this->assertContains('data-matrix', $forBinary);
+        $this->assertNotContains('code128', $forBinary, 'Code 128 stops at printable ASCII');
 
         // Past QR's capacity only Code 128 remains, because ISO/IEC 15417 sets
         // no length limit — a symbol that long is useless in print, but
         // inventing a cap the standard does not have would be worse than
         // letting the caller see how wide it comes out.
-        $this->assertSame(['code128'], $registry->generatorsFor(str_repeat('x', 3000)));
+        $forHuge = $registry->generatorsFor(str_repeat('x', 3000));
+        $this->assertContains('code128', $forHuge);
+        $this->assertNotContains('qrcode', $forHuge, 'past QR version 40');
+        $this->assertNotContains('data-matrix', $forHuge, 'past the largest ECC200 symbol');
     }
 
     public function testACustomGeneratorCanReplaceABuiltInOne(): void
