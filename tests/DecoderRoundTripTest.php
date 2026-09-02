@@ -10,6 +10,7 @@ use CrazyGoat\ScanMePHP\Generator\Qr\QrOptions;
 use CrazyGoat\ScanMePHP\Symbology;
 use CrazyGoat\ScanMePHP\Tests\Support\Decoder;
 use CrazyGoat\ScanMePHP\Tests\Support\ScansBack;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -32,6 +33,9 @@ class DecoderRoundTripTest extends TestCase
         Symbology::QrCode->value => 'QR Code',
         Symbology::Code128->value => 'Code 128',
         Symbology::Ean13->value => 'EAN-13',
+        Symbology::Ean8->value => 'EAN-8',
+        Symbology::UpcA->value => 'UPC-A',
+        Symbology::UpcE->value => 'UPC-E',
         Symbology::DataMatrix->value => 'Data Matrix',
     ];
 
@@ -78,7 +82,7 @@ class DecoderRoundTripTest extends TestCase
         yield 'long text' => [str_repeat('The quick brown fox. ', 20), null];
     }
 
-    /** @dataProvider qrProvider */
+    #[DataProvider('qrProvider')]
     public function testQrCodeScansBack(string $data, ?string $expected): void
     {
         $this->assertScansBack($data, Symbology::QrCode->value, self::FORMAT_NAMES['qrcode'], $expected);
@@ -95,9 +99,8 @@ class DecoderRoundTripTest extends TestCase
     /**
      * A wrong ECC block table shows up as an unreadable symbol at exactly one
      * level, which a self-checking test would never notice.
-     *
-     * @dataProvider eclProvider
      */
+    #[DataProvider('eclProvider')]
     public function testEveryQrErrorCorrectionLevelScansBack(ErrorCorrectionLevel $level): void
     {
         $this->assertScansBack(
@@ -119,7 +122,7 @@ class DecoderRoundTripTest extends TestCase
         }
     }
 
-    /** @dataProvider qrVersionProvider */
+    #[DataProvider('qrVersionProvider')]
     public function testForcedQrVersionsScanBack(int $version): void
     {
         $this->assertScansBack(
@@ -159,7 +162,7 @@ class DecoderRoundTripTest extends TestCase
         return $out;
     }
 
-    /** @dataProvider code128Provider */
+    #[DataProvider('code128Provider')]
     public function testCode128ScansBack(string $data): void
     {
         $this->assertScansBack($data, Symbology::Code128->value, self::FORMAT_NAMES['code128']);
@@ -177,10 +180,95 @@ class DecoderRoundTripTest extends TestCase
         yield 'book isbn' => ['9788375780642', '9788375780642'];
     }
 
-    /** @dataProvider ean13Provider */
+    #[DataProvider('ean13Provider')]
     public function testEan13ScansBack(string $data, string $expected): void
     {
         $this->assertScansBack($data, Symbology::Ean13->value, self::FORMAT_NAMES['ean13'], $expected);
+    }
+
+    /** @return iterable<string, array{string, string}> */
+    public static function ean8Provider(): iterable
+    {
+        yield 'gtin-8' => ['96385074', '96385074'];
+        yield 'sequential' => ['12345670', '12345670'];
+        yield 'computed check digit' => ['9638507', '96385074'];
+        yield 'leading zeros' => ['00000000', '00000000'];
+        yield 'nines' => ['99999995', '99999995'];
+    }
+
+    #[DataProvider('ean8Provider')]
+    public function testEan8ScansBack(string $data, string $expected): void
+    {
+        $this->assertScansBack($data, Symbology::Ean8->value, self::FORMAT_NAMES['ean8'], $expected);
+    }
+
+    /** @return iterable<string, array{string, string}> */
+    public static function upcAProvider(): iterable
+    {
+        // The decoder reports the family in its normalised thirteen-digit
+        // form, so a UPC-A comes back with the leading zero an EAN-13 would
+        // have had. That is what a scanner at a till hands the software.
+        yield 'real upc' => ['036000291452', '0036000291452'];
+        yield 'sequential' => ['012345678905', '0012345678905'];
+        yield 'computed check digit' => ['03600029145', '0036000291452'];
+        yield 'leading zeros' => ['000000000000', '0000000000000'];
+        yield 'nines' => ['999999999993', '0999999999993'];
+    }
+
+    #[DataProvider('upcAProvider')]
+    public function testUpcAScansBack(string $data, string $expected): void
+    {
+        $this->assertScansBack(
+            $data,
+            Symbology::UpcA->value,
+            self::FORMAT_NAMES['upc-a'],
+            $expected,
+            null,
+            // UPC-A is bit for bit the EAN-13 of the same number with a
+            // leading zero, so with every format enabled the decoder reports
+            // the EAN-13 reading — see testUpcAIsTheSameBarsAsAnEan13.
+            'UPCA'
+        );
+    }
+
+    public function testUpcAIsTheSameBarsAsAnEan13(): void
+    {
+        $this->requireDecoder();
+
+        $symbols = Decoder::decode($this->renderForScanning('036000291452', Symbology::UpcA->value));
+
+        self::assertCount(1, $symbols);
+        self::assertSame('EAN-13', $symbols[0]['format']);
+        self::assertSame('0036000291452', $symbols[0]['text']);
+    }
+
+    /**
+     * One UPC-E per zero-suppression rule, given as the UPC-E itself and as
+     * the UPC-A it stands for. Both must produce the same symbol, and the
+     * decoder reports the expanded article number either way.
+     *
+     * @return iterable<string, array{string, string}>
+     */
+    public static function upcEProvider(): iterable
+    {
+        yield 'rule 0-2, last digit 1' => ['04252614', '0042100005264'];
+        yield 'rule 0-2, last digit 0' => ['01234000', '0012000003400'];
+        yield 'rule 3' => ['00030037', '0000300000007'];
+        yield 'rule 4' => ['00001144', '0000010000014'];
+        yield 'rule 5-9' => ['01234565', '0012345000065'];
+        yield 'all zeros' => ['00000000', '0000000000000'];
+        // The decoder normalises to thirteen digits by prefixing a zero to
+        // the twelve-digit UPC-A, so the number system digit ends up second.
+        yield 'number system 1' => ['10000007', '0100000000007'];
+        yield 'without check digit' => ['0425261', '0042100005264'];
+        yield 'from its upc-a' => ['042100005264', '0042100005264'];
+        yield 'from its upc-a, no check digit' => ['04210000526', '0042100005264'];
+    }
+
+    #[DataProvider('upcEProvider')]
+    public function testUpcEScansBack(string $data, string $expected): void
+    {
+        $this->assertScansBack($data, Symbology::UpcE->value, self::FORMAT_NAMES['upc-e'], $expected);
     }
 
     /** @return iterable<string, array{string, bool}> */
@@ -195,7 +283,7 @@ class DecoderRoundTripTest extends TestCase
         yield 'rectangular' => ['RECT-42', true];
     }
 
-    /** @dataProvider dataMatrixProvider */
+    #[DataProvider('dataMatrixProvider')]
     public function testDataMatrixScansBack(string $data, bool $rectangular): void
     {
         $this->assertScansBack(

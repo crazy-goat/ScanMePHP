@@ -22,6 +22,9 @@ enum Symbology: string
     case QrCode = 'qrcode';
     case Code128 = 'code128';
     case Ean13 = 'ean13';
+    case Ean8 = 'ean8';
+    case UpcA = 'upc-a';
+    case UpcE = 'upc-e';
     case DataMatrix = 'data-matrix';
 
     /** The name the registry resolves, for either accepted form. */

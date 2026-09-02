@@ -70,12 +70,14 @@
             ".decoders/bin/pip install --quiet --upgrade pip",
             ".decoders/bin/pip install --quiet zxing-cpp pillow"
         ],
-        "test:roundtrip": "php -d xdebug.mode=off vendor/bin/phpunit --no-coverage tests/DecoderRoundTripTest.php"
+        "test:roundtrip": "php -d xdebug.mode=off vendor/bin/phpunit --no-coverage tests/DecoderRoundTripTest.php",
+        "reference:ean-upc": ".decoders/bin/python tools/ean_upc_reference.py"
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
     "scripts-descriptions": {
         "decoders:install": "Install the zxing-cpp reference decoder used by the round-trip suite",
-        "test:roundtrip": "Verify every symbology against an independent barcode decoder"
+        "test:roundtrip": "Verify every symbology against an independent barcode decoder",
+        "reference:ean-upc": "Regenerate the EAN/UPC module patterns from zxing-cpp"
     }
 }
