@@ -56,11 +56,12 @@ trait ScansBack
         string $expectedFormat,
         ?string $expectedText = null,
         ?object $generatorOptions = null,
+        ?string $decoderFormats = null,
     ): void {
         $this->requireDecoder();
 
         $png = $this->renderForScanning($data, $generator, $generatorOptions);
-        $symbols = Decoder::decode($png);
+        $symbols = Decoder::decode($png, $decoderFormats);
 
         self::assertCount(
             1,

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace CrazyGoat\ScanMePHP\Generator\Ean13\Backend;
+namespace CrazyGoat\ScanMePHP\Generator\UpcA\Backend;
 
 use CrazyGoat\ScanMePHP\Dimension;
 use CrazyGoat\ScanMePHP\Generator\BackendInterface;
@@ -13,24 +13,18 @@ use CrazyGoat\ScanMePHP\Symbol;
 use CrazyGoat\ScanMePHP\Symbology;
 
 /**
- * EAN-13 in pure PHP.
+ * UPC-A in pure PHP, the North American retail code.
  *
- * The symbol is a fixed 95 modules: three guard patterns and twelve
- * seven-module digits. The thirteenth digit is not drawn at all — it is
- * encoded in which parity pattern each of the six left-hand digits uses, which
- * is what lets a scanner read the symbol in either direction.
+ * The same ninety-five modules as EAN-13, and deliberately so: a UPC-A symbol
+ * is bit for bit the EAN-13 of the same number with a leading zero, which is
+ * why scanners read one as the other. It is a separate symbology here rather
+ * than an alias because the twelve digits printed underneath, the symmetric
+ * quiet zone and what a caller gets back all differ, and because a decoder
+ * asked for UPC-A must report UPC-A.
  */
 final class PhpBackend implements BackendInterface
 {
-    /**
-     * Which parity each of the six left-hand digits uses, selected by the
-     * first digit. This is how the first digit is carried without a
-     * thirteenth printed character.
-     */
-    private const FIRST_DIGIT_PARITY = [
-        'LLLLLL', 'LLGLGG', 'LLGGLG', 'LLGGGL', 'LGLLGG',
-        'LGGLLG', 'LGGGLL', 'LGLGLG', 'LGLGGL', 'LGGLGL',
-    ];
+    public const WIDTH = 95;
 
     /** Module offsets of the three guards, which extend below the other bars. */
     private const GUARDS = [
@@ -38,8 +32,6 @@ final class PhpBackend implements BackendInterface
         [45, Patterns::CENTRE_GUARD],
         [92, Patterns::END_GUARD],
     ];
-
-    public const WIDTH = 95;
 
     public function getName(): string
     {
@@ -59,17 +51,15 @@ final class PhpBackend implements BackendInterface
     public function encode(string $data, ?GeneratorOptionsInterface $options = null): Symbol
     {
         $digits = self::normalise($data);
-        $parity = self::FIRST_DIGIT_PARITY[(int) $digits[0]];
 
+        // Every left-hand digit is odd-parity: the number system digit is
+        // printed, so there is nothing for the parity choice to carry.
         $modules = Patterns::START_GUARD;
         for ($position = 0; $position < 6; $position++) {
-            $digit = (int) $digits[$position + 1];
-            $modules .= $parity[$position] === 'L'
-                ? Patterns::LEFT_ODD[$digit]
-                : Patterns::LEFT_EVEN[$digit];
+            $modules .= Patterns::LEFT_ODD[(int) $digits[$position]];
         }
         $modules .= Patterns::CENTRE_GUARD;
-        for ($position = 7; $position < 13; $position++) {
+        for ($position = 6; $position < 12; $position++) {
             $modules .= Patterns::RIGHT[(int) $digits[$position]];
         }
         $modules .= Patterns::END_GUARD;
@@ -79,31 +69,26 @@ final class PhpBackend implements BackendInterface
             height: 2,
             modules: $modules . Patterns::descenderRow(self::WIDTH, self::GUARDS),
             dimension: Dimension::Linear,
-            // ISO/IEC 15420: 11 modules on the left, 7 on the right. The
-            // asymmetry is real and a caller must not have to know it.
-            quietZone: new QuietZone(left: 11, right: 7),
+            quietZone: new QuietZone(left: 9, right: 9),
             rowHeights: [Patterns::BAR_HEIGHT, Patterns::GUARD_DESCENT],
             text: $digits,
             metadata: [
-                'symbology' => Symbology::Ean13->value,
-                'checkDigit' => (int) $digits[12],
+                'symbology' => Symbology::UpcA->value,
+                'checkDigit' => (int) $digits[11],
+                // The number a scanner reports, and what to hand to an EAN-13
+                // renderer or a GTIN-13 database column.
+                'ean13' => '0' . $digits,
             ],
         );
     }
 
     /**
-     * The full 13 digits, computing the check digit when only 12 were given.
+     * The full 12 digits, computing the check digit when only 11 were given.
      *
      * @throws \InvalidArgumentException when the input is not encodable
      */
     public static function normalise(string $data): string
     {
-        return Patterns::normalise($data, 12, 'EAN-13');
-    }
-
-    /** Weighted modulo 10 over the first twelve digits, alternating 1 and 3. */
-    public static function checkDigit(string $twelve): int
-    {
-        return Patterns::checkDigit($twelve);
+        return Patterns::normalise($data, 11, 'UPC-A');
     }
 }
