@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use CrazyGoat\ScanMePHP\Exception\IncompatibleRendererException;
 use CrazyGoat\ScanMePHP\Exception\UnsupportedDataException;
 use CrazyGoat\ScanMePHP\Format;
 use CrazyGoat\ScanMePHP\Generator\Code128\Backend\PhpBackend as Code128Backend;
@@ -399,27 +398,32 @@ class LinearSymbologyTest extends TestCase
         $this->assertGreaterThan(100, $dark, 'the human-readable digits must be drawn');
     }
 
-    public function testCode128PngRefusesTextTheBuiltInFontLacks(): void
+    public function testEveryLegalCode128PayloadCanBeLabelledByThePngFont(): void
     {
         $scanme = Scanme::create();
+        $font = $scanme->getRegistry()->getRenderer(Format::Png)->getCapabilities();
 
-        // Uppercase SKUs are covered; lowercase is not, and says which character.
-        $this->assertNotSame('', $scanme->render('SKU-4471', Symbology::Code128, Format::Png));
-
-        try {
-            $scanme->render('sku-4471', Symbology::Code128, Format::Png);
-            $this->fail('expected the PNG renderer to refuse the lowercase text');
-        } catch (IncompatibleRendererException $e) {
-            $this->assertStringContainsString('no glyph for s (0x73)', $e->getMessage());
-            $this->assertStringContainsString('showText: false', $e->getMessage(), 'the message must say the way out');
+        // The two repertoires coincide by construction: Code 128 accepts
+        // 0x20-0x7E and the bitmap font draws exactly that range. So no
+        // payload this symbology can encode is refusable by the font — which
+        // was not true while the font stopped at QR's alphanumeric set.
+        for ($byte = 0x20; $byte <= 0x7e; $byte++) {
+            $this->assertSame(
+                [],
+                $font->unprintableCharacters(\chr($byte)),
+                sprintf('Code 128 can encode 0x%02X, so the font must draw it', $byte)
+            );
         }
 
-        $this->assertNotSame('', $scanme->render(
-            'sku-4471',
-            Symbology::Code128,
-            Format::Png,
-            new PngOptions(showText: false)
-        ));
+        $this->assertNotSame('', $scanme->render('SKU-4471', Symbology::Code128, Format::Png));
+        $this->assertNotSame('', $scanme->render('sku-4471', Symbology::Code128, Format::Png));
+        $this->assertNotSame('', $scanme->render('a{b}~c #42', Symbology::Code128, Format::Png));
+
+        // Non-ASCII is rejected by the generator, not the renderer: it is not
+        // a drawing limit but a symbology limit, and the message must say so.
+        $this->expectException(UnsupportedDataException::class);
+        $this->expectExceptionMessage('printable ASCII');
+        $scanme->render('ważny', Symbology::Code128, Format::Png);
     }
 
     public function testBarHeightIsPresentationAndDoesNotTouchTheModules(): void
@@ -477,10 +481,16 @@ class LinearSymbologyTest extends TestCase
     {
         $registry = Scanme::create()->getRegistry();
 
-        // An EAN-shaped payload is encodable by all three, and the caller gets
-        // to choose rather than have one guessed for them.
-        $this->assertSame(['qrcode', 'code128', 'ean13', 'data-matrix'], $registry->generatorsFor('5901234123457'));
-        $this->assertSame(['qrcode', 'code128', 'data-matrix'], $registry->generatorsFor('ABC-123'));
-        $this->assertSame(['qrcode', 'data-matrix'], $registry->generatorsFor("binary\0data"));
+        // An EAN-shaped payload is encodable by several, and the caller gets
+        // to choose rather than have one guessed for them. Asserted as
+        // membership: the full list belongs in one place, not in every test
+        // that happens to call generatorsFor().
+        $forGtin = $registry->generatorsFor('5901234123457');
+        $this->assertContains('ean13', $forGtin);
+        $this->assertContains('code128', $forGtin);
+        $this->assertContains('qrcode', $forGtin);
+
+        $this->assertNotContains('ean13', $registry->generatorsFor('ABC-123'), 'letters are not a GTIN');
+        $this->assertNotContains('code128', $registry->generatorsFor("binary\0data"), 'not printable ASCII');
     }
 }

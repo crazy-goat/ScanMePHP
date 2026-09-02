@@ -19,3 +19,6 @@ review-reports/
 
 # Assembled by bin/build-ext-mirror.sh; the published copy lives in crazy-goat/qrcode-ext.
 /build/
+
+# Barcode decoders for the round-trip suite; `composer decoders:install` rebuilds it.
+/.decoders/

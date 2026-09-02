@@ -140,11 +140,23 @@ class PngRendererTest extends TestCase
     public function testALabelTheFontCannotDrawIsRefusedRatherThanLeftWithHoles(): void
     {
         // The symbol's own text is vetted by Compatibility before render() is
-        // reached, but a caption comes straight from the options.
+        // reached, but a caption comes straight from the options. The font
+        // spans printable ASCII, so the realistic gap is now a UTF-8 caption:
+        // report the offending bytes rather than drawing holes.
         $this->expectException(RenderException::class);
-        $this->expectExceptionMessage('no glyph for i (0x69)');
+        $this->expectExceptionMessage('0xC5');
 
-        $this->render(new PngOptions(label: 'Ticket 42'));
+        $this->render(new PngOptions(label: 'Bilet ważny'));
+    }
+
+    public function testAnAsciiLabelIsDrawnWhateverPunctuationItCarries(): void
+    {
+        // Regression guard: this font first shipped with QR's 45-character
+        // alphanumeric set, which refused every lowercase and most punctuation
+        // — half of what Code 128 can legally encode.
+        $this->assertNotFalse(imagecreatefromstring(
+            $this->render(new PngOptions(label: 'order #42: {a-b_c} ~50%'))
+        ));
     }
 
     public function testAWideLabelWidensTheCanvasRatherThanBeingClipped(): void
@@ -161,19 +173,27 @@ class PngRendererTest extends TestCase
         $this->assertGreaterThan(8, $header['width']);
     }
 
-    public function testTheFontCoversDigitsUppercaseAndCommonPunctuation(): void
+    public function testTheFontCoversEveryPrintableAsciiCharacter(): void
     {
         $characters = BitmapFont::characters();
 
-        foreach (array_merge(range('0', '9'), range('A', 'Z'), [' ', '-', '.', '/']) as $expected) {
-            $this->assertContains($expected, $characters, "font must have '$expected'");
+        // Code 128 encodes 0x20-0x7E, so anything short of that makes PNG
+        // refuse payloads the symbology accepts.
+        for ($byte = 0x20; $byte <= 0x7e; $byte++) {
+            $this->assertContains(
+                \chr($byte),
+                $characters,
+                sprintf('font must have 0x%02X, which Code 128 can encode', $byte)
+            );
         }
 
-        // Lowercase is deliberately absent, and must be reported rather than
-        // silently drawn as a gap.
-        $this->assertSame(['a'], BitmapFont::missing('AaA'));
-        $this->assertFalse(BitmapFont::supports('abc'));
+        $this->assertTrue(BitmapFont::supports('order #42: {a-b_c} ~50%'));
         $this->assertTrue(BitmapFont::supports('5901234123457'));
+
+        // Beyond ASCII the font is honest about what it cannot draw.
+        $this->assertSame([], BitmapFont::missing('AaA'));
+        $this->assertFalse(BitmapFont::supports('ważny'));
+        $this->assertFalse(BitmapFont::supports("\x7f"));
     }
 
     public function testEveryGlyphIsTheDeclaredSizeAndOnlySpaceIsBlank(): void
@@ -228,7 +248,7 @@ class PngRendererTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('no glyph for');
 
-        BitmapFont::rasterise('lowercase');
+        BitmapFont::rasterise('ż');
     }
 
     public function testAbsentLabelIsFine(): void

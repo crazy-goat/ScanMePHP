@@ -2,9 +2,12 @@ name: CI
 
 on:
   push:
-    branches: [ main, master, develop ]
+    branches: [ main, master, develop, v2 ]
   pull_request:
-    branches: [ main, master, develop ]
+    # v2 is a long-lived rewrite branch that takes its own pull requests, and
+    # without it here none of them were ever built: eleven commits and four
+    # symbologies landed on v2 with no CI run at all.
+    branches: [ main, master, develop, v2 ]
   workflow_dispatch:
 
 jobs:
@@ -133,7 +136,17 @@ jobs:
     - name: Assemble and build the PIE package
       run: bash bin/build-ext-mirror.sh
 
+    # Every encoder in this repository is verified against tables transcribed
+    # from the same standards it implements — a closed loop that cannot catch a
+    # table misread in the same direction as its test. zxing-cpp is the outside
+    # opinion. SCANME_REQUIRE_DECODER turns its absence into a failure rather
+    # than a skip: a gate that silently disappears still reports green.
+    - name: Install the reference barcode decoder
+      run: composer run-script decoders:install
+
     - name: Run test suite
+      env:
+        SCANME_REQUIRE_DECODER: '1'
       run: composer run-script test
 
     # continue-on-error until #201 is fixed: the suite corrupts memory and
