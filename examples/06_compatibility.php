@@ -60,7 +60,7 @@ printf("\n  %s\n", implode('  ', array_map(
     $formats
 )));
 
-echo "\nEvery built-in pair fits today: all fourteen symbologies draw square\n";
+echo "\nEvery built-in pair fits today: all fifteen symbologies draw square\n";
 echo "modules, and every renderer can print text. That is a fact about this\n";
 echo "particular set, not a guarantee — MaxiCode's hexagons and any renderer\n";
 echo "you write yourself are exactly what the machinery below is for.\n";

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP;
 
+use CrazyGoat\ScanMePHP\Generator\Codabar\CodabarGenerator;
 use CrazyGoat\ScanMePHP\Generator\Code128\Code128Generator;
 use CrazyGoat\ScanMePHP\Generator\Code39\Code39Generator;
 use CrazyGoat\ScanMePHP\Generator\Code39\Mode as Code39Mode;
@@ -44,6 +45,7 @@ final class Defaults
             ->addGenerator(new Code39Generator(Code39Mode::Standard))
             ->addGenerator(new Code39Generator(Code39Mode::Extended))
             ->addGenerator(new Code93Generator())
+            ->addGenerator(new CodabarGenerator())
             ->addGenerator(new Ean13Generator())
             ->addGenerator(new Ean8Generator())
             ->addGenerator(new UpcAGenerator())

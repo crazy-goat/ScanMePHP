@@ -19,10 +19,10 @@ number is worse than a compile error.
 
 ### Added
 
-- **Thirteen new symbologies** alongside QR: Code 128, Code 39, Code 39
-  Extended, Code 93, EAN-13, EAN-8, UPC-A, UPC-E, the EAN-2 and EAN-5 add-ons,
-  ITF, ITF-14, and Data Matrix (ECC200), each with its own generator, aliases
-  and payload rules.
+- **Fourteen new symbologies** alongside QR: Code 128, Code 39, Code 39
+  Extended, Code 93, Codabar, EAN-13, EAN-8, UPC-A, UPC-E, the EAN-2 and EAN-5
+  add-ons, ITF, ITF-14, and Data Matrix (ECC200), each with its own generator,
+  aliases and payload rules.
 - **EAN-2 and EAN-5**, the add-on symbols printed beside a retail barcode: a
   periodical's issue number, a book's list price. They carry no check digit,
   so the digit count is exact — a third digit on an EAN-2 is a different
@@ -61,6 +61,18 @@ number is worse than a compile error.
   beam that clips a guard from reading a valid shorter number — with the 10X
   quiet zone *inside* it, which is where GS1 puts it and where a frame drawn
   flush against the bars would leave none at all.
+- **Codabar**, with the delimiters as options rather than payload. Most
+  implementations make the caller write them in — `'A4917234A'` rather than
+  `'4917234'` — which puts a detail of the symbology into the caller's data and
+  makes `canEncode()` refuse every number they hold. A scanner reports them
+  regardless, so `getText()` is what belongs under the bars and the
+  `characters` metadata is what a scan reads back. The four delimiters are also
+  spelled T, N, * and E, and `Delimiter::fromName()` accepts both spellings
+  because they are the same bars. **No check character**: the variants in
+  circulation disagree and nothing available here writes or validates any of
+  them, so shipping one would mean a barcode table with no independent check —
+  the one thing this library does not do. Compute the variant your system needs
+  and append it to the payload.
 - **`Scanme`**, the one entry point: `render()`, `generate()`, `renderSymbol()`,
   `dataUri()`, `toFile()`, `getContentType()`, `supports()`.
 - **`Registry` and `Defaults`** — an open registry of generators and renderers.
