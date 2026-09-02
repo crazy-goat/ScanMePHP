@@ -6,6 +6,9 @@ namespace CrazyGoat\ScanMePHP\Encoding;
 
 use CrazyGoat\ScanMePHP\Exception\InvalidDataException;
 
+/**
+ * @internal Part of the QR encoding pipeline.
+ */
 class DataEncoder
 {
     private const ALPHANUMERIC_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:';

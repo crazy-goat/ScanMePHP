@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP\Encoding;
 
+/**
+ * @internal Part of the QR encoding pipeline.
+ */
 class ReedSolomon
 {
     private int $primitive = 0x11d;

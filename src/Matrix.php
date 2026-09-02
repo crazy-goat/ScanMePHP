@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP;
 
+/**
+ * The QR encoders' mutable working grid.
+ *
+ * @internal Not part of the public API: its packed-row and reserved-bitmap
+ *           accessors exist for bitwise mask selection and are free to change
+ *           with any optimisation pass. Public code receives a Symbol.
+ */
 class Matrix
 {
     /**
