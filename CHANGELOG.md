@@ -19,9 +19,10 @@ number is worse than a compile error.
 
 ### Added
 
-- **Ten new symbologies** alongside QR: Code 128, Code 39, Code 39 Extended,
-  EAN-13, EAN-8, UPC-A, UPC-E, the EAN-2 and EAN-5 add-ons, and Data Matrix
-  (ECC200), each with its own generator, aliases and payload rules.
+- **Eleven new symbologies** alongside QR: Code 128, Code 39, Code 39
+  Extended, Code 93, EAN-13, EAN-8, UPC-A, UPC-E, the EAN-2 and EAN-5 add-ons,
+  and Data Matrix (ECC200), each with its own generator, aliases and payload
+  rules.
 - **EAN-2 and EAN-5**, the add-on symbols printed beside a retail barcode: a
   periodical's issue number, a book's list price. They carry no check digit,
   so the digit count is exact — a third digit on an EAN-2 is a different
@@ -39,6 +40,15 @@ number is worse than a compile error.
   other. `Code39Options` carries what is genuinely optional — the modulo-43
   check character (off by default: most readers do not verify it and report it
   as trailing data) and the wide-to-narrow ratio.
+- **Code 93**, one registry entry where Code 39 is two, and no options at
+  all. Both things a caller might expect to choose are the two Code 39 makes
+  optional: the check characters are mandatory here — a weighted pair, so
+  unlike Code 39's unweighted sum they see a transposition — and full ASCII is
+  part of the symbology rather than a second reading of it, because the shift
+  characters have bars of their own instead of borrowing a data character's.
+  So `A$B` has one reading here and two in Code 39. Nine modules a character
+  against thirteen makes it the denser of the pair: 81% of the Code 39 width at
+  eleven characters, 72% at fifty-nine.
 - **`Scanme`**, the one entry point: `render()`, `generate()`, `renderSymbol()`,
   `dataUri()`, `toFile()`, `getContentType()`, `supports()`.
 - **`Registry` and `Defaults`** — an open registry of generators and renderers.

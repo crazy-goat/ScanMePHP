@@ -2,7 +2,7 @@
 
 **A universal barcode library for PHP — with optional native C++ acceleration for QR.**
 
-Eleven symbologies, seven output formats, one call. No dependencies, no GD, no
+Twelve symbologies, seven output formats, one call. No dependencies, no GD, no
 Imagick, no extensions required — then go **7–9× faster** on QR with a single
 C++ library if you generate them in volume.
 
@@ -19,7 +19,7 @@ echo $scanme->render('5901234123457', 'ean13', 'png');
 
 ## Why ScanMePHP?
 
-**📇 Eleven symbologies, one API**
+**📇 Twelve symbologies, one API**
 
 | Symbology | Accepts | Notes |
 | --- | --- | --- |
@@ -28,6 +28,7 @@ echo $scanme->render('5901234123457', 'ean13', 'png');
 | `code128` | printable ASCII | automatic set switching |
 | `code39` | digits, A-Z, space and `-.$/+%` | optional modulo-43 check character |
 | `code39ext` | any ASCII | the same bars, lowercase and control bytes as escape pairs |
+| `code93` | any ASCII | denser than Code 39, two mandatory check characters |
 | `ean13` | 12 digits, or 13 with a check digit | the retail default |
 | `ean8` | 7 digits, or 8 with a check digit | for packaging that cannot carry an EAN-13 |
 | `upc-a` | 11 digits, or 12 with a check digit | bit for bit an EAN-13 with a leading zero |
@@ -240,6 +241,7 @@ $scanme->render('ScanMePHP', 'data-matrix', 'svg');
 $scanme->render('SHIPMENT-4471', 'code128', 'png');
 $scanme->render('PART-4471', 'code39', 'png');
 $scanme->render('Part 4471/a', 'code39ext', 'png');
+$scanme->render('Part 4471/a', 'code93', 'png');
 $scanme->render('5901234123457', 'ean13', 'svg');
 $scanme->render('96385074', 'ean8', 'svg');
 $scanme->render('036000291452', 'upc-a', 'svg');
@@ -274,8 +276,17 @@ $scanme->render('PART-4471', 'code39', 'png', new Code39Options(checkCharacter: 
 $scanme->render('PART-4471', 'code39', 'png', new Code39Options(wideRatio: 3));
 ```
 
+`code93` is the denser and better-checked answer to the same problem: nine
+modules a character against Code 39's thirteen, full ASCII built into the
+symbology rather than layered on top, and two mandatory check characters that
+are weighted, so they catch a transposition where Code 39's optional unweighted
+one does not. It takes no options because there is nothing left to choose. The
+one thing it costs is those two characters, so a very short Code 93 symbol saves
+less than the per-character figure suggests — 81% of the Code 39 width at eleven
+characters, 72% at fifty-nine.
+
 Aliases resolve too — `ean`, `ean-13`, `upc`, `upca`, `dm`, `ecc200`, `qr`,
-`c39`.
+`c39`, `c93`.
 
 If you have a payload and are not sure which symbologies accept it, ask rather
 than guess:
