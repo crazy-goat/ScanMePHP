@@ -175,8 +175,11 @@ final class Scanme
     /**
      * Whether this symbology and this output format can be combined at all.
      *
-     * Answers the question without encoding: the incompatibilities are
-     * properties of the symbology, not of a particular payload.
+     * Answers the question without encoding, which means it can only see
+     * symbology-level facts. A renderer that prints text from a fixed
+     * repertoire — the PNG writer and its bitmap font — may still refuse one
+     * particular payload whose human-readable text needs a glyph it lacks; use
+     * Compatibility::check() on a generated symbol for that.
      */
     public function supports(string|Symbology $generator, string|Format $format): bool
     {

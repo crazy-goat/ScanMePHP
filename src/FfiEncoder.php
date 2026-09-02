@@ -13,6 +13,20 @@ use FFI;
  */
 class FfiEncoder implements EncoderInterface
 {
+    /**
+     * One FFI binding per library path, for the life of the process.
+     *
+     * This is not only an optimisation — though it is one, since FFI::cdef()
+     * re-parses the header and dlopens the library every call. PHP frees a
+     * cdef's type table when its FFI object is collected, so a process that
+     * creates and drops many bindings to the same library can end up reading a
+     * cdata field through a freed type and die with SIGBUS. dlopen is
+     * process-global anyway, so there is nothing to gain from a second binding.
+     *
+     * @var array<string, FFI>
+     */
+    private static array $bindings = [];
+
     private readonly FFI $ffi;
 
     public function __construct(string $libraryPath)
@@ -27,8 +41,10 @@ class FfiEncoder implements EncoderInterface
             );
         }
 
-        $header = (string) file_get_contents(__DIR__ . '/ffi/scanme_qr.h');
-        $this->ffi = FFI::cdef($header, $libraryPath);
+        $this->ffi = self::$bindings[$libraryPath] ??= FFI::cdef(
+            (string) file_get_contents(__DIR__ . '/ffi/scanme_qr.h'),
+            $libraryPath
+        );
     }
 
     public function encode(

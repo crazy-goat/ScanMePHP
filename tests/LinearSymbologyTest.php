@@ -359,31 +359,67 @@ class LinearSymbologyTest extends TestCase
             $this->assertFalse($capabilities->hasErrorCorrection(), $capabilities->title . ' has no ECC');
 
             $this->assertStringContainsString($data, $scanme->render($data, $name, Format::Svg));
-            $this->assertFalse($scanme->supports($name, Format::Png), 'the fontless PNG writer cannot print it');
+            $this->assertTrue($scanme->supports($name, Format::Png), 'the built-in bitmap font covers it');
         }
     }
 
-    public function testTextlessRenderingUnlocksTheFontlessPngWriter(): void
+    public function testEan13PngCarriesItsDigitsBeneathTheBars(): void
     {
         $scanme = Scanme::create();
 
-        try {
-            $scanme->render('5901234123457', Symbology::Ean13, Format::Png);
-            $this->fail('expected the PNG renderer to refuse the human-readable text');
-        } catch (IncompatibleRendererException $e) {
-            $this->assertStringContainsString('showText: false', $e->getMessage(), 'the message must say the way out');
-        }
-
-        $png = $scanme->render(
+        $withText = $scanme->render('5901234123457', Symbology::Ean13, Format::Png, new PngOptions(moduleSize: 2));
+        $withoutText = $scanme->render(
             '5901234123457',
             Symbology::Ean13,
             Format::Png,
             new PngOptions(moduleSize: 2, showText: false)
         );
-        $header = unpack('Nwidth/Nheight', substr($png, 16, 8));
 
-        $this->assertSame((95 + 11 + 7) * 2, $header['width']);
-        $this->assertSame(69 * 2, $header['height'], 'bars plus the guard descent');
+        $bare = unpack('Nwidth/Nheight', substr($withoutText, 16, 8));
+        $printed = unpack('Nwidth/Nheight', substr($withText, 16, 8));
+
+        $this->assertSame((95 + 11 + 7) * 2, $bare['width']);
+        $this->assertSame(69 * 2, $bare['height'], 'bars plus the guard descent');
+
+        // Thirteen digits are narrower than the symbol, so only the height grows.
+        $this->assertSame($bare['width'], $printed['width']);
+        $this->assertSame($bare['height'] + (7 + 1) * 2, $printed['height'], 'one text line plus its gap');
+
+        // The digits must actually be dark pixels below the bars, not blank space.
+        $image = imagecreatefromstring($withText);
+        $this->assertNotFalse($image);
+        $dark = 0;
+        for ($y = $bare['height'] + 2; $y < $printed['height']; $y++) {
+            for ($x = 0; $x < $printed['width']; $x++) {
+                if (imagecolorsforindex($image, imagecolorat($image, $x, $y))['red'] < 128) {
+                    $dark++;
+                }
+            }
+        }
+        $this->assertGreaterThan(100, $dark, 'the human-readable digits must be drawn');
+    }
+
+    public function testCode128PngRefusesTextTheBuiltInFontLacks(): void
+    {
+        $scanme = Scanme::create();
+
+        // Uppercase SKUs are covered; lowercase is not, and says which character.
+        $this->assertNotSame('', $scanme->render('SKU-4471', Symbology::Code128, Format::Png));
+
+        try {
+            $scanme->render('sku-4471', Symbology::Code128, Format::Png);
+            $this->fail('expected the PNG renderer to refuse the lowercase text');
+        } catch (IncompatibleRendererException $e) {
+            $this->assertStringContainsString('no glyph for s (0x73)', $e->getMessage());
+            $this->assertStringContainsString('showText: false', $e->getMessage(), 'the message must say the way out');
+        }
+
+        $this->assertNotSame('', $scanme->render(
+            'sku-4471',
+            Symbology::Code128,
+            Format::Png,
+            new PngOptions(showText: false)
+        ));
     }
 
     public function testBarHeightIsPresentationAndDoesNotTouchTheModules(): void

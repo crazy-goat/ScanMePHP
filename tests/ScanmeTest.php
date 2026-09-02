@@ -211,23 +211,63 @@ class ScanmeTest extends TestCase
         $this->assertSame(17 + 15 * 4, $symbol->getWidth());
     }
 
-    public function testHumanReadableTextIsRefusedByTheFontlessPngRenderer(): void
+    public function testEveryRendererCanPrintHumanReadableText(): void
     {
-        // The shape EAN-13 and Code128 will produce: a linear symbol carrying
-        // the digits a renderer is required to print beneath the bars.
+        // The shape EAN-13 and Code128 produce: a linear symbol carrying the
+        // digits a renderer is required to print beneath the bars.
         $linear = Symbol::linear('101001110010101', new QuietZone(left: 11, right: 7), 60, '5901234123457');
 
-        $this->assertTrue($this->scanme->getRegistry()->getRenderer(Format::Svg)->getCapabilities()->text);
-        $this->assertFalse($this->scanme->getRegistry()->getRenderer(Format::Png)->getCapabilities()->text);
+        foreach ($this->scanme->getRegistry()->renderers() as $renderer) {
+            $this->assertTrue($renderer->getCapabilities()->text, $renderer->getFormat());
+            $this->assertNotSame(
+                '',
+                $this->scanme->renderSymbol($linear, $renderer->getFormat()),
+                $renderer->getFormat()
+            );
+        }
 
-        $this->assertStringContainsString(
-            '5901234123457',
-            $this->scanme->renderSymbol($linear, Format::Svg)
-        );
+        $this->assertStringContainsString('5901234123457', $this->scanme->renderSymbol($linear, Format::Svg));
+    }
+
+    public function testPngReportsTheCharactersItsBuiltInFontLacks(): void
+    {
+        // The PNG writer has no font engine, so it ships a bitmap font with a
+        // fixed repertoire — enough for article numbers and SKUs, but the
+        // limit is reported per character rather than as a blanket refusal.
+        $capabilities = $this->scanme->getRegistry()->getRenderer(Format::Png)->getCapabilities();
+        $this->assertNotNull($capabilities->textCharacters);
+        $this->assertSame([], $capabilities->unprintableCharacters('ABC-123 4/5'));
+        $this->assertSame(['a', 'b', 'c'], $capabilities->unprintableCharacters('abcABCa'), 'each reported once');
+
+        // Renderers that delegate typography to a browser or terminal take any text.
+        foreach ([Format::Svg, Format::HtmlDiv, Format::AsciiBlocks] as $format) {
+            $this->assertNull(
+                $this->scanme->getRegistry()->getRenderer($format)->getCapabilities()->textCharacters,
+                $format->value
+            );
+        }
+
+        $lowercase = Symbol::linear('101001110010101', new QuietZone(left: 11, right: 7), 60, 'sku-abc');
+
+        $this->assertStringContainsString('sku-abc', $this->scanme->renderSymbol($lowercase, Format::Svg));
 
         $this->expectException(IncompatibleRendererException::class);
-        $this->expectExceptionMessage('human-readable interpretation');
-        $this->scanme->renderSymbol($linear, Format::Png);
+        $this->expectExceptionMessage('no glyph for s (0x73)');
+        $this->scanme->renderSymbol($lowercase, Format::Png);
+    }
+
+    public function testSuppressingTheTextSidestepsTheFontLimit(): void
+    {
+        $lowercase = Symbol::linear('101001110010101', new QuietZone(left: 11, right: 7), 60, 'sku-abc');
+
+        $png = $this->scanme->renderSymbol($lowercase, Format::Png, new PngOptions(
+            moduleSize: 2,
+            showText: false,
+        ));
+        $header = unpack('Nwidth/Nheight', substr($png, 16, 8));
+
+        $this->assertSame((15 + 18) * 2, $header['width']);
+        $this->assertSame(60 * 2, $header['height'], 'no text, so no room reserved for it');
     }
 
     public function testHexagonalModulesAreRefusedByEverySquareRenderer(): void
