@@ -3,6 +3,13 @@ includes:
 
 parameters:
     level: 4
+    # Analyse the whole range composer.json promises (^8.2), not whichever
+    # interpreter happens to run the tool. Without this a maintainer on 8.5
+    # and CI on 8.2 get different answers from the same command, and the gate
+    # is only worth having if it says one thing.
+    phpVersion:
+        min: 80200
+        max: 80400
     paths:
         - src/
         - tests/
