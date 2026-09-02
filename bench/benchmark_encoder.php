@@ -5,9 +5,9 @@ declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use CrazyGoat\ScanMePHP\Encoder;
+use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
 use CrazyGoat\ScanMePHP\FastEncoder;
 use CrazyGoat\ScanMePHP\FfiEncoder;
-use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
 
 $libraryPath = FfiEncoder::localBuildPath();
 
@@ -24,10 +24,14 @@ $testCases = [
 
 function bench(callable $fn, int $n): float
 {
-    for ($i = 0; $i < min(3, $n); $i++) $fn();
+    for ($i = 0; $i < min(3, $n); $i++) {
+        $fn();
+    }
     gc_collect_cycles();
     $t = hrtime(true);
-    for ($i = 0; $i < $n; $i++) $fn();
+    for ($i = 0; $i < $n; $i++) {
+        $fn();
+    }
     return (hrtime(true) - $t) / 1e6 / $n;
 }
 
@@ -35,8 +39,8 @@ $fastAvailable = PHP_INT_SIZE >= 8;
 $ffiAvailable  = FfiEncoder::isAvailable($libraryPath);
 
 echo "Encoder benchmark — {$iterations} iterations per case\n";
-echo "FastEncoder: " . ($fastAvailable ? "available (64-bit PHP)" : "NOT available (requires 64-bit PHP)") . "\n";
-echo "FfiEncoder:  " . ($ffiAvailable  ? "available ({$libraryPath})" : "NOT available (build clib first)") . "\n";
+echo 'FastEncoder: ' . ($fastAvailable ? 'available (64-bit PHP)' : 'NOT available (requires 64-bit PHP)') . "\n";
+echo 'FfiEncoder:  ' . ($ffiAvailable ? "available ({$libraryPath})" : 'NOT available (build clib first)') . "\n";
 echo "\n";
 
 $fmt = "%-22s  %10s  %10s  %10s  %8s  %8s\n";
@@ -45,23 +49,24 @@ echo str_repeat('-', 78) . "\n";
 
 $phpEncoder  = new Encoder();
 $fastEncoder = $fastAvailable ? new FastEncoder() : null;
-$ffiEncoder  = $ffiAvailable  ? new FfiEncoder($libraryPath) : null;
+$ffiEncoder  = $ffiAvailable ? new FfiEncoder($libraryPath) : null;
 
 foreach ($testCases as $tc) {
     $data = $tc['data'];
     $ecl  = $tc['ecl'];
 
-    $phpMs  = bench(fn() => $phpEncoder->encode($data, $ecl), $iterations);
-    $fastMs = $fastEncoder !== null ? bench(fn() => $fastEncoder->encode($data, $ecl), $iterations) : null;
-    $ffiMs  = $ffiEncoder  !== null ? bench(fn() => $ffiEncoder->encode($data, $ecl), $iterations)  : null;
+    $phpMs  = bench(fn () => $phpEncoder->encode($data, $ecl), $iterations);
+    $fastMs = $fastEncoder !== null ? bench(fn () => $fastEncoder->encode($data, $ecl), $iterations) : null;
+    $ffiMs  = $ffiEncoder  !== null ? bench(fn () => $ffiEncoder->encode($data, $ecl), $iterations) : null;
 
-    printf($fmt,
+    printf(
+        $fmt,
         $tc['label'],
         number_format($phpMs, 3),
         $fastMs !== null ? number_format($fastMs, 3) : 'N/A',
-        $ffiMs  !== null ? number_format($ffiMs,  3) : 'N/A',
+        $ffiMs  !== null ? number_format($ffiMs, 3) : 'N/A',
         $fastMs !== null ? sprintf('%.2fx', $phpMs / $fastMs) : 'N/A',
-        $ffiMs  !== null ? sprintf('%.2fx', $phpMs / $ffiMs)  : 'N/A',
+        $ffiMs  !== null ? sprintf('%.2fx', $phpMs / $ffiMs) : 'N/A',
     );
 }
 

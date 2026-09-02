@@ -24,7 +24,7 @@ class IncompatibleRendererException extends Exception
         return new self(sprintf(
             'The "%s" renderer cannot render %s: %s',
             $format,
-            $symbology === null ? 'this symbol' : 'a ' . $symbology . ' symbol',
+            $symbology === null ? 'this symbol' : 'this ' . $symbology . ' symbol',
             implode('; ', $reasons)
         ));
     }
