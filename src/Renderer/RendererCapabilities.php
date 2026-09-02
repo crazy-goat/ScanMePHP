@@ -25,12 +25,17 @@ final class RendererCapabilities
      * @param bool $color Honours foreground/background colours
      * @param bool $nonUniformRows Can draw rows of differing heights, as the
      *        four-state postal symbologies require
+     * @param class-string|null $optionsClass The RenderOptionsInterface
+     *        implementation this renderer reads. Passing a different bag is an
+     *        error rather than a silent partial application, since the options
+     *        that do not fit are exactly the ones the caller cared about.
      */
     public function __construct(
         public readonly array $moduleShapes = [ModuleShape::Square],
         public readonly bool $text = true,
         public readonly bool $color = true,
         public readonly bool $nonUniformRows = true,
+        public readonly ?string $optionsClass = null,
     ) {
         if ($this->moduleShapes === []) {
             throw new \InvalidArgumentException('A renderer must support at least one module shape');
