@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace CrazyGoat\ScanMePHP;
 
 use CrazyGoat\ScanMePHP\Generator\Code128\Code128Generator;
+use CrazyGoat\ScanMePHP\Generator\Code39\Code39Generator;
+use CrazyGoat\ScanMePHP\Generator\Code39\Mode as Code39Mode;
 use CrazyGoat\ScanMePHP\Generator\DataMatrix\DataMatrixGenerator;
 use CrazyGoat\ScanMePHP\Generator\Ean13\Ean13Generator;
 use CrazyGoat\ScanMePHP\Generator\Ean2\Ean2Generator;
@@ -34,6 +36,10 @@ final class Defaults
         return (new Registry())
             ->addGenerator(new QrGenerator())
             ->addGenerator(new Code128Generator())
+            // One class, two registry entries: the reading mode is part of
+            // the symbology rather than an option. See Code39\Mode.
+            ->addGenerator(new Code39Generator(Code39Mode::Standard))
+            ->addGenerator(new Code39Generator(Code39Mode::Extended))
             ->addGenerator(new Ean13Generator())
             ->addGenerator(new Ean8Generator())
             ->addGenerator(new UpcAGenerator())

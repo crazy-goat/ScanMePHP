@@ -165,6 +165,16 @@ through the decoder some other way, the substitution is declared in
 `DecoderRoundTripTest::NO_STANDALONE_READER`, and a test asserts the reason
 still holds so the exemption cannot quietly outlive it.
 
+Where two symbologies are the same bars, the round trip names the format it is
+asking for rather than accepting the decoder's default reading — `UPCA` for a
+UPC-A, `Code39Std` for standard Code 39. That is not making the test easier:
+the bars still have to decode, and it is the question the caller asked. But it
+does mean the default reading is a fact worth pinning on its own, because it is
+what a scanner out of the box will do — so Code 39's ambiguity has a test that
+asserts the misreading (`A$B` read as two characters, not three) beside the one
+that asserts the correct reading. A property of the symbology that is invisible
+in the suite gets rediscovered in production.
+
 ## CI/CD
 
 GitHub Actions runs two jobs, both gated on the actor having write permissions:
