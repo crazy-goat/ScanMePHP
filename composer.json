@@ -2,7 +2,13 @@
     "name": "crazy-goat/scanmephp",
     "description": "Pure PHP QR code generator with zero dependencies",
     "type": "composer-plugin",
-    "keywords": ["qr", "qrcode", "barcode", "generator", "php"],
+    "keywords": [
+        "qr",
+        "qrcode",
+        "barcode",
+        "generator",
+        "php"
+    ],
     "homepage": "https://github.com/crazy-goat/ScanMePHP",
     "license": "MIT",
     "authors": [
@@ -58,8 +64,18 @@
         "lint:rector": "rector process --dry-run",
         "lint:rector-fix": "rector process",
         "lint:kb": "php bin/kb-lint.php",
-        "lint:kb-fix": "php bin/kb-lint.php --fix"
+        "lint:kb-fix": "php bin/kb-lint.php --fix",
+        "decoders:install": [
+            "python3 -m venv .decoders",
+            ".decoders/bin/pip install --quiet --upgrade pip",
+            ".decoders/bin/pip install --quiet zxing-cpp pillow"
+        ],
+        "test:roundtrip": "php -d xdebug.mode=off vendor/bin/phpunit --no-coverage tests/DecoderRoundTripTest.php"
     },
     "minimum-stability": "stable",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "scripts-descriptions": {
+        "decoders:install": "Install the zxing-cpp reference decoder used by the round-trip suite",
+        "test:roundtrip": "Verify every symbology against an independent barcode decoder"
+    }
 }
