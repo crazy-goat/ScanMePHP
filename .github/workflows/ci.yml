@@ -2,9 +2,12 @@ name: CI
 
 on:
   push:
-    branches: [ main, master, develop ]
+    branches: [ main, master, develop, v2 ]
   pull_request:
-    branches: [ main, master, develop ]
+    # v2 is a long-lived rewrite branch that takes its own pull requests, and
+    # without it here none of them were ever built: eleven commits and four
+    # symbologies landed on v2 with no CI run at all.
+    branches: [ main, master, develop, v2 ]
   workflow_dispatch:
 
 jobs:
