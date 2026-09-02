@@ -71,7 +71,8 @@
             ".decoders/bin/pip install --quiet zxing-cpp pillow"
         ],
         "test:roundtrip": "php -d xdebug.mode=off vendor/bin/phpunit --no-coverage tests/DecoderRoundTripTest.php",
-        "reference:ean-upc": ".decoders/bin/python tools/ean_upc_reference.py"
+        "reference:ean-upc": ".decoders/bin/python tools/ean_upc_reference.py",
+        "reference:code39": ".decoders/bin/python tools/code39_reference.py"
     },
     "minimum-stability": "stable",
     "prefer-stable": true,

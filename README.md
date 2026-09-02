@@ -2,7 +2,7 @@
 
 **A universal barcode library for PHP — with optional native C++ acceleration for QR.**
 
-Nine symbologies, seven output formats, one call. No dependencies, no GD, no
+Eleven symbologies, seven output formats, one call. No dependencies, no GD, no
 Imagick, no extensions required — then go **7–9× faster** on QR with a single
 C++ library if you generate them in volume.
 
@@ -19,13 +19,15 @@ echo $scanme->render('5901234123457', 'ean13', 'png');
 
 ## Why ScanMePHP?
 
-**📇 Nine symbologies, one API**
+**📇 Eleven symbologies, one API**
 
 | Symbology | Accepts | Notes |
 | --- | --- | --- |
 | `qrcode` | any byte string, up to 2953 bytes | v1–v40, error correction L/M/Q/H |
 | `data-matrix` | any byte string, up to 1556 bytes | ECC200, square or rectangular |
 | `code128` | printable ASCII | automatic set switching |
+| `code39` | digits, A-Z, space and `-.$/+%` | optional modulo-43 check character |
+| `code39ext` | any ASCII | the same bars, lowercase and control bytes as escape pairs |
 | `ean13` | 12 digits, or 13 with a check digit | the retail default |
 | `ean8` | 7 digits, or 8 with a check digit | for packaging that cannot carry an EAN-13 |
 | `upc-a` | 11 digits, or 12 with a check digit | bit for bit an EAN-13 with a leading zero |
@@ -236,6 +238,8 @@ closed enum would make it a second-class one.
 $scanme->render('https://example.com', 'qrcode', 'svg');
 $scanme->render('ScanMePHP', 'data-matrix', 'svg');
 $scanme->render('SHIPMENT-4471', 'code128', 'png');
+$scanme->render('PART-4471', 'code39', 'png');
+$scanme->render('Part 4471/a', 'code39ext', 'png');
 $scanme->render('5901234123457', 'ean13', 'svg');
 $scanme->render('96385074', 'ean8', 'svg');
 $scanme->render('036000291452', 'upc-a', 'svg');
@@ -251,14 +255,34 @@ and is refused rather than trimmed. This release generates them as symbols in
 their own right; placing one alongside an EAN-13 in a single image is not yet
 done for you.
 
-Aliases resolve too — `ean`, `ean-13`, `upc`, `upca`, `dm`, `ecc200`, `qr`.
+`code39` and `code39ext` are two readings of one set of bars. Standard Code 39
+carries 43 characters; extended mode reaches all of ASCII by encoding the other
+85 bytes as two characters each, so `'Part 4471/a'` becomes a symbol as wide as
+sixteen characters rather than eleven. Nothing in the printed pattern says which
+reading is meant — it is the scanner's configuration — which is why they are two
+symbologies rather than one with a flag, and why a payload containing `$`, `/`,
+`+` or `%` reads back differently depending on how the scanner is set up:
+
+```php
+use CrazyGoat\ScanMePHP\Generator\Code39\Code39Options;
+
+// LOGMARS and HIBC want the check character; most readers do not verify it
+// and will report it as a trailing character of your data.
+$scanme->render('PART-4471', 'code39', 'png', new Code39Options(checkCharacter: true));
+
+// A wide element of three narrow modules, for a print process that needs it.
+$scanme->render('PART-4471', 'code39', 'png', new Code39Options(wideRatio: 3));
+```
+
+Aliases resolve too — `ean`, `ean-13`, `upc`, `upca`, `dm`, `ecc200`, `qr`,
+`c39`.
 
 If you have a payload and are not sure which symbologies accept it, ask rather
 than guess:
 
 ```php
 $scanme->getRegistry()->generatorsFor('036000291452');
-// ['qrcode', 'code128', 'ean13', 'upc-a', 'data-matrix']
+// ['qrcode', 'code128', 'code39', 'code39ext', 'ean13', 'upc-a', 'data-matrix']
 ```
 
 And to see what is installed, with the rules each one enforces:

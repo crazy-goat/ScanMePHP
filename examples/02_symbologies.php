@@ -15,6 +15,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use CrazyGoat\ScanMePHP\Format;
+use CrazyGoat\ScanMePHP\Generator\Code39\Code39Options;
 use CrazyGoat\ScanMePHP\QuietZone;
 use CrazyGoat\ScanMePHP\Renderer\Options\AsciiOptions;
 use CrazyGoat\ScanMePHP\Scanme;
@@ -56,6 +57,8 @@ echo "=== One payload each ===\n\n";
 $payloads = [
     'qrcode' => 'https://scanmephp.dev',
     'code128' => 'SCANME-2026',
+    'code39' => 'PART-4471',
+    'code39ext' => 'Part 4471/a',
     'ean13' => '5901234123457',
     'ean8' => '96385074',
     'upc-a' => '036000291452',
@@ -107,6 +110,45 @@ $upcE = $scanme->generate('04252614', 'upc-e');
 printf("drawn digits: %s\n", $upcE->getText());
 printf("stands for:   %s\n", $upcE->getMetadataValue('upca'));
 echo $scanme->renderSymbol($upcE, 'ascii-half-blocks', new AsciiOptions(barHeight: 10, sideMargin: 2));
+
+echo "\n=== Code 39 is one set of bars with two readings ===\n\n";
+
+// Standard Code 39 carries 43 characters. Extended mode reaches the rest of
+// ASCII by spending two characters on each of the other 85 bytes, so the same
+// payload is wider — and a payload the standard set cannot hold at all becomes
+// encodable. Nothing in the printed pattern says which reading is meant; that
+// is the scanner's configuration, which is why these are two symbologies.
+foreach (['PART-4471', 'Part 4471/a'] as $payload) {
+    foreach ([Symbology::Code39, Symbology::Code39Extended] as $symbology) {
+        $name = $symbology->value;
+
+        if (!$scanme->getRegistry()->getGenerator($name)->canEncode($payload)) {
+            printf("%-10s %-14s not encodable\n", $name, $payload);
+
+            continue;
+        }
+
+        $symbol = $scanme->generate($payload, $symbology);
+        printf(
+            "%-10s %-14s %3d modules, drawn as %s\n",
+            $name,
+            $payload,
+            $symbol->getWidth(),
+            $symbol->getMetadataValue('characters')
+        );
+    }
+}
+
+// The check character is optional in the standard and off by default: most
+// scanners do not verify it and report it as a trailing character instead.
+$checked = $scanme->generate('PART-4471', Symbology::Code39, new Code39Options(checkCharacter: true));
+printf(
+    "\nwith a check character: %s drawn as %s, printed as \"%s\"\n\n",
+    $checked->getMetadataValue('checkCharacter'),
+    $checked->getMetadataValue('characters'),
+    $checked->getText()
+);
+echo $scanme->renderSymbol($checked, Format::AsciiHalfBlocks, new AsciiOptions(barHeight: 10, sideMargin: 2));
 
 echo "\n=== Add-ons go beside a main symbol, not instead of one ===\n\n";
 

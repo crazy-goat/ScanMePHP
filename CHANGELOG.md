@@ -19,15 +19,26 @@ number is worse than a compile error.
 
 ### Added
 
-- **Eight new symbologies** alongside QR: Code 128, EAN-13, EAN-8, UPC-A,
-  UPC-E, the EAN-2 and EAN-5 add-ons, and Data Matrix (ECC200), each with its
-  own generator, aliases and payload rules.
+- **Ten new symbologies** alongside QR: Code 128, Code 39, Code 39 Extended,
+  EAN-13, EAN-8, UPC-A, UPC-E, the EAN-2 and EAN-5 add-ons, and Data Matrix
+  (ECC200), each with its own generator, aliases and payload rules.
 - **EAN-2 and EAN-5**, the add-on symbols printed beside a retail barcode: a
   periodical's issue number, a book's list price. They carry no check digit,
   so the digit count is exact — a third digit on an EAN-2 is a different
   add-on, not a checksum, and is refused rather than trimmed. Composing one
   into the same image as its main symbol is not yet done for you; the modules
   are there and `examples/02_symbologies.php` shows the three lines it takes.
+- **Code 39 and Code 39 Extended**, registered as two symbologies rather than
+  one with a flag. They are the same bars: extended mode reaches the whole of
+  ASCII by spending two characters on each byte outside the standard 43, and
+  nothing in the printed pattern says which reading is meant — a scanner
+  configured for one reads `A$B` as three characters and a scanner configured
+  for the other reads it as two. Making the mode a symbology is what lets
+  `canEncode()` answer at all: `'hello'` is encodable as one and not the other,
+  and the same five bytes are ten characters wide in one and impossible in the
+  other. `Code39Options` carries what is genuinely optional — the modulo-43
+  check character (off by default: most readers do not verify it and report it
+  as trailing data) and the wide-to-narrow ratio.
 - **`Scanme`**, the one entry point: `render()`, `generate()`, `renderSymbol()`,
   `dataUri()`, `toFile()`, `getContentType()`, `supports()`.
 - **`Registry` and `Defaults`** — an open registry of generators and renderers.
@@ -54,7 +65,10 @@ number is worse than a compile error.
   lone EAN-2 or EAN-5, so those two are gated by decoding a composite — our
   add-on bars printed beside our EAN-13, with the decoder told to refuse a
   symbol that has no add-on — and a second test fails the day zxing-cpp learns
-  to read them standalone, so the substitution cannot outlive its reason.
+  to read them standalone, so the substitution cannot outlive its reason. The
+  Code 39 fixture is exhaustive where exhaustion is cheap: all 43 characters and
+  all 128 ASCII bytes, each as its own symbol, because a swapped row in either
+  table gives a symbol that still scans as something else.
 - **`UPGRADING.md`** and seven runnable examples covering the API end to end.
 - **`tests/ExamplesTest.php`**, which runs every example on every build. The
   0.5.x examples had been dead for some time and nothing noticed, because

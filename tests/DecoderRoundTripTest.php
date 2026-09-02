@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace CrazyGoat\ScanMePHP\Tests;
 
 use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
+use CrazyGoat\ScanMePHP\Exception\IncompatibleRendererException;
+use CrazyGoat\ScanMePHP\Generator\Code39\Charset;
+use CrazyGoat\ScanMePHP\Generator\Code39\Code39Options;
 use CrazyGoat\ScanMePHP\Generator\DataMatrix\DataMatrixOptions;
 use CrazyGoat\ScanMePHP\Generator\Ean\Patterns;
 use CrazyGoat\ScanMePHP\Generator\Qr\QrOptions;
@@ -37,6 +40,8 @@ class DecoderRoundTripTest extends TestCase
     private const FORMAT_NAMES = [
         Symbology::QrCode->value => 'QR Code',
         Symbology::Code128->value => 'Code 128',
+        Symbology::Code39->value => 'Code 39',
+        Symbology::Code39Extended->value => 'Code 39 Extended',
         Symbology::Ean13->value => 'EAN-13',
         Symbology::Ean8->value => 'EAN-8',
         Symbology::UpcA->value => 'UPC-A',
@@ -190,6 +195,247 @@ class DecoderRoundTripTest extends TestCase
     public function testCode128ScansBack(string $data): void
     {
         $this->assertScansBack($data, Symbology::Code128->value, self::FORMAT_NAMES['code128']);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function code39Provider(): iterable
+    {
+        yield 'letters' => ['SCANME'];
+        yield 'single letter' => ['A'];
+        yield 'single digit' => ['0'];
+        yield 'digits' => ['1234567890'];
+        yield 'the whole alphabet' => ['ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
+        yield 'space and punctuation' => ['A B-C.D'];
+        // The four shift characters as ordinary data, which is what they are
+        // in this mode — see testAStandardSymbolIsAmbiguousUntilTheReaderIsTold.
+        yield 'shift characters as data' => ['A$B/C+D%E'];
+        yield 'the whole character set' => [Charset::CHARACTERS];
+        yield 'long payload' => [str_repeat('CODE39-', 8) . 'END'];
+    }
+
+    /**
+     * Standard Code 39, read as standard Code 39.
+     *
+     * The decoder has to be told, and not for convenience: with every format
+     * enabled zxing-cpp prefers the extended reading, and the payloads above
+     * that contain '$', '/', '+' or '%' then come back as different strings.
+     * That is a property of the symbology — the bars do not say which reading
+     * is meant — and asking for Code39Std is asking the question the caller
+     * asked, exactly as asking for UPCA is above.
+     */
+    #[DataProvider('code39Provider')]
+    public function testCode39ScansBack(string $data): void
+    {
+        $this->assertScansBack(
+            $data,
+            Symbology::Code39->value,
+            self::FORMAT_NAMES['code39'],
+            null,
+            null,
+            'Code39Std'
+        );
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function code39ExtendedProvider(): iterable
+    {
+        // Every case here has to contain at least one byte outside the 43,
+        // because a payload that does not is byte for byte a standard symbol
+        // and zxing-cpp reports no extended reading for it at all — see
+        // testAnExtendedSymbolWithNothingToEscapeIsAStandardSymbol.
+        yield 'lowercase' => ['hello'];
+        yield 'mixed case' => ['Hello World'];
+        yield 'underscore' => ['a-b_c'];
+        yield 'punctuation' => ['{"id":42}'];
+        yield 'shift characters as data' => ['A$B/C+D%E'];
+        yield 'price' => ['$100 / 50% + tax'];
+        yield 'at and backtick' => ['user@host `x`'];
+        yield 'brackets' => ['[a](b){c}'];
+        yield 'printable range' => [self::extendedPrintable()];
+    }
+
+    /** The printable bytes, minus the one Code 39 cannot carry at all. */
+    private static function extendedPrintable(): string
+    {
+        $out = '';
+        for ($byte = 0x20; $byte <= 0x7e; $byte++) {
+            // '*' is the start and stop character. It has an escape ('/J') and
+            // this library emits it, but zxing-cpp's reader stops at it, so a
+            // sweep including it would be testing the decoder's tolerance
+            // rather than our encoding — testAsteriskIsEncodableInExtendedMode
+            // covers it on its own terms.
+            if ($byte !== 0x2a) {
+                $out .= \chr($byte);
+            }
+        }
+
+        return $out;
+    }
+
+    #[DataProvider('code39ExtendedProvider')]
+    public function testCode39ExtendedScansBack(string $data): void
+    {
+        $this->assertScansBack(
+            $data,
+            Symbology::Code39Extended->value,
+            self::FORMAT_NAMES['code39ext'],
+            null,
+            null,
+            'Code39Ext'
+        );
+    }
+
+    /**
+     * The Code 39 ambiguity, demonstrated rather than described.
+     *
+     * 'A$B' is three perfectly ordinary standard characters. Handed to a
+     * decoder with nothing specified, it comes back as 'A' followed by STX,
+     * because '$B' is the full-ASCII escape for byte 2. Nothing is wrong with
+     * the bars; the reading mode is not in them.
+     *
+     * This is why Mode is a symbology rather than an option: a caller has to
+     * decide which reading their scanner is configured for, and no amount of
+     * encoding care can make the decision for them.
+     */
+    public function testAStandardSymbolIsAmbiguousUntilTheReaderIsTold(): void
+    {
+        $this->requireDecoder();
+
+        $png = $this->renderForScanning('A$B', Symbology::Code39->value);
+
+        $asExtended = Decoder::decode($png);
+        self::assertCount(1, $asExtended);
+        self::assertSame('Code 39 Extended', $asExtended[0]['format']);
+        self::assertSame([65, 2], $asExtended[0]['bytes'], 'the decoder read "$B" as an escape');
+
+        $asStandard = Decoder::decode($png, 'Code39Std');
+        self::assertCount(1, $asStandard);
+        self::assertSame('Code 39', $asStandard[0]['format']);
+        self::assertSame('A$B', $asStandard[0]['text']);
+    }
+
+    /**
+     * The same fact from the other side: an extended payload that needs no
+     * escape produces the standard symbol, and there is no extended reading of
+     * it to be had.
+     */
+    public function testAnExtendedSymbolWithNothingToEscapeIsAStandardSymbol(): void
+    {
+        $this->requireDecoder();
+
+        $scanme = Scanme::create();
+        self::assertSame(
+            $scanme->generate('HELLO', Symbology::Code39->value)->toModuleString(),
+            $scanme->generate('HELLO', Symbology::Code39Extended->value)->toModuleString(),
+            'a payload inside the 43 characters encodes identically in both modes'
+        );
+
+        $png = $this->renderForScanning('HELLO', Symbology::Code39Extended->value);
+
+        self::assertSame([], Decoder::decode($png, 'Code39Ext'));
+        self::assertSame('HELLO', Decoder::decode($png, 'Code39Std')[0]['text']);
+    }
+
+    /**
+     * The check character is a data character to any reader not verifying it.
+     *
+     * zxing-cpp has no option to verify a Code 39 check character, so it
+     * reports one as a trailing character of the payload. That is not a fault
+     * in either encoder or decoder — it is why the option is off by default,
+     * and why the check character is kept out of the human-readable line.
+     */
+    public function testTheCheckCharacterIsReadAsATrailingDataCharacter(): void
+    {
+        $this->requireDecoder();
+
+        $symbol = Scanme::create()->generate(
+            'SCANME-42',
+            Symbology::Code39->value,
+            new Code39Options(checkCharacter: true)
+        );
+
+        // Unweighted modulo 43 over S C A N M E - 4 2, which is 151.
+        self::assertSame('M', $symbol->getMetadataValue('checkCharacter'));
+        self::assertSame('SCANME-42', $symbol->getText(), 'the check character is not printed');
+
+        $png = $this->renderForScanning(
+            'SCANME-42',
+            Symbology::Code39->value,
+            new Code39Options(checkCharacter: true)
+        );
+
+        self::assertSame('SCANME-42M', Decoder::decode($png, 'Code39Std')[0]['text']);
+    }
+
+    /** A wide element of three modules is as legal as one of two, and as readable. */
+    public function testAWiderRatioStillScans(): void
+    {
+        $this->assertScansBack(
+            'RATIO-3',
+            Symbology::Code39->value,
+            self::FORMAT_NAMES['code39'],
+            null,
+            new Code39Options(wideRatio: 3),
+            'Code39Std'
+        );
+    }
+
+    /**
+     * Control bytes, which the reference fixture proves we draw correctly and
+     * this proves a scanner recovers.
+     *
+     * Two things make this its own test rather than a provider row. The
+     * comparison is on bytes, because zxing-cpp puts a mnemonic like <STX> in
+     * its text field. And the symbol has to be rendered without its
+     * human-readable line: a control byte has no glyph, and the renderer
+     * refuses rather than drawing a box — which is the right answer for a
+     * label a person is meant to read, and is asserted here so the refusal is
+     * not mistaken for a limit on what Code 39 can carry.
+     */
+    public function testControlBytesSurviveExtendedModeButCannotBePrinted(): void
+    {
+        $this->requireDecoder();
+
+        $data = "\x01\x09\x0a\x1f\x7f";
+        $scanme = Scanme::create();
+
+        try {
+            $scanme->render($data, Symbology::Code39Extended->value, 'png', new PngOptions(moduleSize: 6));
+            self::fail('a control byte has no glyph, so the human-readable line cannot be drawn');
+        } catch (IncompatibleRendererException $expected) {
+            self::assertStringContainsString('no glyph', $expected->getMessage());
+        }
+
+        $png = $scanme->render(
+            $data,
+            Symbology::Code39Extended->value,
+            'png',
+            new PngOptions(moduleSize: 6, showText: false)
+        );
+        $symbols = Decoder::decode($png, 'Code39Ext');
+
+        self::assertCount(1, $symbols);
+        self::assertSame([1, 9, 10, 31, 127], $symbols[0]['bytes']);
+    }
+
+    /**
+     * '*' is the one byte with an escape that no reader here will accept.
+     *
+     * The standard makes '/J' mean '*', and this library emits it, but a
+     * decoder stops the symbol at the '*' pattern — so what can be gated is
+     * that we encode it as the escape and not as the guard, which would end
+     * the symbol early and truncate the payload.
+     */
+    public function testAsteriskIsEncodableInExtendedMode(): void
+    {
+        $symbol = Scanme::create()->generate('A*B', Symbology::Code39Extended->value);
+
+        self::assertSame('A/JB', $symbol->getMetadataValue('characters'));
+        self::assertSame(
+            Charset::width(4, 2),
+            $symbol->getWidth(),
+            'four characters between the guards, not three'
+        );
     }
 
     /** @return iterable<string, array{string, string}> */
