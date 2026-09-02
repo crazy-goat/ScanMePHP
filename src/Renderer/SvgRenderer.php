@@ -133,8 +133,11 @@ final class SvgRenderer implements RendererInterface
         }
 
         $result = '';
-        if ($options->roundFinderRegions) {
-            $result = $this->finderRegions($symbol->getFinderRegions(), $rows, $x, $y, $rowPixelHeight, $mod, $color);
+        $regions = $options->roundFinderRegions ? $symbol->getFinderRegions() : [];
+        if ($regions !== []) {
+            $result = $this->finderRegions($regions, $rows, $x, $y, $rowPixelHeight, $mod, $color);
+            // Blanked so the run matcher below cannot draw them a second time.
+            $rows = $this->withoutRegions($regions, $rows);
         }
 
         $joined = implode("\n", $rows);
@@ -189,14 +192,13 @@ final class SvgRenderer implements RendererInterface
     }
 
     /**
-     * Draw the symbology's structurally special regions with rounded corners
-     * and blank them out of $rows so the run matcher does not draw them twice.
+     * Draw the symbology's structurally special regions with rounded corners.
      *
      * The renderer does not know what these regions mean — for QR they are the
      * three finder patterns, another symbology may report none or something
      * else entirely.
      *
-     * @param list<Region> $regions
+     * @param non-empty-list<Region> $regions
      * @param list<string> $rows
      * @param array<int, string> $x
      * @param array<int, string> $y
@@ -204,17 +206,13 @@ final class SvgRenderer implements RendererInterface
      */
     private function finderRegions(
         array $regions,
-        array &$rows,
+        array $rows,
         array $x,
         array $y,
         array $rowPixelHeight,
         int $mod,
         string $color
     ): string {
-        if ($regions === []) {
-            return '';
-        }
-
         $radius = sprintf('%.1f', $mod * 0.15);
         $out = '';
 
@@ -228,12 +226,38 @@ final class SvgRenderer implements RendererInterface
                             . '" width="' . $mod . '" height="' . $rowPixelHeight[$row]
                             . '" fill="' . $color . '" rx="' . $radius . '" ry="' . $radius . '"/>' . "\n";
                     }
-                    $rows[$row][$column] = '0';
                 }
             }
         }
 
         return $out;
+    }
+
+    /**
+     * The module rows with every given region cleared to light.
+     *
+     * @param non-empty-list<Region> $regions
+     * @param list<string> $rows
+     * @return list<string>
+     */
+    private function withoutRegions(array $regions, array $rows): array
+    {
+        $cleared = [];
+
+        foreach ($rows as $index => $modules) {
+            foreach ($regions as $region) {
+                if ($index < $region->y || $index >= $region->y + $region->height) {
+                    continue;
+                }
+                $lastColumn = min($region->x + $region->width, \strlen($modules));
+                for ($column = $region->x; $column < $lastColumn; $column++) {
+                    $modules[$column] = '0';
+                }
+            }
+            $cleared[] = $modules;
+        }
+
+        return $cleared;
     }
 
     private function escapeColor(string $color): string

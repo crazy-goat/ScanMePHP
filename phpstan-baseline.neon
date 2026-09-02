@@ -71,15 +71,3 @@ parameters:
 			identifier: method.alreadyNarrowedType
 			count: 3
 			path: tests/PlatformDetectorTest.php
-
-		-
-			message: '#^Call to method PHPUnit\\Framework\\Assert\:\:assertIsInt\(\) with int will always evaluate to true\.$#'
-			identifier: method.alreadyNarrowedType
-			count: 1
-			path: tests/QRCodeTest.php
-
-		-
-			message: '#^Call to method PHPUnit\\Framework\\Assert\:\:assertIsString\(\) with string will always evaluate to true\.$#'
-			identifier: method.alreadyNarrowedType
-			count: 12
-			path: tests/QRCodeTest.php

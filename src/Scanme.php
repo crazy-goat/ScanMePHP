@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP;
 
+use CrazyGoat\ScanMePHP\Exception\FileWriteException;
 use CrazyGoat\ScanMePHP\Exception\IncompatibleRendererException;
 use CrazyGoat\ScanMePHP\Exception\UnsupportedDataException;
 use CrazyGoat\ScanMePHP\Exception\UnsupportedOptionsException;
@@ -73,7 +74,7 @@ final class Scanme
     {
         [$generatorOptions, $renderOptions] = $this->routeOptions($options);
 
-        if ($renderOptions !== null && !$renderOptions instanceof GeneratorOptionsInterface) {
+        if ($renderOptions instanceof \CrazyGoat\ScanMePHP\Options\RenderOptionsInterface && !$renderOptions instanceof GeneratorOptionsInterface) {
             throw UnsupportedOptionsException::notApplicable($renderOptions::class, 'generating without rendering');
         }
 
@@ -94,7 +95,7 @@ final class Scanme
         $renderer = $this->registry->getRenderer($format);
         $capabilities = $renderer->getCapabilities();
 
-        if ($options !== null
+        if ($options instanceof \CrazyGoat\ScanMePHP\Options\RenderOptionsInterface
             && $capabilities->optionsClass !== null
             && !$options instanceof $capabilities->optionsClass
         ) {
@@ -119,6 +120,52 @@ final class Scanme
         return $renderer->render($symbol, $options);
     }
 
+    /**
+     * The rendered symbol as a data: URI, ready for an <img src> or a CSS
+     * background.
+     *
+     * @throws UnsupportedDataException
+     * @throws UnsupportedOptionsException
+     * @throws IncompatibleRendererException
+     */
+    public function dataUri(
+        string $data,
+        string|Symbology $generator,
+        string|Format $format,
+        OptionsInterface ...$options
+    ): string {
+        $content = $this->render($data, $generator, $format, ...$options);
+
+        return 'data:' . $this->getContentType($format) . ';base64,' . base64_encode($content);
+    }
+
+    /**
+     * Render straight to a file.
+     *
+     * Writes under LOCK_EX so a concurrent request cannot read a half-written
+     * image, and checks the directory first to fail with a clear reason rather
+     * than a file_put_contents() warning.
+     *
+     * @throws FileWriteException
+     */
+    public function toFile(
+        string $path,
+        string $data,
+        string|Symbology $generator,
+        string|Format $format,
+        OptionsInterface ...$options
+    ): void {
+        $directory = \dirname($path);
+        if (!is_dir($directory) || !is_writable($directory)) {
+            throw FileWriteException::directoryNotWritable($directory);
+        }
+
+        $content = $this->render($data, $generator, $format, ...$options);
+        if (file_put_contents($path, $content, LOCK_EX) === false) {
+            throw FileWriteException::cannotWriteToFile($path);
+        }
+    }
+
     /** MIME type an output format produces, for HTTP responses and data URIs. */
     public function getContentType(string|Format $format): string
     {
@@ -140,7 +187,7 @@ final class Scanme
             return false;
         }
 
-        return !($capabilities->providesText && !$rendererCapabilities->text);
+        return !$capabilities->providesText || $rendererCapabilities->text;
     }
 
     public function getRegistry(): Registry
@@ -156,7 +203,7 @@ final class Scanme
         $generator = $this->registry->getGenerator($name);
         $capabilities = $generator->getCapabilities();
 
-        if ($options !== null
+        if ($options instanceof \CrazyGoat\ScanMePHP\Options\GeneratorOptionsInterface
             && $capabilities->optionsClass !== null
             && !$options instanceof $capabilities->optionsClass
         ) {
@@ -193,7 +240,7 @@ final class Scanme
             $claimed = false;
 
             if ($bag instanceof GeneratorOptionsInterface) {
-                if ($generatorOptions !== null) {
+                if ($generatorOptions instanceof \CrazyGoat\ScanMePHP\Options\GeneratorOptionsInterface) {
                     throw UnsupportedOptionsException::duplicate(
                         'generator',
                         $generatorOptions::class,
@@ -205,7 +252,7 @@ final class Scanme
             }
 
             if ($bag instanceof RenderOptionsInterface) {
-                if ($renderOptions !== null) {
+                if ($renderOptions instanceof \CrazyGoat\ScanMePHP\Options\RenderOptionsInterface) {
                     throw UnsupportedOptionsException::duplicate(
                         'renderer',
                         $renderOptions::class,

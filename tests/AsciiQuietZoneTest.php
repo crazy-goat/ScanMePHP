@@ -2,198 +2,136 @@
 
 declare(strict_types=1);
 
-use CrazyGoat\ScanMePHP\QRCode;
-use CrazyGoat\ScanMePHP\QRCodeConfig;
-use CrazyGoat\ScanMePHP\Renderer\FullBlocksRenderer;
-use CrazyGoat\ScanMePHP\Renderer\HalfBlocksRenderer;
+use CrazyGoat\ScanMePHP\Generator\Qr\QrGenerator;
+use CrazyGoat\ScanMePHP\Renderer\AsciiRenderer;
+use CrazyGoat\ScanMePHP\Renderer\AsciiStyle;
+use CrazyGoat\ScanMePHP\Renderer\Options\AsciiOptions;
+use CrazyGoat\ScanMePHP\Symbol;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Test for GitHub Issue #35: ASCII QR codes missing quiet zone in inverted mode
+ * Regression guard for GitHub issue #35: ASCII symbols were missing the bottom
+ * quiet zone in inverted mode, which showed up as a white line along the
+ * bottom edge and cost the symbol its bottom margin.
  *
- * When generating ASCII QR codes with invert=true, the output should have
- * symmetric quiet zone (margin) at both top and bottom. The bottom margin
- * was missing, causing a white line artifact in inverted mode.
+ * The quiet zone is now measured in modules and comes from the symbology, so
+ * the half-blocks style — two module rows per text line — spends half as many
+ * lines on it as the blocks style. The old renderer spent one line per module
+ * on both, which silently doubled the zone for half blocks.
  */
 class AsciiQuietZoneTest extends TestCase
 {
-    private const TEST_URL = 'https://qrcode.crazy-goat.com';
-    private const MARGIN_SIZE = 4;
+    private const URL = 'https://qrcode.crazy-goat.com';
+
+    private function symbol(): Symbol
+    {
+        return (new QrGenerator())->generate(self::URL);
+    }
 
     /**
-     * Count margin lines at top and bottom
+     * Count fully-blank lines at the top and at the bottom.
      *
-     * @param string[] $lines
-     * @param string $marginChar Character used for margin (█ for inverted, ' ' for normal)
-     * @return array [topCount, bottomCount]
+     * @param list<string> $lines
+     * @return array{int, int}
      */
     private function countMarginLines(array $lines, string $marginChar): array
     {
+        $blank = static fn (string $line): bool => $line !== ''
+            && preg_match('/[^' . preg_quote($marginChar, '/') . ']/u', $line) !== 1;
+
         $top = 0;
         foreach ($lines as $line) {
-            if ($line !== '' && !preg_match('/[^' . preg_quote($marginChar, '/') . ']/', $line)) {
-                $top++;
-            } else {
+            if (!$blank($line)) {
                 break;
             }
+            $top++;
         }
 
         $bottom = 0;
-        for ($i = count($lines) - 1; $i >= 0; $i--) {
-            if ($lines[$i] !== '' && !preg_match('/[^' . preg_quote($marginChar, '/') . ']/', $lines[$i])) {
-                $bottom++;
-            } else {
+        foreach (array_reverse($lines) as $line) {
+            if (!$blank($line)) {
                 break;
             }
+            $bottom++;
         }
 
         return [$top, $bottom];
     }
 
-    /**
-     * Test that HalfBlocksRenderer has symmetric margins in normal mode
-     */
-    public function testHalfBlocksRendererHasSymmetricMargins(): void
+    /** @return iterable<string, array{AsciiStyle, bool, int}> */
+    public static function styleProvider(): iterable
     {
-        $config = new QRCodeConfig(
-            engine: new HalfBlocksRenderer(sideMargin: self::MARGIN_SIZE),
-            margin: self::MARGIN_SIZE,
-        );
-        $qr = new QRCode(self::TEST_URL, $config);
-        $output = $qr->render();
-        $lines = explode("\n", $output);
+        // Expected margin lines for a 4-module quiet zone: one line per module
+        // for blocks and dots, one line per two modules for half blocks.
+        yield 'blocks' => [AsciiStyle::Blocks, false, 4];
+        yield 'blocks inverted' => [AsciiStyle::Blocks, true, 4];
+        yield 'dots' => [AsciiStyle::Dots, false, 4];
+        yield 'dots inverted' => [AsciiStyle::Dots, true, 4];
+        yield 'half blocks' => [AsciiStyle::HalfBlocks, false, 2];
+        yield 'half blocks inverted' => [AsciiStyle::HalfBlocks, true, 2];
+    }
 
-        [$top, $bottom] = $this->countMarginLines($lines, ' ');
+    /** @dataProvider styleProvider */
+    public function testQuietZoneIsSymmetricAndSpecSized(AsciiStyle $style, bool $invert, int $expected): void
+    {
+        $symbol = $this->symbol();
+        $this->assertSame(4, $symbol->getQuietZone()->top, 'ISO/IEC 18004 requires 4 modules');
 
-        $this->assertEquals(
-            self::MARGIN_SIZE,
-            $top,
-            'Top margin should be ' . self::MARGIN_SIZE . " lines, got $top"
+        $output = (new AsciiRenderer($style))->render(
+            $symbol,
+            new AsciiOptions(invert: $invert, sideMargin: 4)
         );
-        $this->assertEquals(
-            self::MARGIN_SIZE,
-            $bottom,
-            'Bottom margin should be ' . self::MARGIN_SIZE . " lines, got $bottom"
-        );
+
+        $marginChar = $invert ? ($style === AsciiStyle::Dots ? '●' : '█') : ' ';
+        [$top, $bottom] = $this->countMarginLines(explode("\n", $output), $marginChar);
+
+        $this->assertSame($expected, $top, 'top quiet zone');
+        $this->assertSame($expected, $bottom, 'bottom quiet zone');
     }
 
     /**
-     * Test that HalfBlocksRenderer has symmetric margins in inverted mode
-     * This is the main bug from issue #35
+     * The visual symptom of #35: with the bottom quiet zone gone, the final
+     * line of an inverted half-blocks symbol held module glyphs instead of
+     * background.
      */
-    public function testHalfBlocksRendererInvertedHasSymmetricMargins(): void
+    public function testNoModuleGlyphsSurviveOnTheLastLineWhenInverted(): void
     {
-        $config = new QRCodeConfig(
-            engine: new HalfBlocksRenderer(sideMargin: self::MARGIN_SIZE),
-            margin: self::MARGIN_SIZE,
-            invert: true,
+        $output = (new AsciiRenderer(AsciiStyle::HalfBlocks))->render(
+            $this->symbol(),
+            new AsciiOptions(invert: true, sideMargin: 4)
         );
-        $qr = new QRCode(self::TEST_URL, $config);
-        $output = $qr->render();
         $lines = explode("\n", $output);
+        $lastLine = end($lines);
 
-        // In inverted mode, margin lines are filled with '█' character
-        [$top, $bottom] = $this->countMarginLines($lines, '█');
-
-        $this->assertEquals(
-            self::MARGIN_SIZE,
-            $top,
-            'Top margin should be ' . self::MARGIN_SIZE . " lines in inverted mode, got $top"
-        );
-        $this->assertEquals(
-            self::MARGIN_SIZE,
-            $bottom,
-            'Bottom margin should be ' . self::MARGIN_SIZE . " lines in inverted mode, got $bottom"
-        );
+        $this->assertStringNotContainsString('▄', $lastLine);
+        $this->assertStringNotContainsString('▀', $lastLine);
+        $this->assertMatchesRegularExpression('/^█+$/u', $lastLine);
     }
 
-    /**
-     * Test that FullBlocksRenderer has symmetric margins in normal mode
-     */
-    public function testFullBlocksRendererHasSymmetricMargins(): void
+    public function testSideMarginWidensTheZoneWithoutReplacingIt(): void
     {
-        $config = new QRCodeConfig(
-            engine: new FullBlocksRenderer(sideMargin: self::MARGIN_SIZE),
-            margin: self::MARGIN_SIZE,
-        );
-        $qr = new QRCode(self::TEST_URL, $config);
-        $output = $qr->render();
-        $lines = explode("\n", $output);
+        $symbol = $this->symbol();
+        $width = static fn (string $output): int => mb_strlen(explode("\n", $output)[0]);
 
-        [$top, $bottom] = $this->countMarginLines($lines, ' ');
+        $bare = (new AsciiRenderer(AsciiStyle::Blocks))->render($symbol, new AsciiOptions());
+        $padded = (new AsciiRenderer(AsciiStyle::Blocks))->render($symbol, new AsciiOptions(sideMargin: 6));
 
-        $this->assertEquals(
-            self::MARGIN_SIZE,
-            $top,
-            'Top margin should be ' . self::MARGIN_SIZE . " lines, got $top"
-        );
-        $this->assertEquals(
-            self::MARGIN_SIZE,
-            $bottom,
-            'Bottom margin should be ' . self::MARGIN_SIZE . " lines, got $bottom"
-        );
+        $this->assertSame($symbol->getWidth() + 8, $width($bare), 'symbology quiet zone alone');
+        $this->assertSame($symbol->getWidth() + 8 + 12, $width($padded), 'plus the caller side margin');
     }
 
-    /**
-     * Test that FullBlocksRenderer has symmetric margins in inverted mode
-     */
-    public function testFullBlocksRendererInvertedHasSymmetricMargins(): void
+    public function testAnExplicitZeroQuietZoneIsHonoured(): void
     {
-        $config = new QRCodeConfig(
-            engine: new FullBlocksRenderer(sideMargin: self::MARGIN_SIZE),
-            margin: self::MARGIN_SIZE,
-            invert: true,
+        // A caller squeezing a preview into a tight layout is entitled to drop
+        // the zone; it is their call, and the renderer must not quietly
+        // reinstate the symbology's minimum.
+        $output = (new AsciiRenderer(AsciiStyle::Blocks))->render(
+            $this->symbol(),
+            new AsciiOptions(quietZone: 0)
         );
-        $qr = new QRCode(self::TEST_URL, $config);
-        $output = $qr->render();
-        $lines = explode("\n", $output);
+        [$top, $bottom] = $this->countMarginLines(explode("\n", $output), ' ');
 
-        // In inverted mode, margin lines are filled with '█' character
-        [$top, $bottom] = $this->countMarginLines($lines, '█');
-
-        $this->assertEquals(
-            self::MARGIN_SIZE,
-            $top,
-            'Top margin should be ' . self::MARGIN_SIZE . " lines in inverted mode, got $top"
-        );
-        $this->assertEquals(
-            self::MARGIN_SIZE,
-            $bottom,
-            'Bottom margin should be ' . self::MARGIN_SIZE . " lines in inverted mode, got $bottom"
-        );
-    }
-
-    /**
-     * Test that the last line of QR code is not visible as white line in inverted mode
-     * This is the visual bug reported in issue #35
-     */
-    public function testNoWhiteLineAtBottomInInvertedMode(): void
-    {
-        $config = new QRCodeConfig(
-            engine: new HalfBlocksRenderer(sideMargin: self::MARGIN_SIZE),
-            margin: self::MARGIN_SIZE,
-            invert: true,
-        );
-        $qr = new QRCode(self::TEST_URL, $config);
-        $output = $qr->render();
-        $lines = explode("\n", $output);
-
-        // Get the last line
-        $lastLine = $lines[count($lines) - 1];
-
-        // In inverted mode with proper margins, last line should be all '█' (black)
-        // If there's no bottom margin, last line will contain '▄' characters (white modules)
-        $this->assertStringNotContainsString(
-            '▄',
-            $lastLine,
-            "Last line should not contain '▄' characters (white modules) - indicates missing bottom margin"
-        );
-
-        // Last line should be all black (filled with '█')
-        $this->assertMatchesRegularExpression(
-            '/^█+$/u',
-            $lastLine,
-            'Last line should be all black margin (█ characters only)'
-        );
+        $this->assertSame(0, $top);
+        $this->assertSame(0, $bottom);
     }
 }
