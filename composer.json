@@ -73,7 +73,8 @@
         "test:roundtrip": "php -d xdebug.mode=off vendor/bin/phpunit --no-coverage tests/DecoderRoundTripTest.php",
         "reference:ean-upc": ".decoders/bin/python tools/ean_upc_reference.py",
         "reference:code39": ".decoders/bin/python tools/code39_reference.py",
-        "reference:code93": ".decoders/bin/python tools/code93_reference.py"
+        "reference:code93": ".decoders/bin/python tools/code93_reference.py",
+        "reference:itf": ".decoders/bin/python tools/itf_reference.py"
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
