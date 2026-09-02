@@ -19,10 +19,10 @@ number is worse than a compile error.
 
 ### Added
 
-- **Eleven new symbologies** alongside QR: Code 128, Code 39, Code 39
+- **Thirteen new symbologies** alongside QR: Code 128, Code 39, Code 39
   Extended, Code 93, EAN-13, EAN-8, UPC-A, UPC-E, the EAN-2 and EAN-5 add-ons,
-  and Data Matrix (ECC200), each with its own generator, aliases and payload
-  rules.
+  ITF, ITF-14, and Data Matrix (ECC200), each with its own generator, aliases
+  and payload rules.
 - **EAN-2 and EAN-5**, the add-on symbols printed beside a retail barcode: a
   periodical's issue number, a book's list price. They carry no check digit,
   so the digit count is exact — a third digit on an EAN-2 is a different
@@ -49,6 +49,18 @@ number is worse than a compile error.
   So `A$B` has one reading here and two in Code 39. Nine modules a character
   against thirteen makes it the denser of the pair: 81% of the Code 39 width at
   eleven characters, 72% at fifty-nine.
+- **ITF and ITF-14.** ITF interleaves digits in pairs, so the digit count must
+  be even — and an odd one is **refused rather than padded with a leading
+  zero**, which is what most encoders do and is a change to the caller's data.
+  The optional GS1 check digit flips which parity encodes, so this is one of
+  the few places where `canEncode()` has to read the options to answer.
+  ITF-14 is registered separately rather than being a fourteen-digit ITF,
+  because three things a caller must not have to remember are fixed there: the
+  digit count, the mandatory check digit, and the bearer bar. The bearer bar is
+  drawn as modules — ITF is not self-checking, and the frame is what stops a
+  beam that clips a guard from reading a valid shorter number — with the 10X
+  quiet zone *inside* it, which is where GS1 puts it and where a frame drawn
+  flush against the bars would leave none at all.
 - **`Scanme`**, the one entry point: `render()`, `generate()`, `renderSymbol()`,
   `dataUri()`, `toFile()`, `getContentType()`, `supports()`.
 - **`Registry` and `Defaults`** — an open registry of generators and renderers.

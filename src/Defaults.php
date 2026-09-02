@@ -13,6 +13,8 @@ use CrazyGoat\ScanMePHP\Generator\Ean13\Ean13Generator;
 use CrazyGoat\ScanMePHP\Generator\Ean2\Ean2Generator;
 use CrazyGoat\ScanMePHP\Generator\Ean5\Ean5Generator;
 use CrazyGoat\ScanMePHP\Generator\Ean8\Ean8Generator;
+use CrazyGoat\ScanMePHP\Generator\Itf\ItfGenerator;
+use CrazyGoat\ScanMePHP\Generator\Itf14\Itf14Generator;
 use CrazyGoat\ScanMePHP\Generator\Qr\QrGenerator;
 use CrazyGoat\ScanMePHP\Generator\UpcA\UpcAGenerator;
 use CrazyGoat\ScanMePHP\Generator\UpcE\UpcEGenerator;
@@ -48,6 +50,8 @@ final class Defaults
             ->addGenerator(new UpcEGenerator())
             ->addGenerator(new Ean2Generator())
             ->addGenerator(new Ean5Generator())
+            ->addGenerator(new ItfGenerator())
+            ->addGenerator(new Itf14Generator())
             ->addGenerator(new DataMatrixGenerator())
             ->addRenderer(new SvgRenderer())
             ->addRenderer(new PngRenderer())
