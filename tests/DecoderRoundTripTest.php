@@ -11,6 +11,10 @@ use CrazyGoat\ScanMePHP\Generator\Code39\Code39Options;
 use CrazyGoat\ScanMePHP\Generator\Code93\Charset as Code93Charset;
 use CrazyGoat\ScanMePHP\Generator\DataMatrix\DataMatrixOptions;
 use CrazyGoat\ScanMePHP\Generator\Ean\Patterns;
+use CrazyGoat\ScanMePHP\Generator\Itf\ItfOptions;
+use CrazyGoat\ScanMePHP\Generator\Itf\Patterns as ItfPatterns;
+use CrazyGoat\ScanMePHP\Generator\Itf14\Backend\PhpBackend as Itf14Backend;
+use CrazyGoat\ScanMePHP\Generator\Itf14\Itf14Options;
 use CrazyGoat\ScanMePHP\Generator\Qr\QrOptions;
 use CrazyGoat\ScanMePHP\QuietZone;
 use CrazyGoat\ScanMePHP\Renderer\Options\PngOptions;
@@ -48,6 +52,11 @@ class DecoderRoundTripTest extends TestCase
         Symbology::Ean8->value => 'EAN-8',
         Symbology::UpcA->value => 'UPC-A',
         Symbology::UpcE->value => 'UPC-E',
+        // ITF-14's bars are ordinary ITF, exactly as a UPC-A's are an
+        // EAN-13's; the digit count and the bearer bar are what make it
+        // an ITF-14, and a decoder reports both as ITF.
+        Symbology::Itf->value => 'ITF',
+        Symbology::Itf14->value => 'ITF',
         Symbology::DataMatrix->value => 'Data Matrix',
     ];
 
@@ -612,6 +621,137 @@ class DecoderRoundTripTest extends TestCase
     public function testUpcEScansBack(string $data, string $expected): void
     {
         $this->assertScansBack($data, Symbology::UpcE->value, self::FORMAT_NAMES['upc-e'], $expected);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function itfProvider(): iterable
+    {
+        // Two digits is below what zxing-cpp will report — see
+        // testAVeryShortItfIsBelowTheDecodersFloor.
+        yield 'two pairs' => ['4242'];
+        yield 'zeros' => ['0000'];
+        yield 'nines' => ['9999'];
+        yield 'a run' => ['1234567890'];
+        yield 'leading zero written out' => ['0123'];
+        yield 'alternating' => ['0101010101'];
+        yield 'long' => ['1234567890123456789012'];
+    }
+
+    #[DataProvider('itfProvider')]
+    public function testItfScansBack(string $data): void
+    {
+        $this->assertScansBack($data, Symbology::Itf->value, self::FORMAT_NAMES['itf']);
+    }
+
+    /**
+     * The check digit is a digit of the number, not an annotation on it.
+     *
+     * Turning it on makes an *odd* payload the encodable one, and the decoder
+     * reports all fourteen — sorry, all of them, check digit included, because
+     * nothing in the bars says the last one is special.
+     */
+    public function testAnItfCheckDigitIsPartOfWhatScansBack(): void
+    {
+        $this->assertScansBack(
+            '123456789',
+            Symbology::Itf->value,
+            self::FORMAT_NAMES['itf'],
+            '1234567895',
+            new ItfOptions(checkDigit: true)
+        );
+    }
+
+    /**
+     * ITF's weakness, from the decoder's side.
+     *
+     * Nothing in the bars marks where a character begins, so a very short ITF
+     * is indistinguishable from a fragment of a longer one — and zxing-cpp
+     * refuses to report one rather than risk a false positive. Its own writer
+     * produces the same unreadable symbol, so this is the symbology and not
+     * our encoding: asserted here so the absence of a two-digit case from the
+     * provider above is a decision and not an oversight.
+     *
+     * If a future zxing-cpp lowers its floor, this fails and the case can move
+     * into the provider.
+     */
+    public function testAVeryShortItfIsBelowTheDecodersFloor(): void
+    {
+        $this->requireDecoder();
+
+        self::assertSame([], Decoder::decode($this->renderForScanning('42', Symbology::Itf->value)));
+        self::assertNotSame([], Decoder::decode($this->renderForScanning('4242', Symbology::Itf->value)));
+    }
+
+    /**
+     * A wide element of two modules is legal and readable, and is the one
+     * ratio no reference fixture can cover — zxing-cpp writes only threes, so
+     * this is the sole check that a ratio-2 symbol is a symbol at all.
+     */
+    public function testANarrowerItfRatioStillScans(): void
+    {
+        $this->assertScansBack(
+            '12345678',
+            Symbology::Itf->value,
+            self::FORMAT_NAMES['itf'],
+            null,
+            new ItfOptions(wideRatio: 2)
+        );
+    }
+
+    /** @return iterable<string, array{string, string}> */
+    public static function itf14Provider(): iterable
+    {
+        yield 'gtin-14' => ['12345678901231', '12345678901231'];
+        yield 'computed check digit' => ['1234567890123', '12345678901231'];
+        yield 'zeros' => ['0000000000000', '00000000000000'];
+        yield 'nines' => ['9999999999999', '99999999999997'];
+        yield 'a case gtin' => ['1000000000000', '10000000000007'];
+    }
+
+    #[DataProvider('itf14Provider')]
+    public function testItf14ScansBack(string $data, string $expected): void
+    {
+        $this->assertScansBack($data, Symbology::Itf14->value, self::FORMAT_NAMES['itf14'], $expected);
+    }
+
+    /**
+     * The bearer bar is a frame of dark modules touching the bars, which is
+     * exactly the sort of thing that stops a decoder reading a symbol at all.
+     * It does not — that is the point of the test, and of the frame.
+     */
+    public function testTheBearerBarDoesNotStopTheSymbolBeingRead(): void
+    {
+        $this->requireDecoder();
+
+        $scanme = Scanme::create();
+        $framed = $scanme->generate('1234567890123', Symbology::Itf14->value);
+        $bare = $scanme->generate(
+            '1234567890123',
+            Symbology::Itf14->value,
+            new Itf14Options(bearerBar: false)
+        );
+
+        self::assertSame(3, $framed->getHeight(), 'bearer bar above and below');
+        self::assertSame(1, $bare->getHeight());
+
+        // The frame adds its own thickness *and* the quiet zone it encloses.
+        // GS1 measures the 10X zone from the bars and puts the bearer outside
+        // it; a frame drawn flush against the bars leaves no quiet zone and the
+        // symbol does not scan at all, which is what the loop below would
+        // catch.
+        self::assertSame(
+            $bare->getWidth() + 2 * (Itf14Backend::BEARER + ItfPatterns::QUIET_ZONE),
+            $framed->getWidth()
+        );
+        self::assertTrue($framed->getQuietZone()->isEmpty(), 'the quiet zone is inside the frame');
+
+        foreach ([$framed, $bare] as $symbol) {
+            $png = $scanme->renderSymbol($symbol, 'png', new PngOptions(moduleSize: 6));
+            $symbols = Decoder::decode($png, 'ITF');
+
+            self::assertCount(1, $symbols);
+            self::assertSame('12345678901231', $symbols[0]['text']);
+        }
     }
 
     /** @return iterable<string, array{string, bool}> */

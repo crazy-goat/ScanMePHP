@@ -2,7 +2,7 @@
 
 **A universal barcode library for PHP — with optional native C++ acceleration for QR.**
 
-Twelve symbologies, seven output formats, one call. No dependencies, no GD, no
+Fourteen symbologies, seven output formats, one call. No dependencies, no GD, no
 Imagick, no extensions required — then go **7–9× faster** on QR with a single
 C++ library if you generate them in volume.
 
@@ -19,7 +19,7 @@ echo $scanme->render('5901234123457', 'ean13', 'png');
 
 ## Why ScanMePHP?
 
-**📇 Twelve symbologies, one API**
+**📇 Fourteen symbologies, one API**
 
 | Symbology | Accepts | Notes |
 | --- | --- | --- |
@@ -33,6 +33,8 @@ echo $scanme->render('5901234123457', 'ean13', 'png');
 | `ean8` | 7 digits, or 8 with a check digit | for packaging that cannot carry an EAN-13 |
 | `upc-a` | 11 digits, or 12 with a check digit | bit for bit an EAN-13 with a leading zero |
 | `upc-e` | 7 or 8 digits, or a UPC-A that compresses | zero-suppressed, parity-carried check digit |
+| `itf` | an even number of digits | interleaved 2 of 5, the densest pure-digit linear code |
+| `itf14` | 13 digits, or 14 with a check digit | the GTIN-14 on a shipping case, bearer bar included |
 | `ean2` | exactly 2 digits | add-on: a periodical's issue number |
 | `ean5` | exactly 5 digits | add-on: a book's list price |
 
@@ -246,6 +248,8 @@ $scanme->render('5901234123457', 'ean13', 'svg');
 $scanme->render('96385074', 'ean8', 'svg');
 $scanme->render('036000291452', 'upc-a', 'svg');
 $scanme->render('04252614', 'upc-e', 'svg');
+$scanme->render('1234567890', 'itf', 'svg');
+$scanme->render('1234567890123', 'itf14', 'svg');
 $scanme->render('52', 'ean2', 'svg');
 $scanme->render('51299', 'ean5', 'svg');
 ```
@@ -285,15 +289,36 @@ one thing it costs is those two characters, so a very short Code 93 symbol saves
 less than the per-character figure suggests — 81% of the Code 39 width at eleven
 characters, 72% at fifty-nine.
 
+`itf` is the densest of the pure-digit linear codes, and the one with the
+sharpest edge. It interleaves digits in pairs — one digit's elements are the
+bars, the next digit's are the spaces between them — so **the digit count must
+be even**, and an odd one is refused rather than padded. Most encoders prepend a
+zero; that hands you a symbol carrying a different number, which this library
+declines to do for the same reason it declines to correct a wrong EAN check
+digit. Write the zero yourself, or turn on the optional check digit, which makes
+an odd payload the encodable one:
+
+```php
+use CrazyGoat\ScanMePHP\Generator\Itf\ItfOptions;
+
+$scanme->render('123456789', 'itf', 'png', new ItfOptions(checkDigit: true));
+```
+
+ITF is also not self-checking: nothing in the bars marks where a character
+begins, so a scan that clips a guard reads a valid *shorter* number. That is what
+`itf14` addresses, and why its bearer bar — the solid frame — is drawn as part of
+the symbol rather than left to you. The 10-module quiet zone goes *inside* that
+frame, which is the detail worth knowing if you ever draw one by hand.
+
 Aliases resolve too — `ean`, `ean-13`, `upc`, `upca`, `dm`, `ecc200`, `qr`,
-`c39`, `c93`.
+`c39`, `c93`, `i25`, `gtin-14`.
 
 If you have a payload and are not sure which symbologies accept it, ask rather
 than guess:
 
 ```php
 $scanme->getRegistry()->generatorsFor('036000291452');
-// ['qrcode', 'code128', 'code39', 'code39ext', 'ean13', 'upc-a', 'data-matrix']
+// ['qrcode', 'code128', 'code39', 'code39ext', 'code93', 'ean13', 'upc-a', 'itf', 'data-matrix']
 ```
 
 And to see what is installed, with the rules each one enforces:
