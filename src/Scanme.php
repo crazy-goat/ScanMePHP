@@ -92,6 +92,18 @@ final class Scanme
         ?RenderOptionsInterface $options = null
     ): string {
         $renderer = $this->registry->getRenderer($format);
+        $capabilities = $renderer->getCapabilities();
+
+        if ($options !== null
+            && $capabilities->optionsClass !== null
+            && !$options instanceof $capabilities->optionsClass
+        ) {
+            throw UnsupportedOptionsException::wrongType(
+                $renderer->getFormat() . ' renderer',
+                $capabilities->optionsClass,
+                $options::class
+            );
+        }
 
         $reasons = Compatibility::check($symbol, $renderer);
         if ($reasons !== []) {

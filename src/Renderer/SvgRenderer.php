@@ -4,20 +4,24 @@ declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP\Renderer;
 
-use CrazyGoat\ScanMePHP\Exception\InvalidConfigurationException;
-use CrazyGoat\ScanMePHP\Matrix;
+use CrazyGoat\ScanMePHP\ModuleShape;
 use CrazyGoat\ScanMePHP\ModuleStyle;
-use CrazyGoat\ScanMePHP\RendererInterface;
-use CrazyGoat\ScanMePHP\RenderOptions;
+use CrazyGoat\ScanMePHP\Options\RenderOptionsInterface;
+use CrazyGoat\ScanMePHP\Region;
+use CrazyGoat\ScanMePHP\Renderer\Options\SvgOptions;
+use CrazyGoat\ScanMePHP\Symbol;
 
-class SvgRenderer implements RendererInterface
+final class SvgRenderer implements RendererInterface
 {
-    public function __construct(
-        private readonly int $moduleSize = 10,
-    ) {
-        if ($this->moduleSize <= 0) {
-            throw InvalidConfigurationException::invalidModuleSize($this->moduleSize);
-        }
+    /** Font size for text lines, as a multiple of the module size. */
+    private const TEXT_SCALE = 1.5;
+
+    /** Module rows of vertical space reserved per text line. */
+    private const TEXT_ROWS = 2;
+
+    public function getFormat(): string
+    {
+        return 'svg';
     }
 
     public function getContentType(): string
@@ -25,137 +29,158 @@ class SvgRenderer implements RendererInterface
         return 'image/svg+xml';
     }
 
-    public function render(Matrix $matrix, RenderOptions $options): string
+    public function getCapabilities(): RendererCapabilities
     {
-        $size = $matrix->getSize();
-        $margin = $options->margin;
-        $totalModules = $size + (2 * $margin);
-        $totalSize = $totalModules * $this->moduleSize;
+        return new RendererCapabilities(
+            moduleShapes: [ModuleShape::Square],
+            text: true,
+            color: true,
+            nonUniformRows: true,
+            optionsClass: SvgOptions::class,
+        );
+    }
 
-        $fgColor = $options->getEffectiveForegroundColor();
-        $bgColor = $options->getEffectiveBackgroundColor();
+    public function render(Symbol $symbol, ?RenderOptionsInterface $options = null): string
+    {
+        $options = $options instanceof SvgOptions ? $options : new SvgOptions();
+        $layout = Layout::of($symbol, $options);
+        $mod = $options->moduleSize;
 
-        $svg = $this->generateSvgHeader($totalSize);
-        $svg .= $this->generateBackground($totalSize, $bgColor);
-        $svg .= $this->generateModules($matrix, $margin, $fgColor, $options->moduleStyle, $options->invert);
+        $texts = array_values(array_filter(
+            [$symbol->getText(), $options->label],
+            static fn (?string $line): bool => $line !== null && $line !== ''
+        ));
 
-        if ($options->label !== null && $options->label !== '') {
-            $svg .= $this->generateLabel($options->label, $totalSize, $size, $margin);
+        $canvasWidth = $layout->totalWidth * $mod;
+        // Text sits below the quiet zone rather than inside it: drawing it into
+        // the symbol's own box would either overlap the bottom quiet zone or
+        // fall outside the viewBox and silently not render at all.
+        $canvasHeight = ($layout->totalHeight + (\count($texts) * self::TEXT_ROWS)) * $mod;
+
+        $svg = sprintf(
+            '<?xml version="1.0" encoding="UTF-8"?>' . "\n"
+            . '<svg xmlns="http://www.w3.org/2000/svg" version="1.1" '
+            . 'viewBox="0 0 %d %d" width="%d" height="%d">' . "\n",
+            $canvasWidth,
+            $canvasHeight,
+            $canvasWidth,
+            $canvasHeight
+        );
+
+        $background = $this->escapeColor($options->getEffectiveBackgroundColor());
+        $svg .= sprintf(
+            '  <rect width="%d" height="%d" fill="%s"/>' . "\n",
+            $canvasWidth,
+            $canvasHeight,
+            $background
+        );
+
+        $svg .= $this->modules($symbol, $layout, $options);
+
+        $foreground = $this->escapeColor($options->getEffectiveForegroundColor());
+        $baseline = $layout->totalHeight;
+        foreach ($texts as $line) {
+            $baseline += self::TEXT_ROWS;
+            $svg .= sprintf(
+                '  <text x="%d" y="%d" text-anchor="middle" font-family="Arial, sans-serif" '
+                . 'font-size="%.1f" fill="%s">%s</text>' . "\n",
+                intdiv($canvasWidth, 2),
+                ($baseline - 1) * $mod + intdiv($mod, 2),
+                $mod * self::TEXT_SCALE,
+                $foreground,
+                htmlspecialchars($line, ENT_XML1 | ENT_QUOTES, 'UTF-8')
+            );
         }
 
         return $svg . '</svg>';
     }
 
-    private function generateSvgHeader(int $size): string
-    {
-        return sprintf(
-            '<?xml version="1.0" encoding="UTF-8"?>' . "\n" .
-            '<svg xmlns="http://www.w3.org/2000/svg" version="1.1" ' .
-            'viewBox="0 0 %d %d" width="%d" height="%d">' . "\n",
-            $size,
-            $size,
-            $size,
-            $size
-        );
-    }
-
-    private function generateBackground(int $size, string $color): string
-    {
-        return sprintf(
-            '  <rect width="%d" height="%d" fill="%s"/>' . "\n",
-            $size,
-            $size,
-            $this->escapeColor($color)
-        );
-    }
-
     /**
      * Emit the dark modules (light ones when inverted).
      *
-     * Works on the matrix module string: rows are joined with "\n" so one
+     * Works on the module string with rows joined by "\n", so one
      * preg_match_all() over the whole symbol yields every run of dark modules
-     * with its offset, and offset → (x, y) is a division by size + 1.
-     * Square style draws all runs as one <path> (each run a closed sub-path,
+     * with its offset, and offset → (x, y) is a division by the row stride.
+     * Square style draws all runs as one <path> — each run a closed sub-path,
      * so abutting modules cannot show anti-aliasing seams and the output is
-     * ~5× smaller than one <rect> per module); Rounded/Dot stay one element
-     * per module. Finder-pattern modules keep per-module rounded rects.
+     * ~5× smaller than one <rect> per module; Rounded and Dot stay one element
+     * per module.
      */
-    private function generateModules(Matrix $matrix, int $margin, string $color, ModuleStyle $style, bool $invert): string
+    private function modules(Symbol $symbol, Layout $layout, SvgOptions $options): string
     {
-        $size = $matrix->getSize();
-        $stride = $size + 1;
-        $mod = $this->moduleSize;
-        $escapedColor = $this->escapeColor($color);
+        $width = $layout->width;
+        $stride = $width + 1;
+        $mod = $options->moduleSize;
+        $color = $this->escapeColor($options->getEffectiveForegroundColor());
 
-        $modules = $matrix->toModuleString();
-        if ($invert) {
-            $modules = strtr($modules, '01', '10');
-        }
-
-        // Pixel coordinates as strings, looked up instead of converted per module.
-        $coord = [];
-        for ($i = 0; $i < $size; $i++) {
-            $coord[$i] = (string) (($i + $margin) * $mod);
-        }
-
-        // Finder patterns (7×7 corners) are drawn separately with rounded corners.
-        $finderRadius = sprintf('%.1f', $mod * 0.15);
-        $finderTail = '" width="' . $mod . '" height="' . $mod . '" fill="' . $escapedColor
-            . '" rx="' . $finderRadius . '" ry="' . $finderRadius . '"/>' . "\n";
-        $result = '';
-        $blank = '0000000';
-        $rows = [];
-        for ($y = 0, $offset = 0; $y < $size; $y++, $offset += $size) {
-            $row = substr($modules, $offset, $size);
-            if ($y < 7 || $y >= $size - 7) {
-                $result .= $this->finderModules($row, 0, $coord[$y], $coord, $finderTail);
-                $row = substr_replace($row, $blank, 0, 7);
-                if ($y < 7) {
-                    $result .= $this->finderModules($row, $size - 7, $coord[$y], $coord, $finderTail);
-                    $row = substr_replace($row, $blank, $size - 7, 7);
-                }
+        $rows = $symbol->rows();
+        if ($options->invert) {
+            foreach ($rows as $index => $row) {
+                $rows[$index] = strtr($row, '01', '10');
             }
-            $rows[] = $row;
         }
-        $joined = implode("\n", $rows);
 
-        preg_match_all($style === ModuleStyle::Square ? '/1+/' : '/1/', $joined, $matches, PREG_OFFSET_CAPTURE);
+        // Pixel coordinates as strings, looked up instead of recomputed per module.
+        $x = [];
+        for ($i = 0; $i < $width; $i++) {
+            $x[$i] = (string) ($layout->columnOffset($i) * $mod);
+        }
+        $y = [];
+        $rowPixelHeight = [];
+        foreach ($layout->rowOffsets as $index => $offset) {
+            $y[$index] = (string) ($offset * $mod);
+            $rowPixelHeight[$index] = $layout->rowHeights[$index] * $mod;
+        }
+
+        $result = '';
+        if ($options->roundFinderRegions) {
+            $result = $this->finderRegions($symbol->getFinderRegions(), $rows, $x, $y, $rowPixelHeight, $mod, $color);
+        }
+
+        $joined = implode("\n", $rows);
+        preg_match_all(
+            $options->moduleStyle === ModuleStyle::Square ? '/1+/' : '/1/',
+            $joined,
+            $matches,
+            PREG_OFFSET_CAPTURE
+        );
         if ($matches[0] === []) {
             return $result;
         }
 
-        switch ($style) {
+        switch ($options->moduleStyle) {
             case ModuleStyle::Square:
-                // "h<w>v<mod>h-<w>z" per run length, computed once.
+                // "h<w>v<h>h-<w>z" per run length and row height, computed once
+                // each. Uniform-row symbols only ever populate one height key.
                 $segment = [];
-                for ($w = 1; $w <= $size; $w++) {
-                    $segment[$w] = 'h' . ($w * $mod) . 'v' . $mod . 'h-' . ($w * $mod) . 'z';
-                }
-                $d = '';
+                $path = '';
                 foreach ($matches[0] as [$run, $offset]) {
-                    $d .= 'M' . $coord[$offset % $stride] . ' ' . $coord[intdiv($offset, $stride)] . $segment[\strlen($run)];
+                    $row = intdiv($offset, $stride);
+                    $runWidth = \strlen($run) * $mod;
+                    $height = $rowPixelHeight[$row];
+                    $segment[$height][$runWidth] ??= 'h' . $runWidth . 'v' . $height . 'h-' . $runWidth . 'z';
+                    $path .= 'M' . $x[$offset % $stride] . ' ' . $y[$row] . $segment[$height][$runWidth];
                 }
-                $result .= '  <path fill="' . $escapedColor . '" d="' . $d . '"/>' . "\n";
+                $result .= '  <path fill="' . $color . '" d="' . $path . '"/>' . "\n";
                 break;
 
             case ModuleStyle::Rounded:
                 $radius = sprintf('%.1f', $mod * 0.3);
-                $tail = '" width="' . $mod . '" height="' . $mod . '" fill="' . $escapedColor
-                    . '" rx="' . $radius . '" ry="' . $radius . '"/>' . "\n";
                 foreach ($matches[0] as [, $offset]) {
-                    $result .= '  <rect x="' . $coord[$offset % $stride] . '" y="' . $coord[intdiv($offset, $stride)] . $tail;
+                    $row = intdiv($offset, $stride);
+                    $result .= '  <rect x="' . $x[$offset % $stride] . '" y="' . $y[$row]
+                        . '" width="' . $mod . '" height="' . $rowPixelHeight[$row]
+                        . '" fill="' . $color . '" rx="' . $radius . '" ry="' . $radius . '"/>' . "\n";
                 }
                 break;
 
             case ModuleStyle::Dot:
-                $centre = [];
                 $half = intdiv($mod, 2);
-                foreach ($coord as $i => $px) {
-                    $centre[$i] = (string) ((int) $px + $half);
-                }
-                $tail = '" r="' . sprintf('%.1f', $mod * 0.4) . '" fill="' . $escapedColor . '"/>' . "\n";
                 foreach ($matches[0] as [, $offset]) {
-                    $result .= '  <circle cx="' . $centre[$offset % $stride] . '" cy="' . $centre[intdiv($offset, $stride)] . $tail;
+                    $row = intdiv($offset, $stride);
+                    $result .= '  <circle cx="' . ((int) $x[$offset % $stride] + $half)
+                        . '" cy="' . ((int) $y[$row] + intdiv($rowPixelHeight[$row], 2))
+                        . '" r="' . sprintf('%.1f', $mod * 0.4) . '" fill="' . $color . '"/>' . "\n";
                 }
                 break;
         }
@@ -164,45 +189,57 @@ class SvgRenderer implements RendererInterface
     }
 
     /**
-     * Rounded rects for the seven finder-pattern columns starting at $x0 of one row.
+     * Draw the symbology's structurally special regions with rounded corners
+     * and blank them out of $rows so the run matcher does not draw them twice.
      *
-     * @param list<string> $coord Pixel coordinate per module index
+     * The renderer does not know what these regions mean — for QR they are the
+     * three finder patterns, another symbology may report none or something
+     * else entirely.
+     *
+     * @param list<Region> $regions
+     * @param list<string> $rows
+     * @param array<int, string> $x
+     * @param array<int, string> $y
+     * @param array<int, int> $rowPixelHeight
      */
-    private function finderModules(string $row, int $x0, string $py, array $coord, string $tail): string
-    {
+    private function finderRegions(
+        array $regions,
+        array &$rows,
+        array $x,
+        array $y,
+        array $rowPixelHeight,
+        int $mod,
+        string $color
+    ): string {
+        if ($regions === []) {
+            return '';
+        }
+
+        $radius = sprintf('%.1f', $mod * 0.15);
         $out = '';
-        for ($x = $x0, $end = $x0 + 7; $x < $end; $x++) {
-            if ($row[$x] === '1') {
-                $out .= '  <rect x="' . $coord[$x] . '" y="' . $py . $tail;
+
+        foreach ($regions as $region) {
+            $lastRow = min($region->y + $region->height, \count($rows));
+            for ($row = $region->y; $row < $lastRow; $row++) {
+                $lastColumn = min($region->x + $region->width, \strlen($rows[$row]));
+                for ($column = $region->x; $column < $lastColumn; $column++) {
+                    if ($rows[$row][$column] === '1') {
+                        $out .= '  <rect x="' . $x[$column] . '" y="' . $y[$row]
+                            . '" width="' . $mod . '" height="' . $rowPixelHeight[$row]
+                            . '" fill="' . $color . '" rx="' . $radius . '" ry="' . $radius . '"/>' . "\n";
+                    }
+                    $rows[$row][$column] = '0';
+                }
             }
         }
 
         return $out;
     }
 
-    private function generateLabel(string $label, int $totalSize, int $matrixSize, int $margin): string
-    {
-        $labelY = ($matrixSize + 2 * $margin + 2) * $this->moduleSize;
-        $fontSize = $this->moduleSize * 1.5;
-
-        return sprintf(
-            '  <text x="%d" y="%d" text-anchor="middle" font-family="Arial, sans-serif" ' .
-            'font-size="%.1f" fill="#000000">%s</text>' . "\n",
-            $totalSize / 2,
-            $labelY,
-            $fontSize,
-            htmlspecialchars($label, ENT_XML1 | ENT_QUOTES, 'UTF-8')
-        );
-    }
-
     private function escapeColor(string $color): string
     {
-        // Basic validation - only allow hex colors
-        if (preg_match('/^#[0-9A-Fa-f]{6}$/', $color)) {
-            return $color;
-        }
-
-        // Default to black if invalid
-        return '#000000';
+        // Only literal hex colours reach the document; anything else would let
+        // an option value inject markup or a url() reference into the SVG.
+        return preg_match('/^#[0-9A-Fa-f]{6}$/', $color) === 1 ? $color : '#000000';
     }
 }
