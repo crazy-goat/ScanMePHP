@@ -21,6 +21,7 @@ final class SvgOptions extends AbstractRenderOptions
         string $backgroundColor = '#FFFFFF',
         bool $invert = false,
         ?string $label = null,
+        bool $showText = true,
         public readonly ModuleStyle $moduleStyle = ModuleStyle::Square,
         public readonly bool $roundFinderRegions = true,
     ) {
@@ -32,6 +33,7 @@ final class SvgOptions extends AbstractRenderOptions
             $backgroundColor,
             $invert,
             $label,
+            $showText,
         );
     }
 }

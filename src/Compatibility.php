@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP;
 
+use CrazyGoat\ScanMePHP\Options\RenderOptionsInterface;
+use CrazyGoat\ScanMePHP\Renderer\Options\AbstractRenderOptions;
 use CrazyGoat\ScanMePHP\Renderer\RendererInterface;
 
 /**
@@ -19,10 +21,17 @@ final class Compatibility
     /**
      * Reasons this renderer cannot faithfully draw this symbol.
      *
+     * The options matter: a caller who has explicitly turned the
+     * human-readable text off is not asking for something the renderer cannot
+     * deliver, so a fontless renderer stops being incompatible.
+     *
      * @return list<string> Empty when the pair is compatible
      */
-    public static function check(Symbol $symbol, RendererInterface $renderer): array
-    {
+    public static function check(
+        Symbol $symbol,
+        RendererInterface $renderer,
+        ?RenderOptionsInterface $options = null
+    ): array {
         $capabilities = $renderer->getCapabilities();
         $reasons = [];
 
@@ -38,8 +47,10 @@ final class Compatibility
             );
         }
 
-        if ($symbol->getText() !== null && !$capabilities->text) {
-            $reasons[] = 'the symbology supplies a human-readable interpretation that this renderer cannot print';
+        $wantsText = !$options instanceof AbstractRenderOptions || $options->showText;
+        if ($wantsText && $symbol->getText() !== null && !$capabilities->text) {
+            $reasons[] = 'the symbology supplies a human-readable interpretation that this renderer '
+                . 'cannot print (pass showText: false to render without it)';
         }
 
         if (!$symbol->hasUniformRows() && !$capabilities->nonUniformRows) {
@@ -49,8 +60,11 @@ final class Compatibility
         return $reasons;
     }
 
-    public static function isCompatible(Symbol $symbol, RendererInterface $renderer): bool
-    {
-        return self::check($symbol, $renderer) === [];
+    public static function isCompatible(
+        Symbol $symbol,
+        RendererInterface $renderer,
+        ?RenderOptionsInterface $options = null
+    ): bool {
+        return self::check($symbol, $renderer, $options) === [];
     }
 }

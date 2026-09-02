@@ -106,7 +106,7 @@ final class Scanme
             );
         }
 
-        $reasons = Compatibility::check($symbol, $renderer);
+        $reasons = Compatibility::check($symbol, $renderer, $options);
         if ($reasons !== []) {
             $symbology = $symbol->getMetadataValue('symbology');
 

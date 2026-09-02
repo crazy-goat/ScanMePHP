@@ -86,7 +86,7 @@ final class HtmlRenderer implements RendererInterface
         $markup .= $this->quietRow($layout, $mod, $layout->quietZone->bottom, $background);
         $markup .= $table ? '</table>' : '</div>';
 
-        foreach ([$symbol->getText(), $options->label] as $line) {
+        foreach ([$options->resolveText($symbol), $options->label] as $line) {
             if ($line !== null && $line !== '') {
                 $markup .= $this->caption($line, $pixelWidth, $mod, $foreground, $background);
             }

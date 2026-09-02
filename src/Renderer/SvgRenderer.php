@@ -47,7 +47,7 @@ final class SvgRenderer implements RendererInterface
         $mod = $options->moduleSize;
 
         $texts = array_values(array_filter(
-            [$symbol->getText(), $options->label],
+            [$options->resolveText($symbol), $options->label],
             static fn (?string $line): bool => $line !== null && $line !== ''
         ));
 

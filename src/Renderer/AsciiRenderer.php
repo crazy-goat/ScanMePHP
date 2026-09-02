@@ -63,7 +63,7 @@ final class AsciiRenderer implements RendererInterface
         $background = $this->backgroundChar($invert);
         $lineHeight = $this->style === AsciiStyle::HalfBlocks ? 2 : 1;
 
-        return $this->assemble($block, $layout, $options, $symbol->getText(), $background, $lineHeight);
+        return $this->assemble($block, $layout, $options, $options->resolveText($symbol), $background, $lineHeight);
     }
 
     /**

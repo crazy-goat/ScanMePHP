@@ -19,6 +19,7 @@ final class AsciiOptions extends AbstractRenderOptions
         ?int $barHeight = null,
         bool $invert = false,
         ?string $label = null,
+        bool $showText = true,
         public readonly int $sideMargin = 0,
     ) {
         if ($this->sideMargin < 0) {
@@ -31,6 +32,7 @@ final class AsciiOptions extends AbstractRenderOptions
             barHeight: $barHeight,
             invert: $invert,
             label: $label,
+            showText: $showText,
         );
     }
 }

@@ -20,6 +20,8 @@ namespace CrazyGoat\ScanMePHP;
 enum Symbology: string
 {
     case QrCode = 'qrcode';
+    case Code128 = 'code128';
+    case Ean13 = 'ean13';
 
     /** The name the registry resolves, for either accepted form. */
     public static function nameOf(string|self $symbology): string
