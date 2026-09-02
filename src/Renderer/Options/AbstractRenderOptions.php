@@ -9,6 +9,8 @@ use CrazyGoat\ScanMePHP\Exception\InvalidConfigurationException;
 use CrazyGoat\ScanMePHP\Options\RenderOptionsInterface;
 use CrazyGoat\ScanMePHP\QuietZone;
 use CrazyGoat\ScanMePHP\Symbol;
+use CrazyGoat\ScanMePHP\TextPlacement;
+use CrazyGoat\ScanMePHP\TextRegion;
 
 /**
  * The appearance knobs every renderer shares.
@@ -103,6 +105,36 @@ abstract class AbstractRenderOptions implements RenderOptionsInterface
     final public function resolveText(Symbol $symbol): ?string
     {
         return $this->showText ? $symbol->getText() : null;
+    }
+
+    /**
+     * The lines to draw, grouped into the bands a renderer reserves.
+     *
+     * One band per placement, except that a label always gets a band of its
+     * own beneath the symbology's line rather than colliding with it.
+     *
+     * @return array{above: list<list<TextRegion>>, below: list<list<TextRegion>>}
+     */
+    final public function resolveTextLines(Symbol $symbol): array
+    {
+        $above = [];
+        $below = [];
+
+        foreach ($this->showText ? $symbol->getTextRegions() : [] as $region) {
+            if ($region->placement === TextPlacement::Above) {
+                $above[] = $region;
+            } else {
+                $below[] = $region;
+            }
+        }
+
+        $lines = ['above' => $above === [] ? [] : [$above], 'below' => $below === [] ? [] : [$below]];
+
+        if ($this->label !== null && $this->label !== '') {
+            $lines['below'][] = [new TextRegion($this->label, TextPlacement::Below, 0, $symbol->getWidth())];
+        }
+
+        return $lines;
     }
 
     final public function getEffectiveForegroundColor(): string

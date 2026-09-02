@@ -26,9 +26,22 @@ number is worse than a compile error.
 - **EAN-2 and EAN-5**, the add-on symbols printed beside a retail barcode: a
   periodical's issue number, a book's list price. They carry no check digit,
   so the digit count is exact — a third digit on an EAN-2 is a different
-  add-on, not a checksum, and is refused rather than trimmed. Composing one
-  into the same image as its main symbol is not yet done for you; the modules
-  are there and `examples/02_symbologies.php` shows the three lines it takes.
+  add-on, not a checksum, and is refused rather than trimmed.
+- **Add-on placement**, via `Ean\Composite::of()`: an EAN-13, UPC-A or UPC-E
+  with its add-on beside it, as one `Symbol` every renderer draws. Not a
+  concatenation — there is a seven-module gap, the add-on's bars are drawn
+  shorter than the main symbol's, and its digits go *above* its bars, since the
+  line below already carries the main symbol's own. An EAN-8 is refused: GS1
+  defines no add-on for it, and the pair would scan while being a label a
+  retail system may reject.
+- **Positioned human-readable text.** `Symbol` accepts `TextRegion`s — text
+  with a placement and the module columns it belongs over — which is what makes
+  the above drawable. A plain `text` is still shorthand for one line centred
+  underneath, so nothing else changed. Renderers declare `positionedText` in
+  their capabilities; it defaults to **false**, so a renderer written before
+  this existed is reported as unable rather than assumed able, and a composite
+  handed to one is refused by name instead of printing the price under the
+  middle of the label.
 - **Code 39 and Code 39 Extended**, registered as two symbologies rather than
   one with a flag. They are the same bars: extended mode reaches the whole of
   ASCII by spending two characters on each byte outside the standard 43, and

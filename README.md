@@ -259,9 +259,28 @@ $scanme->render('51299', 'ean5', 'svg');
 `ean2` and `ean5` are the add-on symbols printed beside a main barcode — the
 issue number on a magazine, the price on a book. They carry no check digit, so
 the digit count is exact: a third digit is a different add-on, not a checksum,
-and is refused rather than trimmed. This release generates them as symbols in
-their own right; placing one alongside an EAN-13 in a single image is not yet
-done for you.
+and is refused rather than trimmed.
+
+To put one beside the symbol it belongs to, compose them:
+
+```php
+use CrazyGoat\ScanMePHP\Generator\Ean\Composite;
+
+$composite = Composite::of(
+    $scanme->generate('9788375780642', 'ean13'),
+    $scanme->generate('51299', 'ean5'),
+);
+
+echo $scanme->renderSymbol($composite, 'png');   // reads back as 978837578064251299
+```
+
+That is not a concatenation. The standard puts a gap of seven modules between
+the two, draws the add-on's bars shorter than the main symbol's, and prints the
+add-on's digits **above** its bars — the line underneath already carries the
+main symbol's own. What may be composed with what is a rule rather than a
+convenience: an add-on goes beside an `ean13`, `upc-a` or `upc-e`, and an EAN-8
+is refused, because GS1 defines no add-on for it and the pair would scan
+perfectly well while being a label a retail system may reject.
 
 `code39` and `code39ext` are two readings of one set of bars. Standard Code 39
 carries 43 characters; extended mode reaches all of ASCII by encoding the other

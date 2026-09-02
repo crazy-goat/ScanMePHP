@@ -49,6 +49,7 @@ final class PngRenderer implements RendererInterface
             // 1-bit grayscale: a module is on or off, and so is a glyph pixel.
             color: false,
             nonUniformRows: true,
+            positionedText: true,
             textCharacters: implode('', BitmapFont::characters()),
             optionsClass: PngOptions::class,
         );
@@ -60,18 +61,27 @@ final class PngRenderer implements RendererInterface
         $layout = Layout::of($symbol, $options);
         $mod = $options->moduleSize;
 
-        $textLines = $this->textLines($symbol, $options);
+        $bands = $this->bands($symbol, $layout, $options);
 
-        // The canvas grows sideways if a text line is wider than the symbol,
+        // The canvas grows sideways if a text line runs past the symbol,
         // rather than clipping it: silently losing part of an article number
-        // would be worse than an image a few modules wider than expected.
-        $canvasWidth = $layout->totalWidth;
-        foreach ($textLines as $line) {
-            $canvasWidth = max($canvasWidth, BitmapFont::measure($line));
+        // would be worse than an image a few modules wider than expected. A
+        // line centred on part of the symbol — an add-on's digits — can run
+        // past either edge, so both are measured.
+        $start = 0;
+        $end = $layout->totalWidth;
+        foreach ([...$bands['above'], ...$bands['below']] as $band) {
+            foreach ($band as [$line, $centre]) {
+                $measure = BitmapFont::measure($line);
+                $at = $centre - intdiv($measure, 2);
+                $start = min($start, $at);
+                $end = max($end, $at + $measure);
+            }
         }
 
-        $canvasHeight = $layout->totalHeight
-            + \count($textLines) * (BitmapFont::HEIGHT + self::TEXT_GAP);
+        $canvasWidth = $end - $start;
+        $textRows = \count($bands['above']) + \count($bands['below']);
+        $canvasHeight = $layout->totalHeight + $textRows * (BitmapFont::HEIGHT + self::TEXT_GAP);
 
         $pixelWidth = $canvasWidth * $mod;
         $pixelHeight = $canvasHeight * $mod;
@@ -91,9 +101,17 @@ final class PngRenderer implements RendererInterface
         $padding = str_repeat($invert ? '0' : '1', $bytesPerRow * 8 - $pixelWidth);
         $blank = str_repeat('0', $canvasWidth);
 
-        $raw = $this->scanlines($blank, $layout->quietZone->top, $mod, $bytesPerRow, $pixels, $padding);
+        // Where the symbol sits once the canvas has grown to fit the text.
+        $symbolIndent = -$start;
 
-        $symbolIndent = intdiv($canvasWidth - $layout->totalWidth, 2);
+        $raw = '';
+        foreach ($bands['above'] as $band) {
+            $raw .= $this->band($band, $symbolIndent, $canvasWidth, $mod, $bytesPerRow, $pixels, $padding);
+            $raw .= $this->scanlines($blank, self::TEXT_GAP, $mod, $bytesPerRow, $pixels, $padding);
+        }
+
+        $raw .= $this->scanlines($blank, $layout->quietZone->top, $mod, $bytesPerRow, $pixels, $padding);
+
         $left = str_repeat('0', $symbolIndent + $layout->quietZone->left);
         foreach ($symbol->rows() as $index => $row) {
             $moduleRow = str_pad($left . $row, $canvasWidth, '0');
@@ -109,54 +127,95 @@ final class PngRenderer implements RendererInterface
 
         $raw .= $this->scanlines($blank, $layout->quietZone->bottom, $mod, $bytesPerRow, $pixels, $padding);
 
-        foreach ($textLines as $line) {
+        foreach ($bands['below'] as $band) {
             $raw .= $this->scanlines($blank, self::TEXT_GAP, $mod, $bytesPerRow, $pixels, $padding);
-            $indent = intdiv($canvasWidth - BitmapFont::measure($line), 2);
-            foreach (BitmapFont::rasterise($line) as $glyphRow) {
-                $moduleRow = str_pad(str_repeat('0', $indent) . $glyphRow, $canvasWidth, '0');
-                $raw .= $this->scanlines($moduleRow, 1, $mod, $bytesPerRow, $pixels, $padding);
-            }
+            $raw .= $this->band($band, $symbolIndent, $canvasWidth, $mod, $bytesPerRow, $pixels, $padding);
         }
 
         return $this->encoder->encodeScanlines($raw, $pixelWidth, $pixelHeight, $options->compressionLevel);
     }
 
     /**
-     * The text lines to print: the symbol's own human-readable interpretation,
-     * then the caller's caption.
+     * One band of text as scanlines: every line on it, each centred on its own
+     * columns, rasterised into the same seven glyph rows.
      *
-     * The symbol's text is already vetted by Compatibility before render() is
+     * @param list<array{string, int}> $band Text, and the module column to centre it on
+     * @param array<string, string> $pixels
+     */
+    private function band(
+        array $band,
+        int $symbolIndent,
+        int $canvasWidth,
+        int $mod,
+        int $bytesPerRow,
+        array $pixels,
+        string $padding
+    ): string {
+        $rows = array_fill(0, BitmapFont::HEIGHT, str_repeat('0', $canvasWidth));
+
+        foreach ($band as [$line, $centre]) {
+            $at = $symbolIndent + $centre - intdiv(BitmapFont::measure($line), 2);
+
+            foreach (BitmapFont::rasterise($line) as $index => $glyphRow) {
+                $rows[$index] = substr_replace($rows[$index], $glyphRow, $at, \strlen($glyphRow));
+            }
+        }
+
+        $raw = '';
+        foreach ($rows as $row) {
+            $raw .= $this->scanlines($row, 1, $mod, $bytesPerRow, $pixels, $padding);
+        }
+
+        return $raw;
+    }
+
+    /**
+     * The text bands to print, each a list of lines with the module column to
+     * centre them on.
+     *
+     * @return array{above: list<list<array{string, int}>>, below: list<list<array{string, int}>>}
+     */
+    private function bands(Symbol $symbol, Layout $layout, PngOptions $options): array
+    {
+        $bands = ['above' => [], 'below' => []];
+
+        foreach ($options->resolveTextLines($symbol) as $placement => $lines) {
+            foreach ($lines as $regions) {
+                $band = [];
+                foreach ($regions as $region) {
+                    $this->requireGlyphs($region->text);
+                    $band[] = [$region->text, $layout->columnOffset($region->centre())];
+                }
+
+                $bands[$placement][] = $band;
+            }
+        }
+
+        return $bands;
+    }
+
+    /**
+     * A symbol's own text is vetted by Compatibility before render() is
      * reached; a caption is not, since it comes straight from the options, so
      * an unprintable one is refused here rather than drawn with gaps.
      *
-     * @return list<string>
+     * @throws RenderException when the built-in font cannot draw $line
      */
-    private function textLines(Symbol $symbol, PngOptions $options): array
+    private function requireGlyphs(string $line): void
     {
-        $lines = [];
-
-        foreach ([$options->resolveText($symbol), $options->label] as $line) {
-            if ($line === null || $line === '') {
-                continue;
-            }
-
-            $missing = BitmapFont::missing($line);
-            if ($missing !== []) {
-                throw RenderException::unsupportedOperation(sprintf(
-                    'the built-in font has no glyph for %s — the PNG renderer draws text from a fixed '
-                    . 'repertoire (digits, A-Z and common punctuation)',
-                    implode(' ', array_map(
-                        static fn (string $character): string
-                            => sprintf('%s (0x%02X)', $character, \ord($character)),
-                        $missing
-                    ))
-                ));
-            }
-
-            $lines[] = $line;
+        $missing = BitmapFont::missing($line);
+        if ($missing === []) {
+            return;
         }
 
-        return $lines;
+        throw RenderException::unsupportedOperation(sprintf(
+            'the built-in font has no glyph for %s — the PNG renderer draws text from a fixed '
+            . 'repertoire (digits, A-Z and common punctuation)',
+            implode(' ', array_map(
+                static fn (string $character): string => sprintf('%s (0x%02X)', $character, \ord($character)),
+                $missing
+            ))
+        ));
     }
 
     /**

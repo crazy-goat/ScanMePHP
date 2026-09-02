@@ -8,6 +8,7 @@ use CrazyGoat\ScanMePHP\ModuleShape;
 use CrazyGoat\ScanMePHP\Options\RenderOptionsInterface;
 use CrazyGoat\ScanMePHP\Renderer\Options\AsciiOptions;
 use CrazyGoat\ScanMePHP\Symbol;
+use CrazyGoat\ScanMePHP\TextRegion;
 
 /**
  * Renders a symbol as a block of text for terminals and logs.
@@ -45,6 +46,7 @@ final class AsciiRenderer implements RendererInterface
             text: true,
             color: false,
             nonUniformRows: true,
+            positionedText: true,
             optionsClass: AsciiOptions::class,
         );
     }
@@ -63,7 +65,7 @@ final class AsciiRenderer implements RendererInterface
         $background = $this->backgroundChar($invert);
         $lineHeight = $this->style === AsciiStyle::HalfBlocks ? 2 : 1;
 
-        return $this->assemble($block, $layout, $options, $options->resolveText($symbol), $background, $lineHeight);
+        return $this->assemble($block, $layout, $options, $options->resolveTextLines($symbol), $background, $lineHeight);
     }
 
     /**
@@ -140,13 +142,14 @@ final class AsciiRenderer implements RendererInterface
     /**
      * Wrap the symbol block in its quiet zone, side margin and text lines.
      *
+     * @param array{above: list<list<TextRegion>>, below: list<list<TextRegion>>} $textLines
      * @param int $lineHeight Module rows represented by one text line
      */
     private function assemble(
         string $block,
         Layout $layout,
         AsciiOptions $options,
-        ?string $symbolText,
+        array $textLines,
         string $background,
         int $lineHeight
     ): string {
@@ -160,16 +163,19 @@ final class AsciiRenderer implements RendererInterface
         $blankLine = str_repeat($background, $totalWidth);
 
         $lines = [];
+        foreach ($textLines['above'] as $band) {
+            $lines[] = $this->band($band, $layout, $options, $totalWidth, $background);
+            $lines[] = $blankLine;
+        }
+
         for ($row = 0; $row < $layout->quietZone->top; $row += $lineHeight) {
             $lines[] = $blankLine;
         }
         $lines[] = $block;
 
-        foreach ([$symbolText, $options->label] as $text) {
-            if ($text !== null && $text !== '') {
-                $lines[] = $blankLine;
-                $lines[] = $this->centre(' ' . $text . ' ', $totalWidth, $background);
-            }
+        foreach ($textLines['below'] as $band) {
+            $lines[] = $blankLine;
+            $lines[] = $this->band($band, $layout, $options, $totalWidth, $background);
         }
 
         for ($row = 0; $row < $layout->quietZone->bottom; $row += $lineHeight) {
@@ -177,6 +183,40 @@ final class AsciiRenderer implements RendererInterface
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * One band of text, each line over the columns it belongs to.
+     *
+     * A single full-width line lands centred, which is what this renderer did
+     * before positioning existed. A character cell is far wider than a module,
+     * so an add-on's digits cannot sit exactly over its bars here the way they
+     * do in a raster — they land as close as whole cells allow.
+     *
+     * @param list<TextRegion> $regions
+     */
+    private function band(
+        array $regions,
+        Layout $layout,
+        AsciiOptions $options,
+        int $totalWidth,
+        string $background
+    ): string {
+        if (\count($regions) === 1 && $regions[0]->width === $layout->width) {
+            return $this->centre(' ' . $regions[0]->text . ' ', $totalWidth, $background);
+        }
+
+        $line = str_repeat($background, $totalWidth);
+
+        foreach ($regions as $region) {
+            $text = ' ' . $region->text . ' ';
+            $centre = $layout->columnOffset($region->centre()) + $options->sideMargin;
+            $at = max(0, min($totalWidth - mb_strlen($text), $centre - intdiv(mb_strlen($text), 2)));
+
+            $line = mb_substr($line, 0, $at) . $text . mb_substr($line, $at + mb_strlen($text));
+        }
+
+        return $line;
     }
 
     private function centre(string $text, int $width, string $fill): string

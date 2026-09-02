@@ -16,10 +16,9 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 use CrazyGoat\ScanMePHP\Format;
 use CrazyGoat\ScanMePHP\Generator\Code39\Code39Options;
-use CrazyGoat\ScanMePHP\QuietZone;
+use CrazyGoat\ScanMePHP\Generator\Ean\Composite;
 use CrazyGoat\ScanMePHP\Renderer\Options\AsciiOptions;
 use CrazyGoat\ScanMePHP\Scanme;
-use CrazyGoat\ScanMePHP\Symbol;
 use CrazyGoat\ScanMePHP\Symbology;
 
 $scanme = Scanme::create();
@@ -160,26 +159,35 @@ echo "\n=== Add-ons go beside a main symbol, not instead of one ===\n\n";
 // of a book. On its own it is a valid symbol that most scanners will decline
 // to report, because on its own it does not identify anything.
 //
-// Composing one next to an EAN-13 is not done for you yet — a proper job needs
-// shorter add-on bars and its own line of digits above them, which Symbol
-// cannot express today. Assembling the modules by hand is three lines, and
-// what a scanner reads back is "9788375780642" + "51299":
-$main = $scanme->generate('9788375780642', Symbology::Ean13);
-$addOn = $scanme->generate('51299', Symbology::Ean5);
-
-$composite = Symbol::linear(
-    // Row 0 of the EAN-13 is its bars; row 1 carries only the guard
-    // descenders. ISO/IEC 15420 asks for at least seven modules of separation,
-    // and the add-on's own guard opens with a space, so this leaves eight.
-    modules: substr($main->toModuleString(), 0, $main->getWidth())
-        . str_repeat('0', 7)
-        . $addOn->toModuleString(),
-    quietZone: new QuietZone(left: 11, right: 5),
-    barHeight: 20,
-    text: $main->getText() . ' ' . $addOn->getText(),
+// Composite::of() places one beside the symbol it belongs to. It is not a
+// concatenation: there is a gap of seven modules, the add-on's bars are drawn
+// shorter than the main symbol's, and its digits go *above* its bars, because
+// the line underneath already carries the main symbol's own.
+$composite = Composite::of(
+    $scanme->generate('9788375780642', Symbology::Ean13),
+    $scanme->generate('51299', Symbology::Ean5),
 );
 
-printf("%s + %s, %d modules wide\n\n", $main->getText(), $addOn->getText(), $composite->getWidth());
-echo $scanme->renderSymbol($composite, Format::AsciiHalfBlocks, new AsciiOptions(sideMargin: 2));
+printf(
+    "%s reads back as \"%s\", %d modules across %d rows\n\n",
+    $composite->getText(),
+    $composite->getMetadataValue('main') . $composite->getMetadataValue('addOnText'),
+    $composite->getWidth(),
+    $composite->getHeight()
+);
+
+echo $scanme->renderSymbol($composite, Format::AsciiHalfBlocks, new AsciiOptions(barHeight: 14, sideMargin: 2));
+
+// What may be composed with what is a rule, not a convenience: GS1 defines no
+// add-on for EAN-8, so one is refused even though the bars would take it and a
+// scanner would read the pair.
+try {
+    Composite::of(
+        $scanme->generate('96385074', Symbology::Ean8),
+        $scanme->generate('51299', Symbology::Ean5),
+    );
+} catch (InvalidArgumentException $refused) {
+    printf("\n%s\n", $refused->getMessage());
+}
 
 echo "\nDone.\n";

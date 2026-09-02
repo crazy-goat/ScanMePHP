@@ -25,6 +25,13 @@ final class RendererCapabilities
      * @param bool $color Honours foreground/background colours
      * @param bool $nonUniformRows Can draw rows of differing heights, as the
      *        four-state postal symbologies require
+     * @param bool $positionedText Can place a line of text over part of the
+     *        symbol rather than centred under all of it, which an EAN-13 with
+     *        an add-on needs: the main digits go under the main bars and the
+     *        add-on's over its own. Defaults to false, so a renderer written
+     *        before this existed is reported as unable rather than assumed
+     *        able — the failure of the assumption would be a label with the
+     *        price printed under the wrong half of it.
      * @param string|null $textCharacters When this renderer can print text but
      *        only from a fixed repertoire, the characters it has. Null means
      *        any text, which is the case for every renderer that delegates
@@ -39,6 +46,7 @@ final class RendererCapabilities
         public readonly bool $text = true,
         public readonly bool $color = true,
         public readonly bool $nonUniformRows = true,
+        public readonly bool $positionedText = false,
         public readonly ?string $textCharacters = null,
         public readonly ?string $optionsClass = null,
     ) {
@@ -49,6 +57,12 @@ final class RendererCapabilities
         if (!$this->text && $this->textCharacters !== null) {
             throw new \InvalidArgumentException(
                 'A renderer that cannot print text must not declare a character repertoire'
+            );
+        }
+
+        if (!$this->text && $this->positionedText) {
+            throw new \InvalidArgumentException(
+                'A renderer that cannot print text cannot place it either'
             );
         }
     }

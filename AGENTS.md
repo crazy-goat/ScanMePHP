@@ -165,6 +165,23 @@ through the decoder some other way, the substitution is declared in
 `DecoderRoundTripTest::NO_STANDALONE_READER`, and a test asserts the reason
 still holds so the exemption cannot quietly outlive it.
 
+Where the independent encoder or the decoder cannot cover something, the gap is
+declared with a test rather than left silent. There are three shapes of it so
+far, and all three are the same rule: an exemption that cannot expire quietly
+becomes a habit.
+
+- **The decoder will not read the symbology standalone** — the EAN add-ons.
+  Substitute a gate that puts the same bars through it another way, declare it
+  in `DecoderRoundTripTest::NO_STANDALONE_READER`, and assert the reason still
+  holds.
+- **The decoder has a floor** — a two-digit ITF, a one-character Codabar. Its
+  own writer produces the same unreadable symbol, so the case is left out of
+  the provider with a test that fails if the floor ever moves.
+- **Nothing can verify the table at all** — Codabar's check character, whose
+  variants in circulation disagree and which zxing-cpp neither writes nor
+  validates. Then it is not shipped, and a test asserts the option does not
+  exist.
+
 Where two symbologies are the same bars, the round trip names the format it is
 asking for rather than accepting the decoder's default reading — `UPCA` for a
 UPC-A, `Code39Std` for standard Code 39. That is not making the test easier:
