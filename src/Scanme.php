@@ -51,8 +51,8 @@ final class Scanme
      */
     public function render(
         string $data,
-        string $generator,
-        string $format,
+        string|Symbology $generator,
+        string|Format $format,
         OptionsInterface ...$options
     ): string {
         [$generatorOptions, $renderOptions] = $this->routeOptions($options);
@@ -69,7 +69,7 @@ final class Scanme
      * @throws UnsupportedDataException
      * @throws UnsupportedOptionsException
      */
-    public function generate(string $data, string $generator, OptionsInterface ...$options): Symbol
+    public function generate(string $data, string|Symbology $generator, OptionsInterface ...$options): Symbol
     {
         [$generatorOptions, $renderOptions] = $this->routeOptions($options);
 
@@ -88,7 +88,7 @@ final class Scanme
      */
     public function renderSymbol(
         Symbol $symbol,
-        string $format,
+        string|Format $format,
         ?RenderOptionsInterface $options = null
     ): string {
         $renderer = $this->registry->getRenderer($format);
@@ -106,7 +106,7 @@ final class Scanme
     }
 
     /** MIME type an output format produces, for HTTP responses and data URIs. */
-    public function getContentType(string $format): string
+    public function getContentType(string|Format $format): string
     {
         return $this->registry->getRenderer($format)->getContentType();
     }
@@ -117,7 +117,7 @@ final class Scanme
      * Answers the question without encoding: the incompatibilities are
      * properties of the symbology, not of a particular payload.
      */
-    public function supports(string $generator, string $format): bool
+    public function supports(string|Symbology $generator, string|Format $format): bool
     {
         $capabilities = $this->registry->getGenerator($generator)->getCapabilities();
         $rendererCapabilities = $this->registry->getRenderer($format)->getCapabilities();
@@ -136,7 +136,7 @@ final class Scanme
 
     private function generateWith(
         string $data,
-        string $name,
+        string|Symbology $name,
         ?GeneratorOptionsInterface $options
     ): Symbol {
         $generator = $this->registry->getGenerator($name);

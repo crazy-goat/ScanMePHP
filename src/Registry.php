@@ -56,32 +56,35 @@ final class Registry
     }
 
     /** @throws UnknownGeneratorException */
-    public function getGenerator(string $name): GeneratorInterface
+    public function getGenerator(string|Symbology $name): GeneratorInterface
     {
-        $key = strtolower($name);
+        $requested = Symbology::nameOf($name);
+        $key = strtolower($requested);
         $key = $this->generatorAliases[$key] ?? $key;
 
         return $this->generators[$key]
-            ?? throw UnknownGeneratorException::named($name, $this->generatorNames());
+            ?? throw UnknownGeneratorException::named($requested, $this->generatorNames());
     }
 
     /** @throws UnknownRendererException */
-    public function getRenderer(string $format): RendererInterface
+    public function getRenderer(string|Format $format): RendererInterface
     {
-        return $this->renderers[strtolower($format)]
-            ?? throw UnknownRendererException::named($format, $this->rendererFormats());
+        $requested = Format::nameOf($format);
+
+        return $this->renderers[strtolower($requested)]
+            ?? throw UnknownRendererException::named($requested, $this->rendererFormats());
     }
 
-    public function hasGenerator(string $name): bool
+    public function hasGenerator(string|Symbology $name): bool
     {
-        $key = strtolower($name);
+        $key = strtolower(Symbology::nameOf($name));
 
         return isset($this->generators[$key]) || isset($this->generatorAliases[$key]);
     }
 
-    public function hasRenderer(string $format): bool
+    public function hasRenderer(string|Format $format): bool
     {
-        return isset($this->renderers[strtolower($format)]);
+        return isset($this->renderers[strtolower(Format::nameOf($format))]);
     }
 
     /** Canonical names of every registered generator. @return list<string> */
