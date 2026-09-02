@@ -158,6 +158,13 @@ suite. So every symbology gets two independent checks:
 
 When adding a symbology, both are part of the work, not a follow-up.
 
+If the decoder cannot read the symbology standalone — as with the EAN-2 and
+EAN-5 add-ons, which zxing-cpp will only pick up beside a main symbol — the
+round trip is not skipped. It is replaced by one that gates the same bars
+through the decoder some other way, the substitution is declared in
+`DecoderRoundTripTest::NO_STANDALONE_READER`, and a test asserts the reason
+still holds so the exemption cannot quietly outlive it.
+
 ## CI/CD
 
 GitHub Actions runs on PHP 8.2, 8.3, 8.4.

@@ -135,9 +135,14 @@ final class Decoder
      *        formats, e.g. 'UPCA'. Null lets it report whatever it finds,
      *        which for the EAN/UPC family is not always the symbology that
      *        was asked for: UPC-A shares its bars with EAN-13.
+     * @param string|null $eanAddOn 'ignore', 'read' or 'require' — what to do
+     *        with a two- or five-digit add-on printed beside an EAN/UPC
+     *        symbol. 'require' refuses a symbol that has none, which is the
+     *        only way to make a scanner confirm add-on bars: zxing-cpp has no
+     *        reader for a lone EAN-2 or EAN-5.
      * @return list<array{format: string, text: string, bytes: list<int>, valid: bool}>
      */
-    public static function decode(string $png, ?string $formats = null): array
+    public static function decode(string $png, ?string $formats = null, ?string $eanAddOn = null): array
     {
         $python = self::python();
         if ($python === null) {
@@ -149,10 +154,11 @@ final class Decoder
 
         try {
             $command = sprintf(
-                '%s %s %s%s 2>&1',
+                '%s %s %s%s%s 2>&1',
                 escapeshellarg($python),
                 escapeshellarg(self::script()),
                 $formats === null ? '' : '--formats ' . escapeshellarg($formats) . ' ',
+                $eanAddOn === null ? '' : '--ean-add-on ' . escapeshellarg($eanAddOn) . ' ',
                 escapeshellarg($file)
             );
 

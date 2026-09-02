@@ -6,7 +6,12 @@ namespace CrazyGoat\ScanMePHP\Tests;
 
 use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
 use CrazyGoat\ScanMePHP\Generator\DataMatrix\DataMatrixOptions;
+use CrazyGoat\ScanMePHP\Generator\Ean\Patterns;
 use CrazyGoat\ScanMePHP\Generator\Qr\QrOptions;
+use CrazyGoat\ScanMePHP\QuietZone;
+use CrazyGoat\ScanMePHP\Renderer\Options\PngOptions;
+use CrazyGoat\ScanMePHP\Scanme;
+use CrazyGoat\ScanMePHP\Symbol;
 use CrazyGoat\ScanMePHP\Symbology;
 use CrazyGoat\ScanMePHP\Tests\Support\Decoder;
 use CrazyGoat\ScanMePHP\Tests\Support\ScansBack;
@@ -39,6 +44,25 @@ class DecoderRoundTripTest extends TestCase
         Symbology::DataMatrix->value => 'Data Matrix',
     ];
 
+    /**
+     * The symbologies zxing-cpp will not report on their own.
+     *
+     * An add-on is not an article number — it is a fragment printed beside
+     * one — and zxing-cpp has no reader for a lone EAN-2 or EAN-5, only an
+     * option to pick one up next to a main symbol. So these two are gated by
+     * testAnAddOnScansBackBesideAnEan13() instead of by a case of their own,
+     * and listing them here is what keeps that substitution deliberate: a
+     * symbology may be absent from FORMAT_NAMES only by appearing in this
+     * list, never by being forgotten.
+     *
+     * If a future zxing-cpp learns to read these standalone, the composite
+     * test still passes and this list should shrink.
+     */
+    private const NO_STANDALONE_READER = [
+        Symbology::Ean2->value,
+        Symbology::Ean5->value,
+    ];
+
     public function testTheDecoderItselfIsWiredUp(): void
     {
         $this->requireDecoder();
@@ -55,7 +79,7 @@ class DecoderRoundTripTest extends TestCase
     /** Every built-in symbology must appear here. */
     public function testEveryRegisteredSymbologyHasARoundTripCase(): void
     {
-        $covered = array_keys(self::FORMAT_NAMES);
+        $covered = array_merge(array_keys(self::FORMAT_NAMES), self::NO_STANDALONE_READER);
         $registered = array_map(
             static fn (Symbology $s): string => $s->value,
             Symbology::cases()
@@ -292,6 +316,98 @@ class DecoderRoundTripTest extends TestCase
             self::FORMAT_NAMES['data-matrix'],
             null,
             new DataMatrixOptions(rectangular: $rectangular)
+        );
+    }
+
+    /**
+     * @return iterable<string, array{string, string, string}>
+     */
+    public static function addOnProvider(): iterable
+    {
+        // One EAN-2 per parity pattern the modulo-4 table can select, and one
+        // EAN-5 per weighted checksum that the standard's table indexes.
+        foreach (['00', '01', '02', '03'] as $addOn) {
+            yield "ean-2 {$addOn}" => [Symbology::Ean2->value, $addOn, '5901234123457'];
+        }
+
+        foreach (['00000', '00001', '00002', '51234', '90000', '99999'] as $addOn) {
+            yield "ean-5 {$addOn}" => [Symbology::Ean5->value, $addOn, '9788375780642'];
+        }
+    }
+
+    /**
+     * The real gate on the add-on bars: a scanner reads them beside an EAN-13.
+     *
+     * There is no way to ask zxing-cpp to read an add-on on its own, so the
+     * symbol handed to it here is a composite assembled in the test — our
+     * EAN-13 modules, the spec's separation, then our add-on modules — and the
+     * decoder is told to refuse anything without an add-on. That means a
+     * result at all proves the add-on decoded, and the text proves it decoded
+     * as the digits we asked for.
+     *
+     * The composition lives in the test rather than in the library because
+     * placing an add-on properly needs a shorter bar height and its own
+     * human-readable line above the bars, which Symbol cannot yet express.
+     */
+    #[DataProvider('addOnProvider')]
+    public function testAnAddOnScansBackBesideAnEan13(
+        string $symbology,
+        string $addOn,
+        string $main
+    ): void {
+        $this->requireDecoder();
+
+        $scanme = Scanme::create();
+        $mainSymbol = $scanme->generate($main, Symbology::Ean13->value);
+        $addOnSymbol = $scanme->generate($addOn, $symbology);
+
+        // Row 0 of the EAN-13 is the bars; row 1 is only guard descenders,
+        // which a decoder does not need and a single-row composite cannot
+        // carry. The add-on has no descenders at all.
+        $bars = substr($mainSymbol->toModuleString(), 0, $mainSymbol->getWidth())
+            // ISO/IEC 15420 asks for at least seven modules between the two.
+            // The add-on's own guard opens with a space, so this is eight.
+            . str_repeat('0', 7)
+            . $addOnSymbol->toModuleString();
+
+        $composite = Symbol::linear(
+            modules: $bars,
+            quietZone: new QuietZone(left: 11, right: 5),
+            barHeight: Patterns::BAR_HEIGHT,
+        );
+
+        $png = $scanme->renderSymbol($composite, 'png', new PngOptions(moduleSize: 6));
+        $symbols = Decoder::decode($png, 'EAN13', 'require');
+
+        self::assertCount(
+            1,
+            $symbols,
+            sprintf('no EAN-13 with an add-on was read for %s %s', $symbology, $addOn)
+        );
+        self::assertTrue($symbols[0]['valid']);
+        self::assertSame(
+            $main . $addOn,
+            $symbols[0]['text'],
+            sprintf('%s %s beside %s', $symbology, $addOn, $main)
+        );
+    }
+
+    /**
+     * The exemption above, held to its own terms.
+     *
+     * If zxing-cpp ever reports a lone add-on, this fails and says so — which
+     * is the point: an exemption that cannot expire quietly becomes a habit.
+     */
+    public function testALoneAddOnIsStillUnreadableByTheDecoder(): void
+    {
+        $this->requireDecoder();
+
+        $png = $this->renderForScanning('12345', Symbology::Ean5->value);
+
+        self::assertSame(
+            [],
+            Decoder::decode($png, null, 'read'),
+            'zxing-cpp now reads a standalone add-on; NO_STANDALONE_READER can shrink'
         );
     }
 }
