@@ -167,8 +167,16 @@ still holds so the exemption cannot quietly outlive it.
 
 ## CI/CD
 
-GitHub Actions runs on PHP 8.2, 8.3, 8.4.
-Requires write permissions to run CI.
+GitHub Actions runs two jobs, both gated on the actor having write permissions:
+
+- **lint** — `composer lint` on PHP 8.2, the floor `composer.json` promises.
+  Builds nothing, so it fails fast and reports a lint failure as a lint
+  failure. PHPStan is pinned to the whole supported range (8.2–8.4) in
+  `phpstan.neon`, so one run answers for all three and a maintainer on a newer
+  interpreter gets the same answer as CI.
+- **test** — the full suite on PHP 8.2, 8.3 and 8.4, plus the C++ library, all
+  three SIMD kernels, the PHP extension, the PIE package and the decoder round
+  trip with `SCANME_REQUIRE_DECODER=1`.
 
 ## GitHub Workflow
 
