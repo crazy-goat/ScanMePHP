@@ -23,6 +23,13 @@ return RectorConfig::configure()
     ])
     ->withSkip([
         __DIR__ . '/clib',
+        // examples/ and bench/ are linted by php-cs-fixer and PHPStan but not
+        // modernised here: their job is to be read. Rector's rewrites — an
+        // inline fully-qualified instanceof in place of a null check — are
+        // correct and unreadable, which is the wrong trade for a file whose
+        // whole purpose is to explain the API to someone who has not used it.
+        __DIR__ . '/examples',
+        __DIR__ . '/bench',
         __DIR__ . '/vendor',
         __DIR__ . '/php-ext',
     ]);

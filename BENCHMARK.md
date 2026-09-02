@@ -51,6 +51,12 @@ dark modules are one `preg_match_all()`, PNG pixel bits are packed by GMP (or
 `margin: 4`, `moduleSize: 10`, before = `main` at 9ca32d5 (full before/after
 report incl. end-to-end numbers: `OPTIMIZATION_RESULTS_2026-08.md`):
 
+The renderer names below are the ones the classes had at the time. They are now
+reached by format name through `Scanme::render()` — `FullBlocksRenderer` is
+`ascii-blocks`, `HalfBlocksRenderer` is `ascii-half-blocks`, `SimpleRenderer` is
+`ascii-dots`, and the rest keep the obvious names. The measurements are
+unchanged: the same code, renamed.
+
 | Renderer | v10 before | v10 after | v27 before | v27 after | Output |
 |---|---|---|---|---|---|
 | `FullBlocksRenderer` | 47 | **13.5** | 232 | **74** | identical |
@@ -64,7 +70,7 @@ report incl. end-to-end numbers: `OPTIMIZATION_RESULTS_2026-08.md`):
 | `PngRenderer` | 3 161 | **123** | 14 181 | **633** | same pixels; 1.4 → 2.4 KB at the new default zlib level 1 |
 
 - **SVG**: Square modules are merged per row into runs and emitted as one `<path d="M… h… v… h-… z …">` — abutting sub-paths of a single path rasterise without anti-aliasing seams, and `rsvg-convert` renders the old and new files to identical pixels. Finder patterns keep their per-module rounded `<rect>`s in every style
-- **PNG**: only the first of the `moduleSize` identical scanlines of a module row is stored raw; the rest use the PNG *Up* filter and are all zeros, which deflate handles almost for free. With that, zlib level 1 (new default; `new PngRenderer(compressionLevel: 6)` restores the old size) is 7× faster than level 6 at v10 (31 vs 206 µs) for a 2.4 vs 1.5 KB file
+- **PNG**: only the first of the `moduleSize` identical scanlines of a module row is stored raw; the rest use the PNG *Up* filter and are all zeros, which deflate handles almost for free. With that, zlib level 1 (new default; `new PngOptions(compressionLevel: 6)` restores the old size) is 7× faster than level 6 at v10 (31 vs 206 µs) for a 2.4 vs 1.5 KB file
 - **HTML**: `HtmlTableRenderer` at v27 is bound by copying its 1.2 MB output, not by module work
 
 ## Pure PHP (`FastEncoder`, and `Encoder` for v ≤ 27)
@@ -139,17 +145,26 @@ clib/build/bench/scanme_bench 1000 csv # machine-readable
 ## Architecture
 
 ```
-QRCode (factory — auto-selects fastest available)
-  ├── NativeEncoderExt (v1-v40, C extension, requires scanmeqr.so)
-  │     └── fallback ↓
-  ├── FfiEncoder (v1-v40, C++ via FFI, requires libscanme_qr.so)
-  │     └── fallback ↓
-  ├── FastEncoder (v1-v27, Byte mode, int-pair packed, 64-bit PHP)
-  │     └── fallback ↓
-  └── Encoder (v1-v40; v1-v27 share the FastEncoder bitset path, v28-v40 scalar)
+QrGenerator
+  └── BackendSelector (picks the highest-priority available backend)
+        ├── native   (400) v1-v40, C extension, requires scanmeqr.so
+        ├── ffi      (300) v1-v40, C++ via FFI, requires libscanme_qr.so
+        ├── bitset   (200) v1-v27, Byte mode, int-pair packed, 64-bit PHP
+        └── portable (100) v1-v40; v1-v27 share the bitset path, v28-v40 scalar
 ```
 
-All encoders implement `EncoderInterface` and produce identical, spec-compliant QR codes.
+Each backend wraps one of `NativeEncoder`, `FfiEncoder`, `FastEncoder` and
+`Encoder` — all four implement `EncoderInterface` and produce identical,
+spec-compliant QR codes. Selection happens at runtime per generator, so the
+same code runs everywhere and simply goes faster where the binary is present:
+
+```php
+$qr = new QrGenerator();
+$qr->getActiveBackend()?->getName();           // which one won here
+$qr->getBackendSelector()->force('portable');  // pin one, for a benchmark
+```
+
+The other six symbologies have a single pure-PHP backend each.
 
 ## Running the Benchmark
 
@@ -160,4 +175,9 @@ php -d extension=./php-ext/modules/scanmeqr.so bench/benchmark_all.php 500
 # Benchmark 3 encoders (without php-ext)
 php bench/benchmark_encoder.php          # 200 iterations, table output
 php bench/benchmark_encoder.php 500      # 500 iterations
+
+# Renderers, over an already-encoded symbol
+php bench/benchmark_render.php all 200            # every format, one QR symbol
+php bench/benchmark_render.php svg 500 1400       # one format, a 1400-byte payload
+php bench/benchmark_render.php png 200 300 ean13  # a different symbology
 ```

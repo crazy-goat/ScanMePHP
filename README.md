@@ -1,42 +1,70 @@
 # ScanMePHP
 
-**The fastest pure PHP QR code generator with optional native C++ acceleration.**
+**A universal barcode library for PHP — with optional native C++ acceleration for QR.**
 
-Generate QR codes in PHP without dependencies — then go **100× faster** with a single C++ library. Zero bloat, maximum speed, production-ready.
+Seven symbologies, seven output formats, one call. No dependencies, no GD, no
+Imagick, no extensions required — then go **7–9× faster** on QR with a single
+C++ library if you generate them in volume.
 
 QR encoding algorithms are based on [Nayuki's QR Code generator](https://www.nayuki.io/page/qr-code-generator-library).
 
+```php
+use CrazyGoat\ScanMePHP\Scanme;
+
+$scanme = Scanme::create();
+
+echo $scanme->render('https://example.com', 'qrcode', 'svg');
+echo $scanme->render('5901234123457', 'ean13', 'png');
+```
+
 ## Why ScanMePHP?
 
-**🚀 Blazing Fast — 3-Tier Performance**
+**📇 Seven symbologies, one API**
+
+| Symbology | Accepts | Notes |
+| --- | --- | --- |
+| `qrcode` | any byte string, up to 2953 bytes | v1–v40, error correction L/M/Q/H |
+| `data-matrix` | any byte string, up to 1556 bytes | ECC200, square or rectangular |
+| `code128` | printable ASCII | automatic set switching |
+| `ean13` | 12 digits, or 13 with a check digit | the retail default |
+| `ean8` | 7 digits, or 8 with a check digit | for packaging that cannot carry an EAN-13 |
+| `upc-a` | 11 digits, or 12 with a check digit | bit for bit an EAN-13 with a leading zero |
+| `upc-e` | 7 or 8 digits, or a UPC-A that compresses | zero-suppressed, parity-carried check digit |
+
+Adding your own is a first-class path, not a fork: implement one interface,
+register it, and it resolves by name and alias like everything else.
+
+**🎨 Seven output formats**
+
+SVG, PNG (pure PHP, 1-bit), HTML (div/table) and three terminal styles. Works
+in browsers, emails, print and an SSH session.
+
+**✅ Verified against an independent decoder**
+
+Every symbology in this library is round-tripped through
+[zxing-cpp](https://github.com/zxing-cpp/zxing-cpp) on every CI build: a real
+scanner reads the payload back out of a rendered PNG. Checking an encoder
+against tables transcribed from the same standard it implements cannot catch a
+table that is wrong in the same direction as its test — and a barcode that is
+wrong but scannable fails at the till, not in the suite.
+
+**🚀 Blazing fast on QR — three tiers**
 - **Fast pure PHP**: bitwise mask selection and packed Reed–Solomon — a v10 code in ~60 µs with the JIT, no extensions needed
 - **Native C++ via FFI / extension**: another 6–8× (a v10 code in ~8–9 µs); SIMD mask selection with runtime AVX2/AVX-512 dispatch on x86-64, NEON on arm64
-- **64-bit Optimized**: 2× faster with int-pair bit packing (no extensions needed)
-- **Portable Fallback**: Works on any PHP 8.2+, 32-bit or 64-bit
+- **Portable fallback**: works on any PHP 8.2+, 32-bit or 64-bit
 
-Auto-selects the fastest encoder available — no configuration needed.
+Auto-selects the fastest encoder available — no configuration needed. The
+linear symbologies are pure PHP throughout and cost microseconds either way.
 
-**📦 Zero Dependencies**
+**📦 Zero dependencies**
 - No Composer packages to install
 - No GD, Imagick, or extensions required
-- Single `composer require`, instant QR codes
+- Single `composer require`, instant barcodes
 
-**🎨 8 Output Formats**
-SVG, PNG (pure PHP, 1-bit), HTML (div/table), ASCII (3 styles). Works in terminals, browsers, emails, and print.
-
-**🔧 Full QR Spec Support**
-- All versions v1–v40 (17 to 2953 bytes)
-- All error correction levels (L/M/Q/H)
-- Custom styling, colors, labels, dark mode
-
-## Features
-
-- **Zero dependencies** — no external packages, no PHP extensions required
-- **8 built-in renderers** — SVG, PNG, HTML (div/table), ASCII (full/half/simple blocks)
-- **All QR versions** — v1–v40, all error correction levels (L/M/Q/H)
-- **High performance** — pure PHP encodes v1 in ~15 µs / v10 in ~60 µs (JIT); native C++ extension/FFI adds another 6–8×
-- **Customizable** — module styles, colors, labels, dark mode, margins
-- **Type-safe** — strict types, enums, readonly properties, PHP 8.2+ idioms
+**🔧 Type-safe by construction**
+- Strict types, enums instead of magic strings, readonly option bags
+- Incompatible symbology/renderer pairs are reported by name, never drawn wrong
+- PHP 8.2+ idioms throughout
 
 ## Installation
 
@@ -175,246 +203,257 @@ Prebuilt FFI library binaries are available for:
 ## Quick Start
 
 ```php
-use CrazyGoat\ScanMePHP\QRCode;
+use CrazyGoat\ScanMePHP\Scanme;
 
-$qr = new QRCode('https://example.com');
-echo $qr->render();
+$scanme = Scanme::create();
+
+// Pick a symbology, pick a format, get bytes.
+echo $scanme->render('https://example.com', 'qrcode', 'svg');
 ```
 
-## Renderers
+That is the whole API surface for the common case. There is no builder to
+assemble, no engine to inject, and no object to keep alive between calls.
 
-ScanMePHP ships with 8 renderers. Each implements `RendererInterface` and can be passed as the `engine` parameter.
-
-| Renderer | Output | Constructor Options |
-|---|---|---|
-| `FullBlocksRenderer` | ASCII `█` blocks | `sideMargin` (int, default: 0) |
-| `HalfBlocksRenderer` | ASCII `▀▄█` compact | `sideMargin` (int, default: 0) |
-| `SimpleRenderer` | ASCII `●` dots | `sideMargin` (int, default: 0) |
-| `SvgRenderer` | SVG XML | `moduleSize` (int, default: 10) |
-| `PngRenderer` | PNG image (1-bit) | `moduleSize` (int, default: 10), `compressionLevel` (int 0–9, default: 1) |
-| `HtmlDivRenderer` | HTML `<div>` grid | `moduleSize` (int, default: 10), `fullHtml` (bool, default: false) |
-| `HtmlTableRenderer` | HTML `<table>` | `moduleSize` (int, default: 10), `fullHtml` (bool, default: false) |
-
-### ASCII — FullBlocksRenderer (default)
-
-**Example:** [qrcode_fullblocks.txt](examples/generated-assets/qrcode_fullblocks.txt)
+Enums exist for everything built in, so a typo is a static-analysis concern
+rather than an exception at render time:
 
 ```php
-use CrazyGoat\ScanMePHP\QRCode;
-use CrazyGoat\ScanMePHP\QRCodeConfig;
-use CrazyGoat\ScanMePHP\Renderer\FullBlocksRenderer;
+use CrazyGoat\ScanMePHP\Format;
+use CrazyGoat\ScanMePHP\Symbology;
 
-$config = new QRCodeConfig(
-    engine: new FullBlocksRenderer(sideMargin: 4),
-    label: 'ScanMePHP',
-);
-$qr = new QRCode('https://example.com', $config);
-echo $qr->render();
+echo $scanme->render('5901234123457', Symbology::Ean13, Format::Png);
 ```
 
-### ASCII — HalfBlocksRenderer
+Both forms are accepted everywhere, because the registry is open: a generator
+you register yourself must be addressable as a first-class citizen, and a
+closed enum would make it a second-class one.
 
-**Example:** [qrcode_halfblocks.txt](examples/generated-assets/qrcode_halfblocks.txt)
-
-Compact output — two rows per character using `▀▄█` half-block characters.
+## Symbologies
 
 ```php
-use CrazyGoat\ScanMePHP\Renderer\HalfBlocksRenderer;
-
-$config = new QRCodeConfig(
-    engine: new HalfBlocksRenderer(sideMargin: 4),
-);
+$scanme->render('https://example.com', 'qrcode', 'svg');
+$scanme->render('ScanMePHP', 'data-matrix', 'svg');
+$scanme->render('SHIPMENT-4471', 'code128', 'png');
+$scanme->render('5901234123457', 'ean13', 'svg');
+$scanme->render('96385074', 'ean8', 'svg');
+$scanme->render('036000291452', 'upc-a', 'svg');
+$scanme->render('04252614', 'upc-e', 'svg');
 ```
 
-### ASCII — SimpleRenderer
+Aliases resolve too — `ean`, `ean-13`, `upc`, `upca`, `dm`, `ecc200`, `qr`.
 
-**Example:** [qrcode_simple.txt](examples/generated-assets/qrcode_simple.txt)
-
-Uses `●` dots. Works in terminals without full Unicode block support.
+If you have a payload and are not sure which symbologies accept it, ask rather
+than guess:
 
 ```php
-use CrazyGoat\ScanMePHP\Renderer\SimpleRenderer;
-
-$config = new QRCodeConfig(
-    engine: new SimpleRenderer(sideMargin: 4),
-);
+$scanme->getRegistry()->generatorsFor('036000291452');
+// ['qrcode', 'code128', 'ean13', 'upc-a', 'data-matrix']
 ```
 
-### SVG — SvgRenderer
-
-**Examples:** [qrcode.svg](examples/generated-assets/qrcode.svg) | [qrcode_rounded.svg](examples/generated-assets/qrcode_rounded.svg) | [qrcode_dark.svg](examples/generated-assets/qrcode_dark.svg) | [qrcode_with_label.svg](examples/generated-assets/qrcode_with_label.svg)
+And to see what is installed, with the rules each one enforces:
 
 ```php
-use CrazyGoat\ScanMePHP\Renderer\SvgRenderer;
-use CrazyGoat\ScanMePHP\ModuleStyle;
-
-$config = new QRCodeConfig(
-    engine: new SvgRenderer(moduleSize: 12),
-    moduleStyle: ModuleStyle::Rounded, // Square, Rounded, or Dot
-    label: 'Scan Me!',
-);
-$qr = new QRCode('https://example.com', $config);
-$qr->saveToFile('qrcode.svg');
-```
-
-### PNG — PngRenderer
-
-**Examples:** [qrcode.png](examples/generated-assets/qrcode.png) | [qrcode_small.png](examples/generated-assets/qrcode_small.png) | [qrcode_large.png](examples/generated-assets/qrcode_large.png) | [qrcode_high_ecc.png](examples/generated-assets/qrcode_high_ecc.png)
-
-Generates valid PNG files in pure PHP — no GD, no Imagick, no external libraries. Black and white only, 1-bit monochrome. Ideal for email attachments, API responses, and print. Repeated pixel rows are stored with the PNG *Up* filter, so the default zlib level 1 already gives ~2 KB files in ~0.1 ms; pass `compressionLevel: 6` for the smallest output.
-
-> **Note:** Labels are not supported in PNG output (no font engine). Passing a `label` will throw a `RenderException`.
-
-```php
-use CrazyGoat\ScanMePHP\Renderer\PngRenderer;
-
-$config = new QRCodeConfig(
-    engine: new PngRenderer(moduleSize: 10),
-);
-$qr = new QRCode('https://example.com', $config);
-$qr->saveToFile('qrcode.png');
-
-// Or use as data URI (e.g. in <img> tags)
-$dataUri = $qr->getDataUri(); // data:image/png;base64,...
-```
-
-### HTML — HtmlDivRenderer
-
-**Examples:** [qrcode_div.html](examples/generated-assets/qrcode_div.html) | [qrcode_div_full.html](examples/generated-assets/qrcode_div_full.html) | [qrcode_div_inverted.html](examples/generated-assets/qrcode_div_inverted.html) | [qrcode_div_label.html](examples/generated-assets/qrcode_div_label.html)
-
-Renders QR as a `<div>` flexbox grid with inline styles. No external CSS needed.
-
-```php
-use CrazyGoat\ScanMePHP\Renderer\HtmlDivRenderer;
-
-$config = new QRCodeConfig(
-    engine: new HtmlDivRenderer(moduleSize: 10, fullHtml: false),
-    label: 'ScanMePHP',
-);
-$qr = new QRCode('https://example.com', $config);
-
-// Fragment only (for embedding)
-$html = $qr->render();
-
-// Full HTML page
-$config = new QRCodeConfig(
-    engine: new HtmlDivRenderer(fullHtml: true),
-);
-```
-
-### HTML — HtmlTableRenderer
-
-**Examples:** [qrcode_table.html](examples/generated-assets/qrcode_table.html) | [qrcode_table_full.html](examples/generated-assets/qrcode_table_full.html) | [qrcode_table_inverted.html](examples/generated-assets/qrcode_table_inverted.html) | [qrcode_table_label.html](examples/generated-assets/qrcode_table_label.html)
-
-Same as above but uses `<table>` with `<td>` elements.
-
-```php
-use CrazyGoat\ScanMePHP\Renderer\HtmlTableRenderer;
-
-$config = new QRCodeConfig(
-    engine: new HtmlTableRenderer(moduleSize: 8, fullHtml: true),
-);
-```
-
-## Configuration
-
-All options are set via `QRCodeConfig`:
-
-```php
-use CrazyGoat\ScanMePHP\QRCodeConfig;
-use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
-use CrazyGoat\ScanMePHP\ModuleStyle;
-use CrazyGoat\ScanMePHP\Renderer\SvgRenderer;
-
-$config = new QRCodeConfig(
-    engine: new SvgRenderer(),                          // renderer instance
-    errorCorrectionLevel: ErrorCorrectionLevel::Medium,  // Low, Medium, Quartile, High
-    label: 'My QR Code',                                // optional label below QR
-    size: 0,                                             // QR version 1-40, 0 = auto
-    margin: 4,                                           // quiet zone in modules
-    foregroundColor: '#000000',
-    backgroundColor: '#FFFFFF',
-    moduleStyle: ModuleStyle::Square,                    // Square, Rounded, Dot (SVG only)
-    invert: false,                                       // swap foreground/background
-);
-```
-
-## Dark Mode (Inverted)
-
-```php
-$config = new QRCodeConfig(
-    engine: new FullBlocksRenderer(sideMargin: 4),
-    invert: true,
-    label: 'Dark Mode',
-);
-```
-
-For SVG/HTML renderers, set explicit colors:
-
-```php
-$config = new QRCodeConfig(
-    engine: new SvgRenderer(),
-    invert: true,
-    foregroundColor: '#FFFFFF',
-    backgroundColor: '#000000',
-);
-```
-
-## Output Methods
-
-```php
-$qr = new QRCode('https://example.com', $config);
-
-$qr->render();              // returns string
-$qr->saveToFile('qr.svg');  // writes to file
-$qr->getDataUri();          // data:image/svg+xml;base64,...
-$qr->toBase64();            // raw base64
-$qr->toHttpResponse();      // sends Content-Type header, outputs, exits
-$qr->getMatrix();           // raw Matrix object
-$qr->validate();            // true if data fits in QR version
-echo $qr;                   // __toString() calls render()
-```
-
-## Custom Renderer
-
-Implement `RendererInterface`:
-
-```php
-use CrazyGoat\ScanMePHP\RendererInterface;
-use CrazyGoat\ScanMePHP\Matrix;
-use CrazyGoat\ScanMePHP\RenderOptions;
-
-class MyCustomRenderer implements RendererInterface
-{
-    public function render(Matrix $matrix, RenderOptions $options): string
-    {
-        $size = $matrix->getSize();
-        for ($y = 0; $y < $size; $y++) {
-            for ($x = 0; $x < $size; $x++) {
-                $isDark = $matrix->get($x, $y);
-                // ... your rendering logic
-            }
-        }
-        return $output;
-    }
-
-    public function getContentType(): string
-    {
-        return 'text/plain';
-    }
+foreach ($scanme->getRegistry()->describeGenerators() as $name => $capabilities) {
+    printf("%-12s %s — %s\n", $name, $capabilities->title, $capabilities->dataDescription);
 }
 ```
 
+## Output formats
+
+| Format | Content type | Options class |
+| --- | --- | --- |
+| `svg` | `image/svg+xml` | `SvgOptions` |
+| `png` | `image/png` | `PngOptions` |
+| `html-div` | `text/html` | `HtmlOptions` |
+| `html-table` | `text/html` | `HtmlOptions` |
+| `ascii-blocks` | `text/plain` | `AsciiOptions` |
+| `ascii-half-blocks` | `text/plain` | `AsciiOptions` |
+| `ascii-dots` | `text/plain` | `AsciiOptions` |
+
+`ascii-half-blocks` packs two module rows into one character cell, which is why
+a QR code fits in a normal terminal window.
+
+## Options
+
+Options come in two kinds, and the split is deliberate. **Generator options**
+change what is encoded — a higher QR error correction level spends symbol
+capacity and can grow the symbol. **Render options** change how the same
+modules are drawn.
+
+```php
+use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
+use CrazyGoat\ScanMePHP\Generator\Qr\QrOptions;
+use CrazyGoat\ScanMePHP\ModuleStyle;
+use CrazyGoat\ScanMePHP\Renderer\Options\SvgOptions;
+
+echo $scanme->render(
+    'https://example.com',
+    'qrcode',
+    'svg',
+    new QrOptions(errorCorrection: ErrorCorrectionLevel::High),
+    new SvgOptions(
+        moduleSize: 8,
+        foregroundColor: '#1B3A57',
+        backgroundColor: '#F5F0E1',
+        moduleStyle: ModuleStyle::Rounded,
+        label: 'Scan me',
+    ),
+);
+```
+
+Bags are routed by the interface they implement, so order does not matter and
+either may be omitted. A bag nobody claims is an error rather than a silent
+no-op — the options that do not fit are exactly the ones you cared about.
+
+### Render options
+
+Every renderer's bag carries these:
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `moduleSize` | `10` | Pixels (or CSS px) per module; fixed at 1 for ASCII |
+| `quietZone` | `null` | Override the margin; `null` uses what the symbology requires |
+| `barHeight` | `null` | Height of the bars, in modules; `null` uses the symbology's own |
+| `foregroundColor` | `#000000` | Dark modules |
+| `backgroundColor` | `#FFFFFF` | Light modules |
+| `invert` | `false` | Swap the two |
+| `label` | `null` | Caption drawn under the symbol |
+| `showText` | `true` | Print the human-readable interpretation a linear symbology carries |
+
+Plus, per renderer: `SvgOptions` adds `moduleStyle` and `roundFinderRegions`,
+`PngOptions` adds `compressionLevel` (0–9), `HtmlOptions` adds `fullDocument`
+and `title`, and `AsciiOptions` adds `sideMargin`.
+
+The quiet zone default is worth knowing about: four modules for QR, eleven left
+and seven right for EAN-13, nine and seven for UPC-E. Those widths are part of
+being scannable, not a matter of taste. An explicit value still wins, including
+a smaller or zero one — a caller rendering a preview into a tight layout is
+entitled to that, and it is their call to make.
+
+### Generator options
+
+`QrOptions` takes `errorCorrection` (L/M/Q/H) and an optional `version` floor.
+`DataMatrixOptions` takes `rectangular` and an optional exact `size`. The
+linear symbologies take none: their geometry is fixed by the standard.
+
+## Output methods
+
+```php
+// A string
+$svg = $scanme->render('https://example.com', 'qrcode', 'svg');
+
+// A file, written under LOCK_EX so a concurrent request cannot read half of it
+$scanme->toFile('/var/www/qr.png', 'https://example.com', 'qrcode', 'png');
+
+// A data: URI for an <img src> or a CSS background
+$uri = $scanme->dataUri('https://example.com', 'qrcode', 'svg');
+
+// The modules themselves, for a custom renderer or an image pipeline
+$symbol = $scanme->generate('https://example.com', 'qrcode');
+
+// One encode, many outputs
+$png = $scanme->renderSymbol($symbol, 'png');
+$svg = $scanme->renderSymbol($symbol, 'svg');
+
+// The MIME type, so a controller never hardcodes one
+$scanme->getContentType('svg');   // image/svg+xml
+```
+
+In a controller that is:
+
+```php
+return new Response(
+    $scanme->render($payload, Symbology::QrCode, Format::Svg),
+    200,
+    ['Content-Type' => $scanme->getContentType(Format::Svg)],
+);
+```
+
+## When a pair does not fit
+
+Renderers are swappable, including ones written outside this library, so the
+facade cannot assume every renderer copes with every symbol. A renderer that
+paints character cells has no way to draw MaxiCode's hexagons; one with no font
+engine cannot print the digits an EAN symbol supplies. The alternative to
+reporting the mismatch is emitting something that looks like a barcode and does
+not scan.
+
+```php
+$scanme->supports('ean13', 'svg');   // true — asked without encoding anything
+```
+
+`supports()` answers before encoding, so it sees only symbology-level facts.
+For a question about one particular payload, ask about a built symbol:
+
+```php
+use CrazyGoat\ScanMePHP\Compatibility;
+
+$reasons = Compatibility::check($symbol, $renderer, $options);
+// [] when it renders; otherwise one plain-language reason per problem
+```
+
+Rendering an impossible pair throws `IncompatibleRendererException` naming
+every reason. Data a symbology cannot take at all throws
+`UnsupportedDataException`, naming what it does accept:
+
+```
+The UPC-E symbology cannot encode the given data;
+it accepts 7 or 8 UPC-E digits, or a UPC-A that compresses to one
+```
+
+## Extending
+
+Nothing in the default registry is privileged. Take it, add your own, hand it
+to `Scanme` — a registration under an existing name replaces it, which is how
+you swap the SVG renderer for one that suits your house style without forking.
+
+```php
+use CrazyGoat\ScanMePHP\Defaults;
+use CrazyGoat\ScanMePHP\Scanme;
+
+$scanme = new Scanme(
+    Defaults::registry()
+        ->addRenderer(new MyPdfRenderer())
+        ->addGenerator(new PharmacodeGenerator())
+);
+
+echo $scanme->render('117', 'pharmacode', 'pdf');
+```
+
+A renderer implements four methods (`getFormat`, `getContentType`,
+`getCapabilities`, `render`) and receives a `Symbol` — a plain two-level bitmap
+with a width, a height and optional per-row heights — so it needs no knowledge
+of the symbology that produced it. A generator implements four as well
+(`getCapabilities`, `canEncode`, `generate`, `getActiveBackend`) and owns its
+own backend selection; there is no base class to inherit.
+
+`examples/07_extending.php` builds all three — a renderer, a symbology and a
+backend — end to end.
+
 ## Performance
 
-ScanMePHP includes four encoder implementations. `QRCode` auto-selects the fastest available:
+QR ships four interchangeable encoding backends producing identical modules.
+The generator picks the fastest one that can run on the host, at runtime, with
+no configuration — which one won is visible only through introspection:
 
-| Encoder | Versions | Requirements | Relative Speed |
+```php
+use CrazyGoat\ScanMePHP\Generator\Qr\QrGenerator;
+
+$qr = new QrGenerator();
+$qr->getActiveBackend()?->getName();          // 'native', 'ffi', 'bitset' or 'portable'
+$qr->getBackendSelector()->force('portable'); // pin one, for a benchmark or a test
+```
+
+
+| Backend | Versions | Requirements | Relative Speed |
 |---|---|---|---|
-| `NativeEncoderExt` | v1–v40 | 64-bit PHP + `scanmeqr` extension | **7–9×** faster (a v10 code in ~7 µs) |
-| `FfiEncoder` | v1–v40 | 64-bit PHP + FFI + `libscanme_qr.so` | **6–8×** faster (a v10 code in ~8 µs) |
-| `FastEncoder` | v1–v27 | 64-bit PHP | baseline (bitset fast path) |
-| `Encoder` | v1–v40 | 64-bit PHP 8.2+ | baseline — same fast path for v1–v27, scalar pipeline for v28–v40 |
+| `native` | v1–v40 | 64-bit PHP + `scanmeqr` extension | **7–9×** faster (a v10 code in ~7 µs) |
+| `ffi` | v1–v40 | 64-bit PHP + FFI + `libscanme_qr.so` | **6–8×** faster (a v10 code in ~8 µs) |
+| `bitset` | v1–v27 | 64-bit PHP | baseline (bitset fast path) |
+| `portable` | v1–v40 | PHP 8.2+, 32- or 64-bit | baseline — same fast path for v1–v27, scalar pipeline for v28–v40 |
+
+The other six symbologies are pure PHP throughout and encode in single-digit
+microseconds; for them the renderer is the cost that matters.
 
 ### Capacity (Byte Mode)
 
@@ -427,13 +466,13 @@ Maximum data length for URL/text encoding (Byte mode) at different QR versions:
 | v27 | 125×125 | 1465 | 1125 | 805 | 625 |
 | v40 | 177×177 | **2953** | **2331** | **1663** | **1273** |
 
-**Note:** FastEncoder supports up to v27 (1465 bytes max). For larger data, the portable Encoder's v28–v40 pipeline is automatically used.
+**Note:** the `bitset` backend supports up to v27 (1465 bytes max). For larger data, the portable Encoder's v28–v40 pipeline is automatically used.
 
 ### Benchmark Results
 
 Measured on PHP 8.5 (`opcache.jit=tracing`) / Apple M-series, 500 iterations per case, median latency:
 
-| Test case | Encoder | FastEncoder | FfiEncoder | NativeEncoderExt | Speedup (Encoder/Ext) |
+| Test case | `portable` | `bitset` | `ffi` | `native` | Speedup (portable/native) |
 |---|---|---|---|---|---|
 | v1 (21×21) L | 0.016 ms | 0.015 ms | 0.003 ms | 0.002 ms | **7×** |
 | v5 (37×37) L | 0.031 ms | 0.031 ms | 0.004 ms | 0.004 ms | **8×** |
@@ -452,9 +491,13 @@ All four encoders produce identical, spec-compliant QR codes verified against [n
 Run the benchmark yourself:
 
 ```bash
-php bench/benchmark_encoder.php        # 200 iterations
+php bench/benchmark_encoder.php        # QR encoding, 200 iterations
 php bench/benchmark_encoder.php 500    # 500 iterations
 php -d extension=php-ext/modules/scanmeqr.so bench/benchmark_all.php 500   # incl. the extension
+
+php bench/benchmark_render.php all 200            # every output format, one QR symbol
+php bench/benchmark_render.php svg 500 1400       # one format, a 1400-byte payload
+php bench/benchmark_render.php png 200 300 ean13  # a different symbology
 ```
 
 See [BENCHMARK.md](BENCHMARK.md) for full results, the C++-only benchmark and
@@ -472,14 +515,16 @@ cp clib/build/libscanme_qr.so .
 
 Then pass the library path when creating the encoder:
 
+The `ffi` backend finds it automatically — it looks for
+`clib/build/libscanme_qr.so` in the project root, and for the binary the
+Composer plugin downloads. To point at one somewhere else, construct the
+encoder yourself:
+
 ```php
 use CrazyGoat\ScanMePHP\FfiEncoder;
 
 $encoder = new FfiEncoder(__DIR__ . '/libscanme_qr.so');
-$qr = new QRCode('https://example.com', encoder: $encoder);
 ```
-
-Or let `QRCode` auto-detect it (looks for `clib/build/libscanme_qr.so` in the project root).
 
 ### Prebuilt Binaries
 
@@ -514,28 +559,46 @@ Place the downloaded binary in your project directory. The `FfiEncoder` will aut
 
 - PHP >= 8.2
 - No extensions required
+- Upgrading from 0.x? See [UPGRADING.md](UPGRADING.md)
 - No external dependencies
 - Optional: C++20 compiler + CMake for native FFI encoder
 
 ## Testing
 
 ```bash
-composer test
+composer test                 # the full suite
+composer lint                 # php-cs-fixer, PHPStan, Rector, knowledge-base lint
+
+composer decoders:install     # zxing-cpp + pillow, in a local venv
+composer test:roundtrip       # every symbology, read back by a real decoder
 ```
+
+The round-trip suite skips when the decoder is absent, unless
+`SCANME_REQUIRE_DECODER=1` is set — which CI does, because a gate that silently
+disappears is worse than no gate at all.
 
 ## Examples
 
-See the `examples/` directory. Run any example:
+Seven runnable examples live in [`examples/`](examples/), each printing what it
+is doing:
+
+| File | What it covers |
+| --- | --- |
+| `01_quickstart.php` | The one call this library is built around |
+| `02_symbologies.php` | Every symbology, its payload rules, and how the family relates |
+| `03_output_formats.php` | Every output format and what each is good for |
+| `04_options.php` | Generator options change the symbol; render options change the picture |
+| `05_files_and_web.php` | Files, data URIs, and serving a symbol over HTTP |
+| `06_compatibility.php` | What happens when a symbology and a renderer do not fit |
+| `07_extending.php` | Your own renderer, symbology and encoding backend |
 
 ```bash
-php examples/ascii_fullblocks.php
-php examples/svg_example.php
-php examples/png_example.php
-php examples/html_div.php
-php examples/html_table.php
+php examples/01_quickstart.php
 ```
 
-Generated output files are saved to `examples/generated-assets/`.
+Generated files are written to `examples/generated-assets/`, which is
+regenerated rather than committed. `tests/ExamplesTest.php` runs all seven on
+every CI build — an example that nothing executes is a claim, not a fact.
 
 ## License
 

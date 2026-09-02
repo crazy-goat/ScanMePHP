@@ -5,10 +5,10 @@ declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use CrazyGoat\ScanMePHP\Encoder;
+use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
 use CrazyGoat\ScanMePHP\FastEncoder;
 use CrazyGoat\ScanMePHP\FfiEncoder;
 use CrazyGoat\ScanMePHP\NativeEncoder;
-use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
 
 $libraryPath = FfiEncoder::localBuildPath();
 $extLoaded = extension_loaded('scanmeqr');
@@ -26,10 +26,14 @@ $testCases = [
 
 function bench(callable $fn, int $n): float
 {
-    for ($i = 0; $i < min(3, $n); $i++) $fn();
+    for ($i = 0; $i < min(3, $n); $i++) {
+        $fn();
+    }
     gc_collect_cycles();
     $t = hrtime(true);
-    for ($i = 0; $i < $n; $i++) $fn();
+    for ($i = 0; $i < $n; $i++) {
+        $fn();
+    }
     return (hrtime(true) - $t) / 1e6 / $n;
 }
 
@@ -39,9 +43,9 @@ $extAvailable  = $extLoaded && class_exists('CrazyGoat\ScanMePHP\NativeEncoder')
 
 echo "=== Encoder benchmark — {$iterations} iterations per case ===\n";
 echo "PHP Encoder:      available\n";
-echo "FastEncoder:      " . ($fastAvailable ? "available (64-bit PHP)" : "NOT available (requires 64-bit PHP)") . "\n";
-echo "FfiEncoder:       " . ($ffiAvailable  ? "available ({$libraryPath})" : "NOT available (build clib first)") . "\n";
-echo "NativeEncoderExt: " . ($extAvailable  ? "available (php-ext loaded)" : "NOT available (load php-ext first)") . "\n";
+echo 'FastEncoder:      ' . ($fastAvailable ? 'available (64-bit PHP)' : 'NOT available (requires 64-bit PHP)') . "\n";
+echo 'FfiEncoder:       ' . ($ffiAvailable ? "available ({$libraryPath})" : 'NOT available (build clib first)') . "\n";
+echo 'NativeEncoderExt: ' . ($extAvailable ? 'available (php-ext loaded)' : 'NOT available (load php-ext first)') . "\n";
 echo "\n";
 
 $fmt = "%-22s  %10s  %10s  %10s  %10s  %8s  %8s  %8s\n";
@@ -55,22 +59,23 @@ foreach ($testCases as $tc) {
     // Create fresh encoders for each test case to avoid cache effects
     $phpEncoder  = new Encoder();
     $fastEncoder = $fastAvailable ? new FastEncoder() : null;
-    $ffiEncoder  = $ffiAvailable  ? new FfiEncoder($libraryPath) : null;
-    $extEncoder  = $extAvailable  ? new NativeEncoder() : null;
+    $ffiEncoder  = $ffiAvailable ? new FfiEncoder($libraryPath) : null;
+    $extEncoder  = $extAvailable ? new NativeEncoder() : null;
 
-    $phpMs  = bench(fn() => $phpEncoder->encode($data, $ecl), $iterations);
-    $fastMs = $fastEncoder !== null ? bench(fn() => $fastEncoder->encode($data, $ecl), $iterations) : null;
-    $ffiMs  = $ffiEncoder  !== null ? bench(fn() => $ffiEncoder->encode($data, $ecl), $iterations)  : null;
-    $extMs  = $extEncoder  !== null ? bench(fn() => $extEncoder->encode($data, $ecl), $iterations)  : null;
+    $phpMs  = bench(fn () => $phpEncoder->encode($data, $ecl), $iterations);
+    $fastMs = $fastEncoder !== null ? bench(fn () => $fastEncoder->encode($data, $ecl), $iterations) : null;
+    $ffiMs  = $ffiEncoder  !== null ? bench(fn () => $ffiEncoder->encode($data, $ecl), $iterations) : null;
+    $extMs  = $extEncoder  !== null ? bench(fn () => $extEncoder->encode($data, $ecl), $iterations) : null;
 
-    printf($fmt,
+    printf(
+        $fmt,
         $tc['label'],
         number_format($phpMs, 3),
         $fastMs !== null ? number_format($fastMs, 3) : 'N/A',
-        $ffiMs  !== null ? number_format($ffiMs,  3) : 'N/A',
-        $extMs  !== null ? number_format($extMs,  3) : 'N/A',
+        $ffiMs  !== null ? number_format($ffiMs, 3) : 'N/A',
+        $extMs  !== null ? number_format($extMs, 3) : 'N/A',
         $fastMs !== null ? sprintf('%.2fx', $phpMs / $fastMs) : 'N/A',
-        $ffiMs  !== null ? sprintf('%.2fx', $phpMs / $ffiMs)  : 'N/A',
+        $ffiMs  !== null ? sprintf('%.2fx', $phpMs / $ffiMs) : 'N/A',
         $extMs  !== null ? sprintf('%.2fx', $phpMs / $extMs) : 'N/A',
     );
 }
@@ -79,11 +84,11 @@ echo str_repeat('-', 98) . "\n";
 
 if ($extAvailable) {
     echo "\n=== Speedup vs Pure PHP ===\n";
-    echo "NativeEncoderExt is ~" . number_format($phpMs / $extMs, 1) . "x faster than pure PHP encoder\n";
+    echo 'NativeEncoderExt is ~' . number_format($phpMs / $extMs, 1) . "x faster than pure PHP encoder\n";
     if ($fastAvailable) {
-        echo "NativeEncoderExt is ~" . number_format($fastMs / $extMs, 1) . "x faster than FastEncoder\n";
+        echo 'NativeEncoderExt is ~' . number_format($fastMs / $extMs, 1) . "x faster than FastEncoder\n";
     }
     if ($ffiAvailable) {
-        echo "NativeEncoderExt is ~" . number_format($ffiMs / $extMs, 1) . "x faster than FfiEncoder\n";
+        echo 'NativeEncoderExt is ~' . number_format($ffiMs / $extMs, 1) . "x faster than FfiEncoder\n";
     }
 }
