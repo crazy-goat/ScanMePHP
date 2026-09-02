@@ -8,6 +8,7 @@ use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
 use CrazyGoat\ScanMePHP\Exception\IncompatibleRendererException;
 use CrazyGoat\ScanMePHP\Generator\Code39\Charset;
 use CrazyGoat\ScanMePHP\Generator\Code39\Code39Options;
+use CrazyGoat\ScanMePHP\Generator\Code93\Charset as Code93Charset;
 use CrazyGoat\ScanMePHP\Generator\DataMatrix\DataMatrixOptions;
 use CrazyGoat\ScanMePHP\Generator\Ean\Patterns;
 use CrazyGoat\ScanMePHP\Generator\Qr\QrOptions;
@@ -42,6 +43,7 @@ class DecoderRoundTripTest extends TestCase
         Symbology::Code128->value => 'Code 128',
         Symbology::Code39->value => 'Code 39',
         Symbology::Code39Extended->value => 'Code 39 Extended',
+        Symbology::Code93->value => 'Code 93',
         Symbology::Ean13->value => 'EAN-13',
         Symbology::Ean8->value => 'EAN-8',
         Symbology::UpcA->value => 'UPC-A',
@@ -436,6 +438,77 @@ class DecoderRoundTripTest extends TestCase
             $symbol->getWidth(),
             'four characters between the guards, not three'
         );
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function code93Provider(): iterable
+    {
+        yield 'letters' => ['SCANME'];
+        yield 'single letter' => ['A'];
+        yield 'single digit' => ['0'];
+        yield 'digits' => ['1234567890'];
+        yield 'the whole data set' => [Code93Charset::CHARACTERS];
+        yield 'lowercase' => ['hello'];
+        yield 'mixed case' => ['Hello World'];
+        // The four bytes Code 39 Extended has to escape and this symbology
+        // does not — see testCode93HasOnlyOneReadingOfAShiftCharacter.
+        yield 'shift characters as data' => ['A$B/C+D%E'];
+        yield 'punctuation' => ['{"id":42}'];
+        yield 'underscore' => ['a-b_c'];
+        // The guard is its own pattern rather than a character, so unlike
+        // Code 39 an asterisk in the payload cannot end the symbol early.
+        yield 'asterisk' => ['A*B'];
+        // Past the wrap of both check-character weight cycles, where a running
+        // index that never starts over produces a symbol no scanner accepts.
+        yield 'past both weight cycles' => [str_repeat('CODE93-', 5) . 'END'];
+        yield 'printable range' => [self::printableAscii()];
+    }
+
+    #[DataProvider('code93Provider')]
+    public function testCode93ScansBack(string $data): void
+    {
+        $this->assertScansBack($data, Symbology::Code93->value, self::FORMAT_NAMES['code93']);
+    }
+
+    /**
+     * The one substantive difference from Code 39, from the decoder's side.
+     *
+     * Standard Code 39 printing 'A$B' comes back as two characters unless the
+     * reader is told which mode to use, because there a shift is spelled with
+     * a data character. Code 93's shifts have bars of their own, so the same
+     * payload has one reading and needs no format hint at all.
+     */
+    public function testCode93HasOnlyOneReadingOfAShiftCharacter(): void
+    {
+        $this->requireDecoder();
+
+        $symbols = Decoder::decode($this->renderForScanning('A$B', Symbology::Code93->value));
+
+        self::assertCount(1, $symbols);
+        self::assertSame('Code 93', $symbols[0]['format']);
+        self::assertSame('A$B', $symbols[0]['text']);
+        self::assertSame([65, 36, 66], $symbols[0]['bytes'], 'three characters, not two');
+    }
+
+    /**
+     * Control bytes again, and again unprintable — the renderer refuses the
+     * human-readable line for the same reason it does in Code 39 Extended.
+     */
+    public function testCode93CarriesControlBytes(): void
+    {
+        $this->requireDecoder();
+
+        $data = "\x01\x09\x0a\x1f\x7f";
+        $png = Scanme::create()->render(
+            $data,
+            Symbology::Code93->value,
+            'png',
+            new PngOptions(moduleSize: 6, showText: false)
+        );
+        $symbols = Decoder::decode($png, 'Code93');
+
+        self::assertCount(1, $symbols);
+        self::assertSame([1, 9, 10, 31, 127], $symbols[0]['bytes']);
     }
 
     /** @return iterable<string, array{string, string}> */
