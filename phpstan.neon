@@ -7,6 +7,8 @@ parameters:
         - src/
         - tests/
         - bin/
+        - examples/
+        - bench/
     excludePaths:
         analyseAndScan:
             - clib/*

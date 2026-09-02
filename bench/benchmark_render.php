@@ -2,148 +2,142 @@
 
 declare(strict_types=1);
 
+/*
+ * Renderer benchmark: how long it takes to draw an already-encoded symbol.
+ *
+ * Encoding is deliberately outside the measured region — a Symbol is built
+ * once and handed to every renderer — because the two costs move
+ * independently, and for large symbols rendering is the larger of the two.
+ *
+ * usage: php bench/benchmark_render.php [format|all] [iterations] [payload bytes] [symbology]
+ *
+ *   php bench/benchmark_render.php all 200
+ *   php bench/benchmark_render.php svg 500 1400
+ *   php bench/benchmark_render.php png 200 300 ean13
+ */
+
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use CrazyGoat\ScanMePHP\QRCode;
-use CrazyGoat\ScanMePHP\QRCodeConfig;
-use CrazyGoat\ScanMePHP\Renderer\PngRenderer;
-use CrazyGoat\ScanMePHP\Renderer\SvgRenderer;
-use CrazyGoat\ScanMePHP\Renderer\HtmlDivRenderer;
-use CrazyGoat\ScanMePHP\Renderer\HtmlTableRenderer;
-use CrazyGoat\ScanMePHP\Renderer\FullBlocksRenderer;
-use CrazyGoat\ScanMePHP\Renderer\HalfBlocksRenderer;
-use CrazyGoat\ScanMePHP\Renderer\SimpleRenderer;
+use CrazyGoat\ScanMePHP\Defaults;
+use CrazyGoat\ScanMePHP\Renderer\Options\AbstractRenderOptions;
+use CrazyGoat\ScanMePHP\Renderer\Options\AsciiOptions;
+use CrazyGoat\ScanMePHP\Renderer\RendererInterface;
+use CrazyGoat\ScanMePHP\Scanme;
 
-function showUsage(): void
-{
-    echo "Usage: php benchmark_render.php <renderer> <iterations> [data_size]\n";
-    echo "\n";
-    echo "This benchmark measures ONLY rendering time (excludes QR encoding).\n";
-    echo "\n";
-    echo "Examples:\n";
-    echo "  php benchmark_render.php svg 100\n";
-    echo "  php benchmark_render.php png 50 500\n";
-    echo "  php benchmark_render.php all 20\n";
+$format = $argv[1] ?? 'all';
+$iterations = max(1, (int) ($argv[2] ?? 200));
+$payloadBytes = max(1, (int) ($argv[3] ?? 300));
+$symbology = $argv[4] ?? 'qrcode';
+
+$scanme = new Scanme($registry = Defaults::registry());
+
+if ($format !== 'all' && !$registry->hasRenderer($format)) {
+    fwrite(STDERR, sprintf(
+        "unknown format \"%s\"; available: all, %s\n",
+        $format,
+        implode(', ', $registry->rendererFormats())
+    ));
     exit(1);
 }
 
-if ($argc < 3) {
-    showUsage();
-}
+/**
+ * A payload of roughly the requested size that the chosen symbology accepts.
+ *
+ * The retail symbologies take a fixed number of digits, so a size argument is
+ * meaningless for them; saying so beats silently benchmarking something else.
+ */
+$payload = static function (string $symbology, int $bytes) use ($registry): string {
+    $fixed = [
+        'ean13' => '5901234123457',
+        'ean8' => '96385074',
+        'upc-a' => '036000291452',
+        'upc-e' => '04252614',
+    ];
 
-$rendererName = $argv[1];
-$iterations = (int) $argv[2];
-$dataSize = isset($argv[3]) ? (int) $argv[3] : 300;
+    if (isset($fixed[$symbology])) {
+        return $fixed[$symbology];
+    }
 
-if ($iterations < 1) {
-    echo "Error: iterations must be at least 1\n";
-    exit(1);
-}
+    $data = substr(str_repeat('https://example.com/', (int) ceil($bytes / 20) + 1), 0, $bytes);
 
-// Pre-generate matrix once (not measured)
-$testData = str_repeat('https://example.com/', (int) ceil($dataSize / 20));
-$config = new QRCodeConfig();
-$qr = new QRCode($testData, $config);
-$matrix = $qr->getMatrix();
-$renderOptions = new \CrazyGoat\ScanMePHP\RenderOptions(
-    margin: 4,
-    foregroundColor: '#000000',
-    backgroundColor: '#FFFFFF',
-    moduleStyle: \CrazyGoat\ScanMePHP\ModuleStyle::Square,
-);
+    if (!$registry->getGenerator($symbology)->canEncode($data)) {
+        fwrite(STDERR, sprintf("%s cannot encode a %d-byte payload of that shape\n", $symbology, $bytes));
+        exit(1);
+    }
 
-echo "Test data length: " . strlen($testData) . " bytes\n";
-echo "QR Matrix size: " . $matrix->getSize() . "x" . $matrix->getSize() . "\n";
-echo "Iterations: $iterations\n";
-echo "\n";
+    return $data;
+};
 
-$renderers = [
-    'png' => ['class' => PngRenderer::class, 'args' => [4]],
-    'svg' => ['class' => SvgRenderer::class, 'args' => [4]],
-    'html-div' => ['class' => HtmlDivRenderer::class, 'args' => [4]],
-    'html-table' => ['class' => HtmlTableRenderer::class, 'args' => [4]],
-    'full-blocks' => ['class' => FullBlocksRenderer::class, 'args' => []],
-    'half-blocks' => ['class' => HalfBlocksRenderer::class, 'args' => []],
-    'simple' => ['class' => SimpleRenderer::class, 'args' => []],
-];
+$data = $payload($symbology, $payloadBytes);
+$symbol = $scanme->generate($data, $symbology);
 
-function benchmark(string $name, callable $fn, int $iterations): array
-{
-    // Warmup
-    for ($i = 0; $i < min(3, $iterations); $i++) {
-        $fn();
+/** The options bag each renderer reads, at a size worth drawing. */
+$optionsFor = static function (RendererInterface $renderer): ?AbstractRenderOptions {
+    $class = $renderer->getCapabilities()->optionsClass;
+
+    if ($class === null) {
+        return null;
+    }
+
+    // The ASCII renderers fix module size at 1 — a character cell is a module —
+    // so their bag takes no size to set.
+    return $class === AsciiOptions::class ? new AsciiOptions() : new $class(moduleSize: 4);
+};
+
+/** Steady-state per-call cost in microseconds, warmed up and with GC settled. */
+$bench = static function (callable $subject, int $n): float {
+    for ($i = 0; $i < min(5, $n); $i++) {
+        $subject();
     }
 
     gc_collect_cycles();
-    
-    $startMemory = memory_get_usage(true);
-    $startTime = hrtime(true);
-
-    for ($i = 0; $i < $iterations; $i++) {
-        $fn();
+    $start = hrtime(true);
+    for ($i = 0; $i < $n; $i++) {
+        $subject();
     }
 
-    $endTime = hrtime(true);
-    $endMemory = memory_get_usage(true);
-    
-    $totalTimeMs = ($endTime - $startTime) / 1e6;
-    $avgTimeMs = $totalTimeMs / $iterations;
-    $memoryDiffKb = ($endMemory - $startMemory) / 1024;
+    return (hrtime(true) - $start) / 1e3 / $n;
+};
 
-    return [
-        'name' => $name,
-        'avg_time_ms' => round($avgTimeMs, 3),
-        'total_time_ms' => round($totalTimeMs, 2),
-        'memory_kb' => round($memoryDiffKb, 2),
-        'iterations' => $iterations,
+printf("symbology:  %s\n", $symbology);
+printf("payload:    %d bytes\n", \strlen($data));
+printf("symbol:     %d x %d modules\n", $symbol->getWidth(), $symbol->getHeight());
+printf("iterations: %d\n\n", $iterations);
+
+printf("%-18s %12s %12s %10s\n", 'format', 'per call', 'total', 'output');
+printf("%-18s %12s %12s %10s\n", str_repeat('-', 18), str_repeat('-', 12), str_repeat('-', 12), str_repeat('-', 10));
+
+$renderers = $format === 'all' ? $registry->renderers() : [$registry->getRenderer($format)];
+$results = [];
+
+foreach ($renderers as $renderer) {
+    $options = $optionsFor($renderer);
+    $bytes = \strlen($renderer->render($symbol, $options));
+    $microseconds = $bench(static fn (): string => $renderer->render($symbol, $options), $iterations);
+
+    printf(
+        "%-18s %9.1f us %9.1f ms %8d B\n",
+        $renderer->getFormat(),
+        $microseconds,
+        $microseconds * $iterations / 1e3,
+        $bytes
+    );
+
+    $results[] = [
+        'format' => $renderer->getFormat(),
+        'microseconds' => round($microseconds, 2),
+        'bytes' => $bytes,
     ];
 }
 
-function runBenchmark(string $name, array $rendererConfig, $matrix, $renderOptions, int $iterations): array
-{
-    $class = $rendererConfig['class'];
-    $args = $rendererConfig['args'];
-    $renderer = new $class(...$args);
-    
-    return benchmark($name, function () use ($renderer, $matrix, $renderOptions) {
-        $renderer->render($matrix, $renderOptions);
-    }, $iterations);
-}
+// Written for comparison across commits; bench/benchmark_*.json is gitignored.
+$file = sprintf('%s/benchmark_render_%s_%d.json', __DIR__, $format, time());
+file_put_contents($file, json_encode([
+    'symbology' => $symbology,
+    'payload_bytes' => \strlen($data),
+    'symbol' => ['width' => $symbol->getWidth(), 'height' => $symbol->getHeight()],
+    'iterations' => $iterations,
+    'results' => $results,
+], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT));
 
-function printResult(array $r): void
-{
-    echo sprintf(
-        "%-20s %10.3f ms %10.2f ms %10.2f KB\n",
-        $r['name'],
-        $r['avg_time_ms'],
-        $r['total_time_ms'],
-        $r['memory_kb']
-    );
-}
-
-// Header
-echo sprintf("%-20s %12s %12s %12s\n", "Renderer", "Avg Time", "Total Time", "Memory");
-echo str_repeat("-", 60) . "\n";
-
-$results = [];
-
-if ($rendererName === 'all') {
-    foreach ($renderers as $key => $config) {
-        $results[] = runBenchmark($key, $config, $matrix, $renderOptions, $iterations);
-        printResult(end($results));
-    }
-} else {
-    if (!isset($renderers[$rendererName])) {
-        echo "Error: Unknown renderer '$rendererName'\n";
-        showUsage();
-    }
-    $results[] = runBenchmark($rendererName, $renderers[$rendererName], $matrix, $renderOptions, $iterations);
-    printResult($results[0]);
-}
-
-echo str_repeat("-", 60) . "\n";
-
-// Save results
-$resultsFile = __DIR__ . '/benchmark_render_' . $rendererName . '_' . time() . '.json';
-file_put_contents($resultsFile, json_encode($results, JSON_PRETTY_PRINT));
-echo "\nResults saved to: $resultsFile\n";
+printf("\nwrote %s\n", basename($file));

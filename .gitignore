@@ -22,3 +22,6 @@ review-reports/
 
 # Barcode decoders for the round-trip suite; `composer decoders:install` rebuilds it.
 /.decoders/
+
+# Written by the files in examples/; `php examples/03_output_formats.php` rebuilds them.
+/examples/generated-assets/

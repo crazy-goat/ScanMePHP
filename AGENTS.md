@@ -1,6 +1,7 @@
 # ScanMePHP - Agent Guidelines
 
-Pure PHP QR code generator with zero dependencies. PHP 8.2+.
+Pure PHP barcode library with zero dependencies, plus optional native C++
+acceleration for QR. PHP 8.2+.
 
 ## Build & Test Commands
 
@@ -11,13 +12,21 @@ composer test
 vendor/bin/phpunit
 
 # Run a single test method
-vendor/bin/phpunit --filter testBasicAsciiQrCode
+vendor/bin/phpunit --filter testTheFamilyIsRegisteredAndDescribesItself
 
 # Run tests from a specific file
-vendor/bin/phpunit tests/QRCodeTest.php
+vendor/bin/phpunit tests/ScanmeTest.php
 
 # Run with coverage (if xdebug installed)
 vendor/bin/phpunit --coverage-text
+
+# Lint: php-cs-fixer, PHPStan, Rector, knowledge-base lint — all four must pass
+composer lint
+composer lint-fix
+
+# Round-trip every symbology through an independent decoder (zxing-cpp)
+composer decoders:install
+composer test:roundtrip
 
 # Validate composer files
 composer validate --strict
@@ -36,11 +45,11 @@ composer install
 - Use enums for fixed value sets
 
 ### Naming Conventions
-- **Classes/Interfaces/Enums**: PascalCase (e.g., `QRCode`, `RendererInterface`)
+- **Classes/Interfaces/Enums**: PascalCase (e.g., `Scanme`, `RendererInterface`)
 - **Methods/Properties**: camelCase (e.g., `render()`, `errorCorrectionLevel`)
 - **Enum Cases**: PascalCase (e.g., `ErrorCorrectionLevel::Medium`)
 - **Constants**: No constants used - prefer enums
-- **Namespaces**: `ScanMePHP\` for src, `ScanMePHP\Tests\` for tests
+- **Namespaces**: `CrazyGoat\ScanMePHP\` for src, `CrazyGoat\ScanMePHP\Tests\` for tests
 
 ### Imports & Organization
 - Group use statements together (no blank lines between)
@@ -48,23 +57,22 @@ composer install
 - No unused imports
 - Example:
   ```php
-  use ScanMePHP\Encoding\Mode;
-  use ScanMePHP\Exception\FileWriteException;
-  use ScanMePHP\Exception\InvalidDataException;
+  use CrazyGoat\ScanMePHP\Encoding\Mode;
+  use CrazyGoat\ScanMePHP\Exception\FileWriteException;
+  use CrazyGoat\ScanMePHP\Exception\UnsupportedDataException;
   ```
 
 ### Type Declarations
 - Always declare return types
-- Use nullable types: `?string`, `?QRCodeConfig`
+- Use nullable types: `?string`, `?RenderOptionsInterface`
 - Use `void` for methods that don't return
-- Use `never` for methods that always exit (e.g., `toHttpResponse(): never`)
 - Use union types where appropriate (PHP 8.0+)
 
 ### Error Handling
 - Create custom exceptions in `src/Exception/`
 - Use static factory methods on exceptions:
   ```php
-  throw InvalidDataException::emptyData();
+  throw UnsupportedDataException::forSymbology($title, $description);
   throw FileWriteException::directoryNotWritable($directory);
   ```
 - Use `sprintf()` for formatted messages in exceptions
@@ -91,24 +99,64 @@ composer install
 - All renderers (PNG, SVG, HTML, ASCII) are pure PHP implementations
 
 ### Architecture Patterns
-- Renderers implement `RendererInterface`
-- Config uses immutable readonly properties via `QRCodeConfig`
-- Matrix encoding in `Encoding/` namespace
-- Enums for: `ErrorCorrectionLevel`, `ModuleStyle`, `Mode`
-- Renderers in `Renderer/` subdirectory
+- `Scanme` is the only entry point callers use; it resolves names, routes option
+  bags by the interface they implement, and refuses pairs it cannot draw
+  faithfully
+- `Registry` holds generators and renderers by name; `Defaults::registry()` is
+  what ships. Nothing in it is privileged — a registration under an existing
+  name replaces it
+- Generators implement `GeneratorInterface` and publish `GeneratorCapabilities`;
+  renderers implement `RendererInterface` and publish `RendererCapabilities`.
+  `Compatibility::check()` matches the two and reports mismatches by name rather
+  than emitting a symbol that does not scan
+- A generator composes a `BackendSelector` over one or more `BackendInterface`
+  encoders (QR has four: native, ffi, bitset, portable) — no base class
+- `Symbol` is the currency between the two halves: a rectangular two-level
+  bitmap plus quiet zone, optional per-row heights, optional human-readable
+  text and symbology metadata
+- Option bags are readonly; render options extend `AbstractRenderOptions`,
+  generator options are per-symbology (`QrOptions`, `DataMatrixOptions`)
+- Enums for `Symbology`, `Format`, `ErrorCorrectionLevel`, `ModuleStyle`,
+  `ModuleShape`, `Dimension`, `Mode` — but every API takes `string|Enum`, because
+  the registry is open and a caller's own generator must be a first-class citizen
 
 ## Project Structure
 
 ```
 src/
-  Renderer/          # Output format implementations
+  Generator/          # One directory per symbology, each with Backend/
+    Ean/              # Tables shared by the whole EAN/UPC family
+  Renderer/           # Output format implementations
+    Options/          # Render option bags
   Encoding/           # QR encoding logic
+  Options/            # The two option interfaces
   Exception/          # Custom exceptions
-  *.php               # Main classes, interfaces, enums
+  *.php               # Scanme, Registry, Defaults, Symbol, enums
 tests/
+  fixtures/           # Reference module strings from independent encoders
+  Support/            # Decoder bridge and the ScansBack trait
   *Test.php           # PHPUnit tests
-examples/             # Usage examples
+examples/             # Seven runnable examples, executed by tests/ExamplesTest.php
+bench/                # Encoder and renderer benchmarks
+clib/                 # C++ QR core (FFI + extension)
+php-ext/              # PHP extension wrapping clib
+tools/                # decode.py and the reference-fixture generators
 ```
+
+### Verification Discipline
+
+An encoder checked only against tables transcribed from the standard it
+implements cannot catch a table that is wrong in the same direction as its
+test — and a barcode that is wrong but scannable fails at the till, not in the
+suite. So every symbology gets two independent checks:
+
+- **A reference fixture** generated by an encoder we did not write (zxing-cpp),
+  compared module for module — `tests/fixtures/*_reference.csv`, regenerated by
+  `composer reference:ean-upc` and friends
+- **A decoder round trip** — render a real PNG, hand it to zxing-cpp, require
+  the payload and the symbology back (`tests/DecoderRoundTripTest.php`)
+
+When adding a symbology, both are part of the work, not a follow-up.
 
 ## CI/CD
 
