@@ -9,20 +9,12 @@ namespace CrazyGoat\ScanMePHP\Encoding;
  */
 class ReedSolomon
 {
-    private int $primitive = 0x11d;
-    private array $expTable;
-    private array $logTable;
-
-    /** @var array<int, array> Cached generator polynomials keyed by degree */
-    private array $generatorCache = [];
-
     /**
-     * Cached transposed factor tables keyed by eccCount.
-     * factorTableCache[eccCount][factor] = int[] of XOR values for each ECC position.
-     * Eliminates per-byte log lookups in the inner encode loop.
-     * @var array<int, array<int, int[]>>
+     * QR's field: primitive polynomial 0x11D with the generator polynomial
+     * starting at alpha^0. The arithmetic is shared with the other GF(2^8)
+     * symbologies; only the tables below are QR's own.
      */
-    private array $factorTableCache = [];
+    private readonly ReedSolomon256 $field;
 
     // [version-1][ecl] = [g1_blocks, g1_data, ecc_per_block, g2_blocks, g2_data]
     private const EC_BLOCKS = [
@@ -70,48 +62,12 @@ class ReedSolomon
 
     public function __construct()
     {
-        $this->initGaloisField();
-    }
-
-    private function initGaloisField(): void
-    {
-        $this->expTable = [];
-        $this->logTable = [];
-
-        $x = 1;
-        for ($i = 0; $i < 255; $i++) {
-            $this->expTable[$i] = $x;
-            $this->logTable[$x] = $i;
-            $x <<= 1;
-            if ($x & 0x100) {
-                $x ^= $this->primitive;
-            }
-        }
-        $this->expTable[255] = $this->expTable[0];
-
-        for ($i = 256; $i < 512; $i++) {
-            $this->expTable[$i] = $this->expTable[$i - 255];
-        }
+        $this->field = ReedSolomon256::forQr();
     }
 
     public function encode(array $data, int $eccCount): array
     {
-        $factorTable = $this->getFactorTable($eccCount);
-        $ecc = array_fill(0, $eccCount, 0);
-
-        foreach ($data as $byte) {
-            $factor = $byte ^ array_shift($ecc);
-            $ecc[] = 0;
-
-            if ($factor !== 0) {
-                $ft = $factorTable[$factor];
-                for ($i = 0; $i < $eccCount; $i++) {
-                    $ecc[$i] ^= $ft[$i];
-                }
-            }
-        }
-
-        return $ecc;
+        return $this->field->encode($data, $eccCount);
     }
 
     public function encodeWithInterleaving(array $data, int $version, int $eclLevel): array
@@ -159,82 +115,6 @@ class ReedSolomon
         }
 
         return $interleaved;
-    }
-
-    /**
-     * Get transposed factor table, cached by eccCount.
-     * factorTable[factor][i] = expTable[logTable[generator[i+1]] + logTable[factor]]
-     * Pre-computes all 255 non-zero factor multiplications for each generator coefficient.
-     *
-     * @return array<int, int[]> [factor] => int[] XOR values per ECC position
-     */
-    private function getFactorTable(int $eccCount): array
-    {
-        if (isset($this->factorTableCache[$eccCount])) {
-            return $this->factorTableCache[$eccCount];
-        }
-
-        $generator = $this->getGeneratorPolynomial($eccCount);
-        $expTable = $this->expTable;
-        $logTable = $this->logTable;
-
-        // Pre-compute log of each generator coefficient.
-        // Most coefficients are non-zero, but intermediate coefficients CAN be zero
-        // in GF(256) for large ECC counts (e.g., 264 for v11-High).
-        // Use -1 as sentinel for zero coefficients (log(0) is undefined).
-        $genLog = [];
-        for ($i = 0; $i < $eccCount; $i++) {
-            $coeff = $generator[$eccCount - 1 - $i];
-            $genLog[$i] = $coeff !== 0 ? $logTable[$coeff] : -1;
-        }
-
-        // Build transposed table: for each possible factor (1-255),
-        // pre-compute the XOR contribution to each ECC position.
-        // Zero coefficients contribute 0 (multiplication by zero in GF(256)).
-        $factorTable = [];
-        for ($f = 1; $f < 256; $f++) {
-            $lf = $logTable[$f];
-            $row = [];
-            for ($i = 0; $i < $eccCount; $i++) {
-                $row[$i] = $genLog[$i] !== -1 ? $expTable[$genLog[$i] + $lf] : 0;
-            }
-            $factorTable[$f] = $row;
-        }
-
-        $this->factorTableCache[$eccCount] = $factorTable;
-        return $factorTable;
-    }
-
-    /**
-     * Get generator polynomial, cached by degree.
-     */
-    private function getGeneratorPolynomial(int $degree): array
-    {
-        if (isset($this->generatorCache[$degree])) {
-            return $this->generatorCache[$degree];
-        }
-
-        $poly = $this->buildGeneratorPolynomial($degree);
-        $this->generatorCache[$degree] = $poly;
-        return $poly;
-    }
-
-    private function buildGeneratorPolynomial(int $degree): array
-    {
-        $expTable = $this->expTable;
-        $logTable = $this->logTable;
-
-        $gen = array_fill(0, $degree + 1, 0);
-        $gen[0] = 1;
-
-        for ($i = 0; $i < $degree; $i++) {
-            for ($j = $degree; $j >= 1; $j--) {
-                $gen[$j] = $gen[$j - 1] ^ ($gen[$j] === 0 ? 0 : $expTable[$logTable[$gen[$j]] + $i]);
-            }
-            $gen[0] = $expTable[$logTable[$gen[0]] + $i];
-        }
-
-        return $gen;
     }
 
     public function getEccCount(int $version, int $errorCorrectionLevel): int
