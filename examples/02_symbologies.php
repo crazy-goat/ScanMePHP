@@ -14,8 +14,12 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
+use CrazyGoat\ScanMePHP\Format;
+use CrazyGoat\ScanMePHP\QuietZone;
 use CrazyGoat\ScanMePHP\Renderer\Options\AsciiOptions;
 use CrazyGoat\ScanMePHP\Scanme;
+use CrazyGoat\ScanMePHP\Symbol;
+use CrazyGoat\ScanMePHP\Symbology;
 
 $scanme = Scanme::create();
 
@@ -56,6 +60,8 @@ $payloads = [
     'ean8' => '96385074',
     'upc-a' => '036000291452',
     'upc-e' => '04252614',
+    'ean2' => '52',
+    'ean5' => '51299',
     'data-matrix' => 'ScanMePHP',
 ];
 
@@ -101,5 +107,33 @@ $upcE = $scanme->generate('04252614', 'upc-e');
 printf("drawn digits: %s\n", $upcE->getText());
 printf("stands for:   %s\n", $upcE->getMetadataValue('upca'));
 echo $scanme->renderSymbol($upcE, 'ascii-half-blocks', new AsciiOptions(barHeight: 10, sideMargin: 2));
+
+echo "\n=== Add-ons go beside a main symbol, not instead of one ===\n\n";
+
+// An EAN-2 or EAN-5 is a fragment: the issue number of a magazine, the price
+// of a book. On its own it is a valid symbol that most scanners will decline
+// to report, because on its own it does not identify anything.
+//
+// Composing one next to an EAN-13 is not done for you yet — a proper job needs
+// shorter add-on bars and its own line of digits above them, which Symbol
+// cannot express today. Assembling the modules by hand is three lines, and
+// what a scanner reads back is "9788375780642" + "51299":
+$main = $scanme->generate('9788375780642', Symbology::Ean13);
+$addOn = $scanme->generate('51299', Symbology::Ean5);
+
+$composite = Symbol::linear(
+    // Row 0 of the EAN-13 is its bars; row 1 carries only the guard
+    // descenders. ISO/IEC 15420 asks for at least seven modules of separation,
+    // and the add-on's own guard opens with a space, so this leaves eight.
+    modules: substr($main->toModuleString(), 0, $main->getWidth())
+        . str_repeat('0', 7)
+        . $addOn->toModuleString(),
+    quietZone: new QuietZone(left: 11, right: 5),
+    barHeight: 20,
+    text: $main->getText() . ' ' . $addOn->getText(),
+);
+
+printf("%s + %s, %d modules wide\n\n", $main->getText(), $addOn->getText(), $composite->getWidth());
+echo $scanme->renderSymbol($composite, Format::AsciiHalfBlocks, new AsciiOptions(sideMargin: 2));
 
 echo "\nDone.\n";

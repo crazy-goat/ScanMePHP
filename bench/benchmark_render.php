@@ -52,6 +52,8 @@ $payload = static function (string $symbology, int $bytes) use ($registry): stri
         'ean8' => '96385074',
         'upc-a' => '036000291452',
         'upc-e' => '04252614',
+        'ean2' => '52',
+        'ean5' => '51299',
     ];
 
     if (isset($fixed[$symbology])) {

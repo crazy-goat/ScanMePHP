@@ -25,6 +25,8 @@ FORMATS = {
     "ean8": zxingcpp.EAN8,
     "upc-a": zxingcpp.UPCA,
     "upc-e": zxingcpp.UPCE,
+    "ean2": zxingcpp.EAN2,
+    "ean5": zxingcpp.EAN5,
 }
 
 
@@ -107,20 +109,62 @@ for system in ("0", "1"):
             break
 assert len(seen) == 20, f"only {len(seen)} of 20 parity patterns covered"
 
-def modules(text: str, fmt) -> str:
+# The add-ons. EAN-2 has only a hundred possible symbols, so all of them are
+# here: that is exhaustive proof of the modulo-4 parity table rather than a
+# sample of it. EAN-5 has a hundred thousand, so it gets one symbol per
+# checksum — every parity pattern the table can select — plus the edges.
+for value in range(100):
+    CASES.append(("ean2", f"{value:02d}"))
+
+
+def addon_check(digits: str) -> int:
+    return sum(int(d) * (3 if i % 2 == 0 else 9) for i, d in enumerate(digits)) % 10
+
+
+seen5 = set()
+for value in range(100000):
+    digits = f"{value:05d}"
+    check = addon_check(digits)
+    if check in seen5:
+        continue
+    seen5.add(check)
+    CASES.append(("ean5", digits))
+assert len(seen5) == 10, f"only {len(seen5)} of 10 parity patterns covered"
+
+for digits in ("00000", "99999", "51234", "90000"):
+    if ("ean5", digits) not in CASES:
+        CASES.append(("ean5", digits))
+
+
+# Expected module count per symbology, used to restore the one bit the writer
+# drops: an add-on's guard opens with a space, and an image written without
+# quiet zones starts at the first bar. The missing module is forced by the
+# guard, not guessed — asserting the width here is what keeps it that way.
+WIDTHS = {"ean13": 95, "ean8": 67, "upc-a": 95, "upc-e": 51, "ean2": 21, "ean5": 48}
+
+
+def modules(text: str, fmt, expected: int) -> str:
     barcode = zxingcpp.create_barcode(text, fmt)
     image = zxingcpp.write_barcode_to_image(barcode, scale=1, add_hrt=False, add_quiet_zones=False)
     view = memoryview(image)
     width = view.shape[1]
     row = bytearray(view)[:width]
-    return "".join("1" if pixel < 128 else "0" for pixel in row)
+    bars = "".join("1" if pixel < 128 else "0" for pixel in row)
+
+    missing = expected - len(bars)
+    if missing:
+        assert missing == 1, f"{text}: expected {expected} modules, got {len(bars)}"
+        bars = "0" + bars
+    assert bars.startswith("0101") or bars.startswith("101"), f"{text}: no start guard"
+
+    return bars
 
 
 def main() -> int:
     rows = []
     for symbology, data in CASES:
         try:
-            rows.append((symbology, data, modules(data, FORMATS[symbology])))
+            rows.append((symbology, data, modules(data, FORMATS[symbology], WIDTHS[symbology])))
         except Exception as error:  # pragma: no cover - developer tooling
             return int(bool(sys.stderr.write(f"{symbology} {data}: {error}\n"))) or 1
 

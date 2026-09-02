@@ -38,6 +38,18 @@ final class Patterns
 
     public const START_GUARD = '101';
 
+    /**
+     * Add-on symbols open with a guard of their own, five modules wide.
+     *
+     * It begins with a space, which is why an add-on cannot simply be
+     * concatenated onto a main symbol: the spec puts a gap of at least seven
+     * modules between the two, and the guard's leading space is part of it.
+     */
+    public const ADDON_START_GUARD = '01011';
+
+    /** Two modules between add-on digits, where the main symbols use none. */
+    public const ADDON_SEPARATOR = '01';
+
     public const CENTRE_GUARD = '01010';
 
     public const END_GUARD = '101';
@@ -52,6 +64,22 @@ final class Patterns
     public const BAR_HEIGHT = 64;
 
     public const GUARD_DESCENT = 5;
+
+    /**
+     * Which parity each of the two EAN-2 digits uses, selected by the
+     * two-digit value modulo 4. 'O' draws from LEFT_ODD, 'E' from LEFT_EVEN.
+     *
+     * Add-ons carry no printed check digit, so the parity is the only
+     * redundancy they have — which is also why a scanner refuses an add-on
+     * whose parity does not match the digits it read.
+     */
+    public const EAN2_PARITY = ['OO', 'OE', 'EO', 'EE'];
+
+    /** The same for EAN-5's five digits, selected by addOnCheckDigit(). */
+    public const EAN5_PARITY = [
+        'EEOOO', 'EOEOO', 'EOOEO', 'EOOOE', 'OEEOO',
+        'OOEEO', 'OOOEE', 'OEOEO', 'OEOOE', 'OOEOE',
+    ];
 
     /**
      * Weighted modulo 10 over the payload, weight 3 on the rightmost digit and
@@ -120,6 +148,93 @@ final class Patterns
 
         return \strlen($data) === $payloadLength
             || (int) $data[$payloadLength] === self::checkDigit(substr($data, 0, $payloadLength));
+    }
+
+    /**
+     * EAN-5's check digit: weights 3 and 9 alternating from the left.
+     *
+     * Unlike the rest of the family this digit is never printed and never
+     * supplied by the caller — it exists only to choose the parity pattern,
+     * which is how five digits fit into a symbol that has nowhere to put a
+     * sixth.
+     */
+    public static function addOnCheckDigit(string $digits): int
+    {
+        $sum = 0;
+        for ($position = 0, $last = \strlen($digits); $position < $last; $position++) {
+            $sum += (int) $digits[$position] * ($position % 2 === 0 ? 3 : 9);
+        }
+
+        return $sum % 10;
+    }
+
+    /**
+     * The parity string for an add-on, one character per digit.
+     *
+     * EAN-2 and EAN-5 pick theirs differently — modulo 4 of the printed value
+     * against a weighted checksum — but both spend it the same way, so the
+     * choice lives here and the backends only draw.
+     *
+     * @throws \InvalidArgumentException when $digits is not a 2- or 5-digit add-on
+     */
+    public static function addOnParity(string $digits): string
+    {
+        return match (\strlen($digits)) {
+            2 => self::EAN2_PARITY[(int) $digits % 4],
+            5 => self::EAN5_PARITY[self::addOnCheckDigit($digits)],
+            default => throw new \InvalidArgumentException(sprintf(
+                'An add-on has 2 or 5 digits, got %d: %s',
+                \strlen($digits),
+                $digits
+            )),
+        };
+    }
+
+    /**
+     * The modules of a complete add-on symbol: guard, digits, separators.
+     *
+     * Twenty-one modules for an EAN-2, forty-eight for an EAN-5. There is no
+     * trailing guard — an add-on ends on a bar, and its right-hand quiet zone
+     * is what tells a scanner the symbol is over.
+     */
+    public static function addOnModules(string $digits): string
+    {
+        $parity = self::addOnParity($digits);
+        $modules = self::ADDON_START_GUARD;
+
+        for ($position = 0, $last = \strlen($digits); $position < $last; $position++) {
+            if ($position > 0) {
+                $modules .= self::ADDON_SEPARATOR;
+            }
+
+            $table = $parity[$position] === 'O' ? self::LEFT_ODD : self::LEFT_EVEN;
+            $modules .= $table[(int) $digits[$position]];
+        }
+
+        return $modules;
+    }
+
+    /**
+     * Validate an add-on payload, which is plain digits and nothing else.
+     *
+     * normalise() does not apply: an add-on has no printed check digit for a
+     * caller to supply or get wrong, so there is nothing to reconcile — the
+     * input is either the right number of digits or it is not an add-on.
+     *
+     * @throws \InvalidArgumentException when the input is not encodable
+     */
+    public static function addOnDigits(string $data, int $length, string $symbology): string
+    {
+        if (preg_match('/^\d{' . $length . '}$/', $data) !== 1) {
+            throw new \InvalidArgumentException(sprintf(
+                '%s needs exactly %d digits and has no check digit, got: %s',
+                $symbology,
+                $length,
+                $data
+            ));
+        }
+
+        return $data;
     }
 
     /**
