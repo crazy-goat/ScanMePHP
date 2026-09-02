@@ -175,7 +175,7 @@ class ScanmeTest extends TestCase
     public function testUnknownGeneratorListsWhatIsAvailable(): void
     {
         $this->expectException(UnknownGeneratorException::class);
-        $this->expectExceptionMessage('Available: code128, ean13, qrcode');
+        $this->expectExceptionMessage('Available: code128, data-matrix, ean13, qrcode');
 
         $this->scanme->render(self::URL, 'aztec', Format::Svg);
     }
@@ -411,8 +411,10 @@ class ScanmeTest extends TestCase
 
         // A URL is printable ASCII, so Code 128 can carry it too; the caller
         // picks, rather than having one guessed for them.
-        $this->assertSame(['qrcode', 'code128'], $registry->generatorsFor(self::URL));
-        $this->assertSame(['qrcode'], $registry->generatorsFor("binary\0payload"));
+        $this->assertSame(['qrcode', 'code128', 'data-matrix'], $registry->generatorsFor(self::URL));
+
+        // Data Matrix escapes bytes above 127, so it carries binary too.
+        $this->assertSame(['qrcode', 'data-matrix'], $registry->generatorsFor("binary\0payload"));
 
         // Past QR's capacity only Code 128 remains, because ISO/IEC 15417 sets
         // no length limit — a symbol that long is useless in print, but

@@ -479,8 +479,8 @@ class LinearSymbologyTest extends TestCase
 
         // An EAN-shaped payload is encodable by all three, and the caller gets
         // to choose rather than have one guessed for them.
-        $this->assertSame(['qrcode', 'code128', 'ean13'], $registry->generatorsFor('5901234123457'));
-        $this->assertSame(['qrcode', 'code128'], $registry->generatorsFor('ABC-123'));
-        $this->assertSame(['qrcode'], $registry->generatorsFor("binary\0data"));
+        $this->assertSame(['qrcode', 'code128', 'ean13', 'data-matrix'], $registry->generatorsFor('5901234123457'));
+        $this->assertSame(['qrcode', 'code128', 'data-matrix'], $registry->generatorsFor('ABC-123'));
+        $this->assertSame(['qrcode', 'data-matrix'], $registry->generatorsFor("binary\0data"));
     }
 }

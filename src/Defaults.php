@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CrazyGoat\ScanMePHP;
 
 use CrazyGoat\ScanMePHP\Generator\Code128\Code128Generator;
+use CrazyGoat\ScanMePHP\Generator\DataMatrix\DataMatrixGenerator;
 use CrazyGoat\ScanMePHP\Generator\Ean13\Ean13Generator;
 use CrazyGoat\ScanMePHP\Generator\Qr\QrGenerator;
 use CrazyGoat\ScanMePHP\Renderer\AsciiRenderer;
@@ -29,6 +30,7 @@ final class Defaults
             ->addGenerator(new QrGenerator())
             ->addGenerator(new Code128Generator())
             ->addGenerator(new Ean13Generator())
+            ->addGenerator(new DataMatrixGenerator())
             ->addRenderer(new SvgRenderer())
             ->addRenderer(new PngRenderer())
             ->addRenderer(new HtmlRenderer(HtmlMode::Div))
