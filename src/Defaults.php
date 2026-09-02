@@ -7,7 +7,10 @@ namespace CrazyGoat\ScanMePHP;
 use CrazyGoat\ScanMePHP\Generator\Code128\Code128Generator;
 use CrazyGoat\ScanMePHP\Generator\DataMatrix\DataMatrixGenerator;
 use CrazyGoat\ScanMePHP\Generator\Ean13\Ean13Generator;
+use CrazyGoat\ScanMePHP\Generator\Ean8\Ean8Generator;
 use CrazyGoat\ScanMePHP\Generator\Qr\QrGenerator;
+use CrazyGoat\ScanMePHP\Generator\UpcA\UpcAGenerator;
+use CrazyGoat\ScanMePHP\Generator\UpcE\UpcEGenerator;
 use CrazyGoat\ScanMePHP\Renderer\AsciiRenderer;
 use CrazyGoat\ScanMePHP\Renderer\AsciiStyle;
 use CrazyGoat\ScanMePHP\Renderer\HtmlMode;
@@ -30,6 +33,9 @@ final class Defaults
             ->addGenerator(new QrGenerator())
             ->addGenerator(new Code128Generator())
             ->addGenerator(new Ean13Generator())
+            ->addGenerator(new Ean8Generator())
+            ->addGenerator(new UpcAGenerator())
+            ->addGenerator(new UpcEGenerator())
             ->addGenerator(new DataMatrixGenerator())
             ->addRenderer(new SvgRenderer())
             ->addRenderer(new PngRenderer())

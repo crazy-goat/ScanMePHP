@@ -202,7 +202,10 @@ class ScanmeTest extends TestCase
         $registered = array_keys($this->scanme->getRegistry()->describeGenerators());
         sort($registered);
 
-        $this->assertSame(['code128', 'data-matrix', 'ean13', 'qrcode'], $registered);
+        $this->assertSame(
+            ['code128', 'data-matrix', 'ean13', 'ean8', 'qrcode', 'upc-a', 'upc-e'],
+            $registered
+        );
     }
 
     public function testUnknownFormatListsWhatIsAvailable(): void

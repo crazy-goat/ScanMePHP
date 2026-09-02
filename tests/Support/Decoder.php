@@ -131,9 +131,13 @@ final class Decoder
     /**
      * Decode a PNG and return every symbol found in it.
      *
+     * @param string|null $formats Restrict the decoder to these zxing-cpp
+     *        formats, e.g. 'UPCA'. Null lets it report whatever it finds,
+     *        which for the EAN/UPC family is not always the symbology that
+     *        was asked for: UPC-A shares its bars with EAN-13.
      * @return list<array{format: string, text: string, bytes: list<int>, valid: bool}>
      */
-    public static function decode(string $png): array
+    public static function decode(string $png, ?string $formats = null): array
     {
         $python = self::python();
         if ($python === null) {
@@ -145,9 +149,10 @@ final class Decoder
 
         try {
             $command = sprintf(
-                '%s %s %s 2>&1',
+                '%s %s %s%s 2>&1',
                 escapeshellarg($python),
                 escapeshellarg(self::script()),
+                $formats === null ? '' : '--formats ' . escapeshellarg($formats) . ' ',
                 escapeshellarg($file)
             );
 
