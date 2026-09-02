@@ -57,6 +57,7 @@ $payload = static function (string $symbology, int $bytes) use ($registry): stri
         'code39' => 'PART-4471',
         'code39ext' => 'Part 4471/a',
         'code93' => 'Part 4471/a',
+        'codabar' => '4917234',
         'ean2' => '52',
         'ean5' => '51299',
     ];

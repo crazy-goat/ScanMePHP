@@ -2,7 +2,7 @@
 
 **A universal barcode library for PHP — with optional native C++ acceleration for QR.**
 
-Fourteen symbologies, seven output formats, one call. No dependencies, no GD, no
+Fifteen symbologies, seven output formats, one call. No dependencies, no GD, no
 Imagick, no extensions required — then go **7–9× faster** on QR with a single
 C++ library if you generate them in volume.
 
@@ -19,7 +19,7 @@ echo $scanme->render('5901234123457', 'ean13', 'png');
 
 ## Why ScanMePHP?
 
-**📇 Fourteen symbologies, one API**
+**📇 Fifteen symbologies, one API**
 
 | Symbology | Accepts | Notes |
 | --- | --- | --- |
@@ -29,6 +29,7 @@ echo $scanme->render('5901234123457', 'ean13', 'png');
 | `code39` | digits, A-Z, space and `-.$/+%` | optional modulo-43 check character |
 | `code39ext` | any ASCII | the same bars, lowercase and control bytes as escape pairs |
 | `code93` | any ASCII | denser than Code 39, two mandatory check characters |
+| `codabar` | digits and `-$:/.+` | library cards, blood bank labels; delimiters are options |
 | `ean13` | 12 digits, or 13 with a check digit | the retail default |
 | `ean8` | 7 digits, or 8 with a check digit | for packaging that cannot carry an EAN-13 |
 | `upc-a` | 11 digits, or 12 with a check digit | bit for bit an EAN-13 with a leading zero |
@@ -244,6 +245,7 @@ $scanme->render('SHIPMENT-4471', 'code128', 'png');
 $scanme->render('PART-4471', 'code39', 'png');
 $scanme->render('Part 4471/a', 'code39ext', 'png');
 $scanme->render('Part 4471/a', 'code93', 'png');
+$scanme->render('4917234', 'codabar', 'png');
 $scanme->render('5901234123457', 'ean13', 'svg');
 $scanme->render('96385074', 'ean8', 'svg');
 $scanme->render('036000291452', 'upc-a', 'svg');
@@ -310,15 +312,35 @@ begins, so a scan that clips a guard reads a valid *shorter* number. That is wha
 the symbol rather than left to you. The 10-module quiet zone goes *inside* that
 frame, which is the detail worth knowing if you ever draw one by hand.
 
+`codabar` takes the data alone. Most implementations make you write the
+delimiters into the payload — `'A4917234A'` rather than `'4917234'` — which puts
+a detail of the symbology into your data and makes `canEncode()` refuse every
+number you actually hold. Here they are options, defaulting to `A` at both ends,
+and the four are also spelled `T`, `N`, `*`, `E` in older documentation:
+
+```php
+use CrazyGoat\ScanMePHP\Generator\Codabar\CodabarOptions;
+use CrazyGoat\ScanMePHP\Generator\Codabar\Delimiter;
+
+$scanme->render('4917234', 'codabar', 'png', new CodabarOptions(stop: Delimiter::B));
+```
+
+A scanner does report the delimiters, so `getText()` gives you what belongs under
+the bars and `$symbol->getMetadataValue('characters')` gives you what a scan will
+read back. Codabar has no check character here: the variants in circulation
+disagree with one another and nothing this library can verify against implements
+any of them, so rather than ship an unchecked table, compute the one your system
+needs and append it to the payload — it is an ordinary data character either way.
+
 Aliases resolve too — `ean`, `ean-13`, `upc`, `upca`, `dm`, `ecc200`, `qr`,
-`c39`, `c93`, `i25`, `gtin-14`.
+`c39`, `c93`, `i25`, `gtin-14`, `nw-7`.
 
 If you have a payload and are not sure which symbologies accept it, ask rather
 than guess:
 
 ```php
 $scanme->getRegistry()->generatorsFor('036000291452');
-// ['qrcode', 'code128', 'code39', 'code39ext', 'code93', 'ean13', 'upc-a', 'itf', 'data-matrix']
+// ['qrcode', 'code128', 'code39', 'code39ext', 'code93', 'codabar', 'ean13', 'upc-a', 'itf', 'data-matrix']
 ```
 
 And to see what is installed, with the rules each one enforces:

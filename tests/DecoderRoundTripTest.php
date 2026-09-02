@@ -6,6 +6,8 @@ namespace CrazyGoat\ScanMePHP\Tests;
 
 use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
 use CrazyGoat\ScanMePHP\Exception\IncompatibleRendererException;
+use CrazyGoat\ScanMePHP\Generator\Codabar\CodabarOptions;
+use CrazyGoat\ScanMePHP\Generator\Codabar\Delimiter;
 use CrazyGoat\ScanMePHP\Generator\Code39\Charset;
 use CrazyGoat\ScanMePHP\Generator\Code39\Code39Options;
 use CrazyGoat\ScanMePHP\Generator\Code93\Charset as Code93Charset;
@@ -48,6 +50,7 @@ class DecoderRoundTripTest extends TestCase
         Symbology::Code39->value => 'Code 39',
         Symbology::Code39Extended->value => 'Code 39 Extended',
         Symbology::Code93->value => 'Code 93',
+        Symbology::Codabar->value => 'Codabar',
         Symbology::Ean13->value => 'EAN-13',
         Symbology::Ean8->value => 'EAN-8',
         Symbology::UpcA->value => 'UPC-A',
@@ -446,6 +449,68 @@ class DecoderRoundTripTest extends TestCase
             Charset::width(4, 2),
             $symbol->getWidth(),
             'four characters between the guards, not three'
+        );
+    }
+
+    /** @return iterable<string, array{string, CodabarOptions}> */
+    public static function codabarProvider(): iterable
+    {
+        $default = new CodabarOptions();
+
+        yield 'digits' => ['123456', $default];
+        yield 'a membership number' => ['4917234', $default];
+        yield 'punctuation' => ['1-2$3', $default];
+        yield 'the ratio punctuation' => ['12:34/56.78+90', $default];
+        yield 'zeros' => ['00000000', $default];
+        yield 'nines' => ['99999999', $default];
+        yield 'every data character' => ['0123456789-$:/.+', $default];
+        // The delimiters carry no data but a scanner reports them, so every
+        // pair has to come back as the pair that was asked for.
+        yield 'a to b' => ['123456', new CodabarOptions(stop: Delimiter::B)];
+        yield 'b to c' => ['123456', new CodabarOptions(start: Delimiter::B, stop: Delimiter::C)];
+        yield 'c to d' => ['123456', new CodabarOptions(start: Delimiter::C, stop: Delimiter::D)];
+        yield 'd to d' => ['123456', new CodabarOptions(start: Delimiter::D, stop: Delimiter::D)];
+        yield 'the wider ratio' => ['123456', new CodabarOptions(wideRatio: 3)];
+    }
+
+    /**
+     * The payload here is the data alone, and the delimiters come from the
+     * options — but a scanner reports them, so what comes back is the sequence
+     * the symbol actually carries. That difference is the whole reason
+     * getText() and the 'characters' metadata are two different things, so the
+     * round trip asserts against the metadata.
+     */
+    #[DataProvider('codabarProvider')]
+    public function testCodabarScansBack(string $data, CodabarOptions $options): void
+    {
+        $this->requireDecoder();
+
+        $symbol = Scanme::create()->generate($data, Symbology::Codabar->value, $options);
+
+        $this->assertScansBack(
+            $data,
+            Symbology::Codabar->value,
+            self::FORMAT_NAMES['codabar'],
+            (string) $symbol->getMetadataValue('characters'),
+            $options
+        );
+
+        self::assertSame($data, $symbol->getText(), 'the delimiters are not printed');
+    }
+
+    /**
+     * As with a very short ITF, a one-character Codabar is below what
+     * zxing-cpp will report — its own writer produces the same unreadable
+     * symbol. Pinned so the absence of such a case above is a decision.
+     */
+    public function testAOneCharacterCodabarIsBelowTheDecodersFloor(): void
+    {
+        $this->requireDecoder();
+
+        self::assertSame([], Decoder::decode($this->renderForScanning('0', Symbology::Codabar->value)));
+        self::assertNotSame(
+            [],
+            Decoder::decode($this->renderForScanning('123456', Symbology::Codabar->value))
         );
     }
 
