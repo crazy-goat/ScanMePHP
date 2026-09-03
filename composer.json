@@ -68,7 +68,7 @@
         "decoders:install": [
             "python3 -m venv .decoders",
             ".decoders/bin/pip install --quiet --upgrade pip",
-            ".decoders/bin/pip install --quiet zxing-cpp pillow"
+            ".decoders/bin/pip install --quiet zxing-cpp pillow qrcodegen"
         ],
         "test:roundtrip": "php -d xdebug.mode=off vendor/bin/phpunit --no-coverage tests/DecoderRoundTripTest.php",
         "reference:ean-upc": ".decoders/bin/python tools/ean_upc_reference.py",
@@ -77,12 +77,13 @@
         "reference:itf": ".decoders/bin/python tools/itf_reference.py",
         "reference:codabar": ".decoders/bin/python tools/codabar_reference.py",
         "reference:code128": ".decoders/bin/python tools/code128_reference.py",
-        "reference:gs1": ".decoders/bin/python tools/gs1_reference.py"
+        "reference:gs1": ".decoders/bin/python tools/gs1_reference.py",
+        "reference:gs1-qr": ".decoders/bin/python tools/gs1_qr_reference.py"
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
     "scripts-descriptions": {
-        "decoders:install": "Install the zxing-cpp reference decoder used by the round-trip suite",
+        "decoders:install": "Install the reference decoder and encoders the verification suite compares against",
         "test:roundtrip": "Verify every symbology against an independent barcode decoder",
         "reference:ean-upc": "Regenerate the EAN/UPC module patterns from zxing-cpp"
     }
