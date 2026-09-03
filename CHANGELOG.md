@@ -27,6 +27,22 @@ number is worse than a compile error.
   periodical's issue number, a book's list price. They carry no check digit,
   so the digit count is exact — a third digit on an EAN-2 is a different
   add-on, not a checksum, and is refused rather than trimmed.
+- **GS1-128**, as its own generator (`gs1-128`, aliases `gs1128`, `ean128`,
+  `ean-128`, `ucc128`). Takes the parenthesised form GS1 prints under the bars
+  — `(01)09501101020917(10)LOT0001` — and puts the FNC1 separators where the
+  application identifier table says they go, plus the one after the start code
+  that makes a reader announce `]C1`. The bars are Code 128 bars and the same
+  encoder draws them; what makes it a different generator is that
+  `canEncode()` has a different question to answer.
+- **The GS1 application identifier table**
+  (`Generator\Gs1\ApplicationIdentifier`, 541 identifiers). Derived, not
+  transcribed: `tools/gs1_reference.py` sweeps every two-, three- and
+  four-digit string past zxing-cpp and keeps what it accepts, then probes each
+  one's legal data lengths and separator rule. Three identifiers turn out to
+  accept a *set* of lengths rather than a range, and predefined length turns
+  out not to mean fixed length — `(402)` is seventeen digits and still needs a
+  separator. Frozen in `tests/fixtures/gs1_ai_reference.csv`; the table is
+  compared against it row for row.
 - **A reference fixture for Code 128** (`tests/fixtures/code128_reference.csv`,
   141 symbols from zxing-cpp). Code 128 shipped before the rule that every
   symbology gets one, so it was the last linear code verified only against its
