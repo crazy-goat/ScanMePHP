@@ -7,6 +7,8 @@ namespace CrazyGoat\ScanMePHP\Tests;
 use CrazyGoat\ScanMePHP\Encoding\MaxiCode\Mode;
 use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
 use CrazyGoat\ScanMePHP\Exception\IncompatibleRendererException;
+use CrazyGoat\ScanMePHP\Generator\AustraliaPost\AustraliaPostOptions;
+use CrazyGoat\ScanMePHP\Generator\AustraliaPost\Format as AustraliaPostFormat;
 use CrazyGoat\ScanMePHP\Generator\Aztec\AztecOptions;
 use CrazyGoat\ScanMePHP\Generator\Codabar\CodabarOptions;
 use CrazyGoat\ScanMePHP\Generator\Codabar\Delimiter;
@@ -119,6 +121,7 @@ class DecoderRoundTripTest extends TestCase
         Symbology::Rm4scc->value,
         Symbology::Kix->value,
         Symbology::IntelligentMail->value,
+        Symbology::AustraliaPost->value,
     ];
 
     public function testTheDecoderItselfIsWiredUp(): void
@@ -1600,14 +1603,16 @@ class DecoderRoundTripTest extends TestCase
      * @param string $symbology which four-state code
      * @param string $data the payload
      * @param string $expected the bars zint drew for it
+     * @param object|null $options the option bag the fixture row was drawn under
      */
     #[DataProvider('fourStateProvider')]
     public function testAFourStateSymbolRendersTheBarsItsReferenceEncoderDrew(
         string $symbology,
         string $data,
-        string $expected
+        string $expected,
+        ?object $options = null
     ): void {
-        $png = $this->renderForScanning($data, $symbology);
+        $png = $this->renderForScanning($data, $symbology, ...($options === null ? [] : [$options]));
 
         self::assertSame($expected, $this->barsInThePng($png), "bars rendered for {$symbology} {$data}");
     }
@@ -1641,6 +1646,20 @@ class DecoderRoundTripTest extends TestCase
                     '94999999999999999999-99999999999',
                 ],
             ],
+            // The one fixture in the family with a third column: Australia
+            // Post's format is a choice rather than something in the payload,
+            // so the row carries it and the bag is rebuilt from it here.
+            Symbology::AustraliaPost->value => [
+                'australia_post_reference.csv',
+                [
+                    '96130590',
+                    '99999999',
+                    '96130590     ',
+                    '9613059000000000',
+                    '96130590zAAAA',
+                    '96130590000000000000000',
+                ],
+            ],
         ];
 
         foreach ($wanted as $symbology => [$fixture, $payloads]) {
@@ -1649,10 +1668,25 @@ class DecoderRoundTripTest extends TestCase
 
             fgetcsv($handle, 0, ',', '"', '');
             while (($row = fgetcsv($handle, 0, ',', '"', '')) !== false) {
-                [$data, $states] = $row;
-                if (\in_array($data, $payloads, true)) {
-                    yield "{$symbology} {$data}" => [$symbology, $data, $states];
+                $format = \count($row) === 3 ? $row[1] : null;
+                [$data, $states] = [$row[0], $row[\count($row) - 1]];
+
+                if (!\in_array($data, $payloads, true)) {
+                    continue;
                 }
+
+                if ($format === null) {
+                    yield "{$symbology} {$data}" => [$symbology, $data, $states];
+
+                    continue;
+                }
+
+                yield "{$symbology} {$format} {$data}" => [
+                    $symbology,
+                    $data,
+                    $states,
+                    new AustraliaPostOptions(AustraliaPostFormat::from($format)),
+                ];
             }
 
             fclose($handle);
@@ -1762,6 +1796,7 @@ class DecoderRoundTripTest extends TestCase
             Symbology::IntelligentMail->value,
             '01234567094987654321-01234',
         ];
+        yield Symbology::AustraliaPost->value => [Symbology::AustraliaPost->value, '96130590AB CD'];
     }
 
     /**

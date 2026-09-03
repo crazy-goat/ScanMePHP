@@ -364,6 +364,43 @@ number is worse than a compile error.
   Verified with the same one-opinion caveat as the rest of the family:
   bar for bar against zint (`composer reference:intelligent-mail`), plus the
   rendered PNG measured back into bars.
+- **Australia Post** (`australia-post`, aliases `auspost`,
+  `australia-post-4state`, `customer-barcode`): the Customer Barcode on the
+  front of Australian mail, and the last of the four-state family. An
+  eight-digit sorting code, optionally followed by a customer information field.
+  One option, the Format Control Code. Pure PHP.
+
+  It is the only postal code here that **corrects** rather than merely detects.
+  RM4SCC carries a check character and Intelligent Mail a CRC; both can say a
+  symbol is wrong and neither can say what it should have been. This one spends
+  four Reed–Solomon codewords over GF(64) and repairs two of them outright —
+  the same field `Encoding\ReedSolomonGf2m` already provided for Aztec and
+  MaxiCode, reused rather than rewritten. It is also why the bars are grouped in
+  threes, and why the Standard Customer Barcode is thirty-seven bars rather than
+  thirty-six: three bars are six bits are one codeword, and a single filler bar
+  exists so that the count divides.
+
+  Two things at the call site. **The Format Control Code is an option**, because
+  the same sorting code drawn as Reply Paid and drawn as ordinary mail are two
+  different articles and nothing in the data string says which; the two wider
+  Standard codes, 59 and 62, are not a choice and follow from the customer
+  field. **And the customer field is sized in bars, not characters** — 5 or 10
+  characters, or 8 or 15 digits — so a half-filled field is refused rather than
+  padded out. Padding it would mean inventing semantics no reader has agreed to:
+  filler bars in the middle of a text field index as lower-case letters. The
+  field's width is also the only thing that says which of the two character
+  tables it is written in, so five digits are text and eight digits are numbers.
+
+  Both character tables are derived rather than transcribed. The sixty-four
+  three-bar patterns and the ten two-bar ones are one enumeration read at two
+  widths: no tracker bar first in ascending order, then a tracker in the leading
+  bar, then the leftovers.
+
+  Verified with the same one-opinion caveat as the rest of the family: bar for
+  bar against zint (`composer reference:australia-post`), plus the rendered PNG
+  measured back into bars — and the parity additionally checked by its
+  definition, with the syndromes of every symbol asserted zero in a field the
+  test builds for itself.
 - **Hexagonal modules in the SVG and PNG renderers**, and the first time the
   shape negotiation that has been in `RendererCapabilities` all along actually
   declines something. MaxiCode's rows interlock — a row sits 0.866 of a module

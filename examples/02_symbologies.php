@@ -79,6 +79,7 @@ $payloads = [
     'rm4scc' => 'LE28HS',
     'kix' => '2500GG30250',
     'intelligent-mail' => '01234567094987654321-01234',
+    'australia-post' => '96130590AB CD',
 ];
 
 foreach ($payloads as $symbology => $data) {
