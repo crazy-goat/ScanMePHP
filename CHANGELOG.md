@@ -302,6 +302,33 @@ number is worse than a compile error.
   which gates the render path without pretending to be a second opinion on the
   bars. One independent encoder where the rest of the library has an encoder
   and a decoder.
+- **KIX** (`kix`, aliases `kix-code`, `klantindex`, `postnl`): the Dutch
+  four-state code, on the front of PostNL's mail. RM4SCC's alphabet with the
+  envelope taken off — no start bar, no stop bar, no check character. Digits
+  and capitals, one to eighteen of them, typically a postcode, house number and
+  additions. No options. Pure PHP.
+
+  A KIX symbol is its characters concatenated and nothing else, which is what
+  the tests assert, since every mistake available here is a mistake of
+  addition. What it costs a reader is worth stating plainly: there is no error
+  detection over the symbol, so a dropped or added character produces another
+  legal symbol saying something else. Only the per-character two-of-four parity
+  survives, and it catches a misread bar rather than a misread symbol — sorting
+  machines read KIX beside an address they can compare it against. With no start
+  pattern either, the quiet zone is what marks where the first character is, so
+  it stays on all four sides. Eighteen characters is the specification's ceiling
+  rather than the reference encoder's.
+
+  The thirty-six characters moved to `Generator\FourState\Alphabet`, shared
+  with RM4SCC. That the two draw a character identically was measured — the two
+  fixtures were generated independently through zint — and it is now asserted,
+  because two copies of a base-six derivation are two chances for one to drift
+  and a drifted copy still draws thirty-six legal characters.
+
+  Verified like RM4SCC, with the same one-opinion caveat: bar for bar against
+  zint (`composer reference:kix`), plus the rendered PNG measured back into
+  bars. That substitution is now one test over the four-state family rather than
+  one per symbology.
 - **Hexagonal modules in the SVG and PNG renderers**, and the first time the
   shape negotiation that has been in `RendererCapabilities` all along actually
   declines something. MaxiCode's rows interlock — a row sits 0.866 of a module

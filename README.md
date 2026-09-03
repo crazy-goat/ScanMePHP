@@ -265,6 +265,7 @@ $scanme->render('(01)09501101020917(10)LOT0001', 'databar-expanded-stacked', 'sv
 $scanme->render('52', 'ean2', 'svg');
 $scanme->render('51299', 'ean5', 'svg');
 $scanme->render('LE28HS', 'rm4scc', 'svg');
+$scanme->render('2500GG30250', 'kix', 'svg');
 ```
 
 `ean2` and `ean5` are the add-on symbols printed beside a main barcode — the
@@ -863,15 +864,41 @@ drew. That is one independent opinion where the rest of the library has two,
 and it is written down in [AGENTS.md](AGENTS.md) rather than left to be
 discovered.
 
+### KIX
+
+The Dutch equivalent, on the front of PostNL's mail. Same four-state bars,
+same thirty-six characters, drawn the same way — and then nothing around them:
+
+```php
+$scanme->render('2500GG30250', 'kix', 'svg');
+```
+
+No start bar, no stop bar, no check character. A KIX symbol is its characters
+concatenated, up to eighteen of them, which makes it the smallest symbology
+here. It is worth knowing what that costs, because a postal code sounds like
+something that checks itself and this one does not: drop a character and you
+have another legal KIX symbol saying something else. What survives is the
+per-character parity — two ascenders and two descenders in each — which catches
+a misread bar, not a misread symbol. Sorting machines read KIX beside an
+address they can compare it against.
+
+The quiet zone matters more here than in RM4SCC for the same reason. With no
+start pattern to recognise, white space is the only thing that says where the
+first character begins, so keep the margin the renderers put there.
+
+It is verified the same way RM4SCC is, against zint and by measuring the
+rendered pixels back into bars, with the same one-opinion caveat.
+
 Aliases resolve too — `ean`, `ean-13`, `upc`, `upca`, `dm`, `ecc200`, `qr`,
-`c39`, `c93`, `i25`, `gtin-14`, `nw-7`, `ean128`, `gs1dm`, `royal-mail`.
+`c39`, `c93`, `i25`, `gtin-14`, `nw-7`, `ean128`, `gs1dm`, `royal-mail`,
+`postnl`.
 
 If you have a payload and are not sure which symbologies accept it, ask rather
 than guess:
 
 ```php
 $scanme->getRegistry()->generatorsFor('036000291452');
-// ['qrcode', 'code128', 'code39', 'code39ext', 'code93', 'codabar', 'ean13', 'upc-a', 'itf', 'data-matrix', 'aztec', 'pdf417', 'maxicode', 'rm4scc']
+// ['qrcode', 'code128', 'code39', 'code39ext', 'code93', 'codabar', 'ean13', 'upc-a', 'itf', 'data-matrix', 'aztec', 'pdf417', 'maxicode', 'rm4scc', 'kix']
 ```
 
 And to see what is installed, with the rules each one enforces:

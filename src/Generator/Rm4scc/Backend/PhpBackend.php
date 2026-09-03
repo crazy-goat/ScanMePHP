@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CrazyGoat\ScanMePHP\Generator\Rm4scc\Backend;
 
 use CrazyGoat\ScanMePHP\Generator\BackendInterface;
+use CrazyGoat\ScanMePHP\Generator\FourState\Alphabet;
 use CrazyGoat\ScanMePHP\Generator\FourState\Patterns;
 use CrazyGoat\ScanMePHP\Generator\Rm4scc\Characters;
 use CrazyGoat\ScanMePHP\Options\GeneratorOptionsInterface;
@@ -61,7 +62,7 @@ final class PhpBackend implements BackendInterface
 
         $bars = [Characters::START];
         foreach (str_split($payload . $check) as $character) {
-            $bars = [...$bars, ...Characters::bars($character)];
+            $bars = [...$bars, ...Alphabet::bars($character)];
         }
         $bars[] = Characters::STOP;
 
@@ -104,7 +105,7 @@ final class PhpBackend implements BackendInterface
             ));
         }
 
-        if (strspn($payload, Characters::ALPHABET) !== \strlen($payload)) {
+        if (!Alphabet::covers($payload)) {
             throw new \InvalidArgumentException(sprintf(
                 'RM4SCC carries digits and capital letters only, got "%s"',
                 $data
