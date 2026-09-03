@@ -70,6 +70,7 @@ $payloads = [
     'ean5' => '51299',
     'data-matrix' => 'ScanMePHP',
     'aztec' => 'BOARDING-4471',
+    'pdf417' => 'SHIP TO: 123 Main St.',
 ];
 
 foreach ($payloads as $symbology => $data) {

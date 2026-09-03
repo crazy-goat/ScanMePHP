@@ -61,6 +61,68 @@ number is worse than a compile error.
   Nothing asks for either yet — a GS1 Aztec would — and an encoder that emitted
   one by accident would be worse than one that cannot. Like Data Matrix, Aztec
   is pure PHP only; native acceleration stays QR-only by design.
+- **PDF417** (`pdf417`, alias `pdf-417`): a stack of independently readable
+  linear rows, which is what driving licences, boarding passes and shipping
+  labels are printed with — a scanner recovers the data from a few sweeps
+  across the symbol rather than needing it square in frame. Roughly 1850
+  characters of text or 1100 bytes of binary data.
+
+  `Pdf417Options` carries four things, three of which are preferences rather
+  than facts about the data. The **shape** — the column count, and a floor
+  under the row count — is a request, because any grid with enough cells holds
+  the codewords and the spare cells become pad codewords; the default is six
+  columns, since every row also spends the width of four data columns on its
+  start pattern, two row indicators and stop pattern, so a one-column symbol
+  gives four fifths of its width to structure. The **error correction level**
+  is a real level, 0 to 8, each doubling the last one's check codewords from
+  two to 512, and the default is what ISO/IEC 15438 recommends for the amount
+  of data. The **row height** is presentation: PDF417 rows carry nothing
+  vertically, so three modules is convention rather than meaning.
+
+  That last one made PDF417 the first matrix symbology here whose rows are not
+  one module tall, and it needed no new mechanism — a symbol states its own row
+  heights and the renderers already honoured them, which is the same path a
+  linear symbology's bar height takes and the one the four-state postal codes
+  will take for their ratios.
+
+  Three compaction modes — text with four submodes, numeric in base 900, byte —
+  and which to use is searched for exactly rather than guessed at. The search
+  is linear in the payload despite covering every segmentation, because both
+  group structures are finite: what one more character costs depends only on
+  how far into its group it falls, so fifty-eight states per position cover
+  everything. Across 148 payloads swept against zxing-cpp it was never longer
+  and never shorter — half identical, half the same length by another route.
+
+  Not implemented: the ECI header and the macro block. No ECI means bytes pass
+  through as they are and the reader's charset assumption applies, which is
+  worth knowing because zxing declares binary input with one and so produces a
+  different symbol for the same bytes. No macro block means a payload too large
+  for one symbol is refused rather than split across several. Like Aztec,
+  PDF417 is pure PHP only; native acceleration stays QR-only by design.
+- **`Encoding\Pdf417\ReedSolomonGf929`**, Reed–Solomon over a prime field.
+  Neither existing implementation generalises to it, and not for want of
+  trying: over GF(2^m) addition *is* exclusive-or, which is why both of the
+  others add with `^`. 929 is prime, so every `^` would have to become an
+  addition modulo 929 — a different arithmetic, not a wider one. Anchored
+  against zxing-cpp's own check codewords for a symbol it produced, and the
+  sign convention is the part that matters: PDF417's check codewords are the
+  negated remainder, and getting that wrong yields plausible codewords no
+  reader accepts.
+- **`Encoding\Pdf417\CodewordPatterns`**, the only table in this library that
+  is measured rather than derived — and the measurement is arranged so that
+  trusting the oracle is not what makes it right. Which cluster a pattern
+  belongs to *is* derivable, from the alternating sum of its four bar widths
+  modulo nine, and that holds for all 2787 entries. The assignment of values to
+  patterns within a cluster is not: sorting each cluster by the pattern as an
+  integer or by its width tuple, either direction, places at most two of several
+  hundred known values correctly. So `tools/pdf417_codeword_table.py` seeds the
+  table from row indicator values this library states itself from the geometry,
+  then grows it by predicting whole symbols and learning only from those where
+  every already-known cell agrees — a symbol that disagrees anywhere is
+  discarded whole. Roughly half are refused. `Pdf417CodewordPatternsTest` then
+  guards the result by re-deriving every cluster and checking each is a
+  bijection over patterns that are seventeen modules of eight elements one to
+  six wide starting with a bar.
 - **`Encoding\Aztec\ReedSolomonGf2m`**, Reed–Solomon over GF(2^m) for any m.
   `ReedSolomon256` could not be reused: it is deliberately hardcoded to GF(256)
   — a 256-row factor table and no log lookups in the inner loop — because that
