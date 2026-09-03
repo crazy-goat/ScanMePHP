@@ -186,6 +186,19 @@ becomes a habit.
   validates. Then it is not shipped, and a test asserts the option does not
   exist.
 
+A **reference** fixture and an **agreement** fixture are different things and
+must not be confused. A reference fixture comes from an encoder we did not
+write and is what says our output is right. An agreement fixture holds our own
+output, frozen, and says only that two things still match — which is worth
+having exactly once: the C++ core is tested from C++ and cannot call the PHP
+encoder, so `tests/fixtures/qr_agreement.csv` stands in for it. The PHP
+backends need no such file and compare in memory. A frozen copy is only useful
+while it is still a copy, so a test asserts it still is
+(`QrAgreementFixtureTest`); otherwise it rots into last month's symbols and
+goes on reporting a pass, which is worse than a red build. QR spent a long time
+with an agreement fixture named like a reference one and nothing verifying it
+from outside — that is the mistake this paragraph exists to prevent repeating.
+
 Where two symbologies are the same bars, the round trip names the format it is
 asking for rather than accepting the decoder's default reading — `UPCA` for a
 UPC-A, `Code39Std` for standard Code 39. That is not making the test easier:
