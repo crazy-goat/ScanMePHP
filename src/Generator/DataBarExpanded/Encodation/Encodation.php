@@ -61,13 +61,15 @@ final class Encodation
     private const TRIPLE = 3;
 
     /**
+     * @param int $charactersPerRow how many characters a stacked row holds, or
+     *        0 for the linear symbol; see {@see rowFill()}
      * @return list<int> the data characters, each a twelve-bit value
      *
      * @throws \InvalidArgumentException when the payload needs more than a symbol holds
      */
-    public static function values(ElementString $elements): array
+    public static function values(ElementString $elements, int $charactersPerRow = 0): array
     {
-        $stream = self::bits($elements);
+        $stream = self::bits($elements, $charactersPerRow);
 
         $values = [];
         foreach (str_split($stream, 12) as $character) {
@@ -77,7 +79,28 @@ final class Encodation
         return $values;
     }
 
-    private static function bits(ElementString $elements): string
+    /**
+     * One more data character, when stacking would otherwise leave a row
+     * holding a single one.
+     *
+     * A stacked symbol's rows are filled left to right and the last takes the
+     * remainder, and the remainder may not be one character: a row that short
+     * carries a character and a finder and nothing to read them against. The
+     * cost of avoiding it is one more character of padding, which is also one
+     * more character in the count the checksum and the variable length field
+     * are computed from — so it has to be decided here, before the bit stream
+     * is written, rather than in the layout.
+     */
+    private static function rowFill(int $characters, int $charactersPerRow): int
+    {
+        if ($charactersPerRow === 0) {
+            return 0;
+        }
+
+        return ($characters + 1) % $charactersPerRow === 1 ? 1 : 0;
+    }
+
+    private static function bits(ElementString $elements, int $charactersPerRow = 0): string
     {
         $payload = $elements->payload();
         [$ai, $value] = $elements->elements[0];
@@ -91,6 +114,7 @@ final class Encodation
                 self::GTIN_HEAD_BITS + $field->shortestLength(),
                 self::GTIN_CHARACTERS
             );
+            $characters += self::rowFill($characters, $charactersPerRow);
 
             $head = self::GTIN_METHOD . self::variableLength($characters) . self::field((int) $value[0], 4);
             for ($triple = 0; $triple < 4; $triple++) {
@@ -107,6 +131,7 @@ final class Encodation
         $field = GeneralField::encode($payload);
         $head = \strlen(self::GENERAL_METHOD) + 2;
         $characters = self::characters($head + $field->shortestLength(), self::MINIMUM_CHARACTERS);
+        $characters += self::rowFill($characters, $charactersPerRow);
 
         return self::pad(
             self::GENERAL_METHOD . self::variableLength($characters)

@@ -6,6 +6,7 @@ namespace CrazyGoat\ScanMePHP\Generator\DataBarExpanded\Backend;
 
 use CrazyGoat\ScanMePHP\Generator\BackendInterface;
 use CrazyGoat\ScanMePHP\Generator\DataBar\Patterns;
+use CrazyGoat\ScanMePHP\Generator\DataBarExpanded\Encodation\Characters;
 use CrazyGoat\ScanMePHP\Generator\DataBarExpanded\Encodation\Encodation;
 use CrazyGoat\ScanMePHP\Generator\DataBarExpanded\Encodation\GeneralField;
 use CrazyGoat\ScanMePHP\Generator\Gs1\ElementString;
@@ -85,17 +86,8 @@ final class PhpBackend implements BackendInterface
     {
         $elements = ElementString::parse($data);
 
-        $values = Encodation::values($elements);
-        $characters = array_map(
-            static fn (int $value): array => Patterns::character($value, Patterns::EXPANDED, false),
-            $values
-        );
-
-        $checksum = Patterns::expandedChecksum($characters);
-        $check = Patterns::EXPANDED_MODULUS * (\count($characters) - 3) + $checksum;
-
-        $all = [Patterns::character($check, Patterns::EXPANDED, false), ...$characters];
-        $widths = $this->layout($all);
+        $characters = Characters::of($elements);
+        $widths = $this->layout($characters->widths);
 
         return Symbol::linear(
             modules: Patterns::modules($widths),
@@ -106,9 +98,9 @@ final class PhpBackend implements BackendInterface
             text: $elements->humanReadable(),
             metadata: [
                 'symbology' => Symbology::DataBarExpanded->value,
-                'characters' => \count($all),
-                'checksum' => $checksum,
-                'checkCharacter' => $check,
+                'characters' => \count($characters->widths),
+                'checksum' => $characters->checksum,
+                'checkCharacter' => $characters->checkCharacter,
             ],
         );
     }

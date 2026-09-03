@@ -75,6 +75,7 @@ $payloads = [
     'databar-omni' => '01234567890128',
     'databar-limited' => '01234567890128',
     'databar-expanded' => '(01)09501101020917(10)LOT0001',
+    'databar-expanded-stacked' => '(01)09501101020917(10)LOT0001',
 ];
 
 foreach ($payloads as $symbology => $data) {

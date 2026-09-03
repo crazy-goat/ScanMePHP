@@ -13,6 +13,7 @@ use CrazyGoat\ScanMePHP\Generator\Codabar\Delimiter;
 use CrazyGoat\ScanMePHP\Generator\Code39\Charset;
 use CrazyGoat\ScanMePHP\Generator\Code39\Code39Options;
 use CrazyGoat\ScanMePHP\Generator\Code93\Charset as Code93Charset;
+use CrazyGoat\ScanMePHP\Generator\DataBarExpandedStacked\DataBarExpandedStackedOptions;
 use CrazyGoat\ScanMePHP\Generator\DataBarLimited\Backend\PhpBackend as LimitedBackend;
 use CrazyGoat\ScanMePHP\Generator\DataBarOmni\Backend\PhpBackend;
 use CrazyGoat\ScanMePHP\Generator\DataBarOmni\DataBarOmniOptions;
@@ -84,6 +85,7 @@ class DecoderRoundTripTest extends TestCase
         Symbology::DataBarOmni->value => 'DataBar Omni',
         Symbology::DataBarLimited->value => 'DataBar Limited',
         Symbology::DataBarExpanded->value => 'DataBar Expanded',
+        Symbology::DataBarExpandedStacked->value => 'DataBar Expanded Stacked',
         // As with GS1-128: the same bars, and what marks it as GS1 is an FNC1
         // the decoder reports by parenthesising what it hands back.
         Symbology::Gs1DataMatrix->value => 'Data Matrix',
@@ -640,6 +642,56 @@ class DecoderRoundTripTest extends TestCase
             Symbology::DataBarExpanded->value,
             self::FORMAT_NAMES['databar-expanded'],
             ElementString::parse($data)->humanReadable(),
+        );
+    }
+
+    /**
+     * The stacked symbol, at every width it can be folded to.
+     *
+     * The payloads matter less here than the shapes: a row that ends on a
+     * finder, a last row of two characters, a mirrored row, and the column
+     * counts no reference encoder draws by default and so no fixture covers.
+     *
+     * The wide foldings carry their own expected format. A symbol whose rows
+     * are long enough that a scan line crosses most of the data at once comes
+     * back from zxing-cpp labelled as the linear symbology — the element
+     * strings are identical and complete, so what differs is the name the
+     * decoder puts on the shape, not what it read.
+     *
+     * @return iterable<string, array{string, int, string}>
+     */
+    public static function dataBarExpandedStackedProvider(): iterable
+    {
+        $stacked = self::FORMAT_NAMES['databar-expanded-stacked'];
+        $linear = self::FORMAT_NAMES['databar-expanded'];
+        $longest = '(90)GEBU1SG1T8IO532URE3V(21)zjqs09d0igjzy6x';
+
+        yield 'a GTIN' => ['(01)09501101020917', 2, $stacked];
+        yield 'a GTIN and a batch number' => ['(01)09501101020917(10)LOT0001', 2, $stacked];
+        yield 'a row ending on a finder' => ['(90)111111(91)11111', 2, $stacked];
+        yield 'lowercase, four rows' => ['(90)abcdefghijklmnopqrstuvwxyz', 2, $stacked];
+        yield 'twenty-two characters, six rows' => [$longest, 2, $stacked];
+        yield 'four pairs per row' => ['(90)abcdefghijklmnopqrstuvwxyz', 4, $stacked];
+        yield 'four pairs per row, three rows' => [$longest, 4, $stacked];
+        yield 'six pairs per row' => [$longest, 6, $linear];
+        yield 'eight pairs per row' => [$longest, 8, $linear];
+        yield 'ten pairs per row' => [$longest, 10, $stacked];
+        yield 'the longest payload, folded narrow' => [
+            '(90)111111111111111111111111111111(91)11111111111111111111111111',
+            2,
+            $stacked,
+        ];
+    }
+
+    #[DataProvider('dataBarExpandedStackedProvider')]
+    public function testADataBarExpandedStackedScansBack(string $data, int $columns, string $format): void
+    {
+        $this->assertScansBack(
+            $data,
+            Symbology::DataBarExpandedStacked->value,
+            $format,
+            ElementString::parse($data)->humanReadable(),
+            new DataBarExpandedStackedOptions(columns: $columns),
         );
     }
 
