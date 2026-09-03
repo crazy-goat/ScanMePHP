@@ -113,10 +113,10 @@ final class MicroQrEncoder
     {
         if ($version === 1) {
             // M1 has no level. A caller who pinned one did not mean M1.
-            return !$pinned instanceof \CrazyGoat\ScanMePHP\ErrorCorrectionLevel ? [null] : [];
+            return $pinned instanceof ErrorCorrectionLevel ? [] : [null];
         }
 
-        if ($pinned instanceof \CrazyGoat\ScanMePHP\ErrorCorrectionLevel) {
+        if ($pinned instanceof ErrorCorrectionLevel) {
             return Specs::supports($version, $pinned) ? [$pinned] : [];
         }
 
@@ -182,7 +182,7 @@ final class MicroQrEncoder
             return 'Micro QR';
         }
 
-        if ($version === 1 || !$level instanceof \CrazyGoat\ScanMePHP\ErrorCorrectionLevel) {
+        if ($version === 1 || !$level instanceof ErrorCorrectionLevel) {
             return 'Micro QR M' . $version;
         }
 

@@ -254,6 +254,6 @@ final class Specs
 
     private static function key(?ErrorCorrectionLevel $level): int|string
     {
-        return !$level instanceof \CrazyGoat\ScanMePHP\ErrorCorrectionLevel ? 'detection' : $level->value;
+        return $level instanceof ErrorCorrectionLevel ? $level->value : 'detection';
     }
 }

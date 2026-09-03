@@ -58,7 +58,11 @@ final class MicroQrOptions implements GeneratorOptionsInterface
         // natural things to write -- M1 at level L, M3 at level Q -- are both
         // impossible. Pinning only one of the two is always fine; the encoder
         // fills in the other.
-        if ($version instanceof \CrazyGoat\ScanMePHP\Generator\MicroQr\Version && $errorCorrection instanceof \CrazyGoat\ScanMePHP\ErrorCorrectionLevel && !$version->supports($errorCorrection)) {
+        if (
+            $version instanceof Version
+            && $errorCorrection instanceof ErrorCorrectionLevel
+            && !$version->supports($errorCorrection)
+        ) {
             throw new \InvalidArgumentException($version->levels() === []
                 ? sprintf(
                     'Micro QR %s takes no error correction level; it detects errors rather than '
