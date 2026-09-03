@@ -68,6 +68,7 @@ $payload = static function (string $symbology, int $bytes) use ($registry): stri
         'databar-limited' => '01234567890128',
         'databar-expanded' => '(01)09501101020917(10)LOT0001',
         'databar-expanded-stacked' => '(01)09501101020917(10)LOT0001',
+        'rm4scc' => 'LE28HS',
         'ean2' => '52',
         'ean5' => '51299',
     ];
