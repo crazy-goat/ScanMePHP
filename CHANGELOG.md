@@ -132,6 +132,30 @@ number is worse than a compile error.
   to check against writes one — a sweep of thirty candidate splits produced no
   symbol a reader would accept, so shipping a guess would mean shipping a mode
   that cannot be verified. Like Aztec and PDF417, MaxiCode is pure PHP only.
+- **GS1 DataBar Omnidirectional** (`databar-omni`, aliases `databar`,
+  `gs1-databar`, `databar-omnidirectional`, `rss14`, `rss-14`): a GTIN-14 in
+  ninety-six modules, roughly a quarter of an EAN-13's width, for the loose
+  produce and small packs an EAN-13 does not fit on. Accepts thirteen digits
+  and computes the check digit, or fourteen and verifies it, with or without a
+  leading `(01)` — which is never in the bars, since DataBar *means* AI 01.
+  `DataBarOmniOptions` carries one preference, the truncated height: GS1 lists
+  DataBar Truncated as its own symbology and it is the same modules at 13X
+  instead of 33X, giving up the omnidirectional scan rather than any data, so
+  it is a height here and not a second generator.
+
+  This is the first symbology here with no pattern table. A data character is a
+  value and its eight element widths are that value's index into an enumeration
+  of every legal combination of four bars and four spaces, so the encoder is a
+  function rather than a lookup — and an off-by-one in it shifts every value
+  after the mistake, printing a symbol that scans as a different GTIN. The
+  group parameters were recovered by counting group sizes out of an oracle's
+  symbols rather than transcribed, which caught two errors a reading would not
+  have: the bars carry no "at least one narrow element" rule and the spaces do,
+  and the inside characters interleave space-first where the outside ones are
+  bar-first. There is also no check character in the bars — the two finder
+  patterns are the checksum, split nine ways — and the checksum weights are the
+  powers of three modulo 79 rather than the thirty-two literals reference
+  implementations ship. Pure PHP, like every symbology added after QR.
 - **Hexagonal modules in the SVG and PNG renderers**, and the first time the
   shape negotiation that has been in `RendererCapabilities` all along actually
   declines something. MaxiCode's rows interlock — a row sits 0.866 of a module

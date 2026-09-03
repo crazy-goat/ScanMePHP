@@ -258,6 +258,7 @@ $scanme->render('036000291452', 'upc-a', 'svg');
 $scanme->render('04252614', 'upc-e', 'svg');
 $scanme->render('1234567890', 'itf', 'svg');
 $scanme->render('1234567890123', 'itf14', 'svg');
+$scanme->render('01234567890128', 'databar-omni', 'svg');
 $scanme->render('52', 'ean2', 'svg');
 $scanme->render('51299', 'ean5', 'svg');
 ```
@@ -582,6 +583,59 @@ variation. That is scope, and it is on the roadmap.
 $scanme->supports('maxicode', 'svg');           // true
 $scanme->supports('maxicode', 'ascii-blocks');  // false
 ```
+
+### GS1 DataBar
+
+`databar-omni` is the symbol GS1 defined for what an EAN-13 is too wide for:
+loose produce, small pharmacy packs, coupons. It carries a GTIN-14 in
+ninety-six modules, about a quarter of an EAN-13's width.
+
+```php
+$scanme->render('01234567890128', 'databar-omni', 'svg');
+```
+
+It accepts thirteen digits and computes the check digit, or fourteen and
+verifies it, with or without a leading `(01)`.
+
+**The `(01)` is not in the bars.** DataBar carries a GTIN and nothing else, so
+the application identifier is not encoded — it is what the symbology *means*,
+which is why a scanner reports digits it never read, and why the text printed
+under the bars says the same thing the scanner will.
+
+Three things about this symbology are worth knowing before you print one:
+
+**It has no quiet zone.** Every other linear symbology here needs a margin;
+DataBar's guard patterns do that work, and the standard asks for none. Ninety-six
+modules is the whole symbol, edge to edge.
+
+**There is no check character.** The two finder patterns *are* the checksum: the
+left one's index is the checksum over nine and the right one's is the remainder.
+So the patterns a scanner uses to find the symbol are the same ones it uses to
+verify it.
+
+**There is no pattern table.** A data character is a value, and its eight
+element widths are that value's index into an enumeration of every legal
+combination of four bars and four spaces. That makes the encoder a function
+rather than a lookup — and it is why the reference fixture walks group
+boundaries rather than sampling realistic article numbers: an off-by-one in the
+enumeration shifts every value after it, and prints a symbol that scans as a
+different GTIN.
+
+The one option is a height:
+
+```php
+use CrazyGoat\ScanMePHP\Generator\DataBarOmni\DataBarOmniOptions;
+
+$scanme->render('01234567890128', 'databar-omni', 'svg', new DataBarOmniOptions(
+    truncated: true,
+));
+```
+
+GS1 lists "DataBar Truncated" as a symbology of its own, and it is the same
+ninety-six modules printed at 13X instead of 33X. What a truncated symbol gives
+up is the omnidirectional scan — a beam crossing it at an angle no longer meets
+a full row of it — not the data. So it is a preference here rather than a second
+generator, because the modules do not change.
 
 Like Data Matrix, Aztec is pure PHP only. The C++ core and the extension exist
 because QR is what gets generated in bulk, and native acceleration is
