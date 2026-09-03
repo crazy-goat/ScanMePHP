@@ -27,6 +27,7 @@ use CrazyGoat\ScanMePHP\Generator\Itf14\Itf14Generator;
 use CrazyGoat\ScanMePHP\Generator\MaxiCode\MaxiCodeGenerator;
 use CrazyGoat\ScanMePHP\Generator\Pdf417\Pdf417Generator;
 use CrazyGoat\ScanMePHP\Generator\Qr\QrGenerator;
+use CrazyGoat\ScanMePHP\Generator\Rm4scc\Rm4sccGenerator;
 use CrazyGoat\ScanMePHP\Generator\UpcA\UpcAGenerator;
 use CrazyGoat\ScanMePHP\Generator\UpcE\UpcEGenerator;
 use CrazyGoat\ScanMePHP\Renderer\AsciiRenderer;
@@ -75,6 +76,7 @@ final class Defaults
             ->addGenerator(new DataBarLimitedGenerator())
             ->addGenerator(new DataBarExpandedGenerator())
             ->addGenerator(new DataBarExpandedStackedGenerator())
+            ->addGenerator(new Rm4sccGenerator())
             ->addRenderer(new SvgRenderer())
             ->addRenderer(new PngRenderer())
             ->addRenderer(new HtmlRenderer(HtmlMode::Div))
