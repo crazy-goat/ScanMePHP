@@ -241,6 +241,7 @@ closed enum would make it a second-class one.
 ```php
 $scanme->render('https://example.com', 'qrcode', 'svg');
 $scanme->render('ScanMePHP', 'data-matrix', 'svg');
+$scanme->render('BOARDING-4471', 'aztec', 'svg');
 $scanme->render('SHIPMENT-4471', 'code128', 'png');
 $scanme->render('(01)09501101020917(10)LOT0001', 'gs1-128', 'png');
 $scanme->render('(01)09501101020917(10)LOT0001', 'gs1-data-matrix', 'svg');
@@ -377,6 +378,70 @@ the same way pinning a version does — the C++ core takes only
 `encode(data, len, ecl)` and the bitset encoder scores its masks inside an
 inlined hot path, so the request drops to the portable encoder, and a registry
 without one reports the pin by name rather than ignoring it.
+
+### Aztec
+
+`aztec` is the matrix symbology with its finder in the middle and no quiet zone,
+which is why it turns up on transport tickets and boarding passes where there is
+no room to waste around the edge. It holds roughly 3000 characters of text or
+1900 bytes of binary data.
+
+```php
+$scanme->render('BOARDING-4471', 'aztec', 'svg');
+```
+
+Two things about it differ from every other symbology here.
+
+**There are no error correction levels.** Aztec has a percentage, and the
+percentage is a *floor* rather than a target: the symbol is sized to hold the
+data plus at least that much recovery data, and whatever capacity is left over
+becomes recovery data as well. Five characters land in the smallest symbol there
+is and come out with twelve of its seventeen codewords given to error
+correction, because there was nowhere else for the room to go. Asking for 5% and
+asking for 40% therefore produce the same 15-module symbol.
+
+```php
+use CrazyGoat\ScanMePHP\Generator\Aztec\AztecOptions;
+
+$scanme->render('BOARDING-4471', 'aztec', 'svg', new AztecOptions(errorCorrectionPercent: 50));
+```
+
+The default is 33%, which is what the encoders this library is checked against
+use — ISO/IEC 24778 recommends at least 23%. Be aware that two different numbers
+describe the same symbol and implementations disagree about which to report: the
+share of the whole symbol, or the share measured against the data. This option
+is the first of those.
+
+**A size can be pinned, and it is a size rather than a layer count.**
+
+```php
+$scanme->render('BOARDING-4471', 'aztec', 'svg', new AztecOptions(size: 31));
+```
+
+There are thirty-six Aztec symbols: four compact ones at 15, 19, 23 and 27
+modules, and thirty-two full ones from 31 to 151. A layer count would be
+ambiguous — four layers is a compact 27-module symbol *and* a full 31-module one
+— whereas the sizes do not collide, so a size names one symbol and nothing else.
+Pinning one overrides the percentage, since the two can contradict each other
+and the size is the more concrete request, and encoding fails if the data does
+not fit.
+
+Aztec also takes **binary data directly**. Bytes with no place in its five
+character modes — the null byte, thirteen control characters, and everything
+above ASCII, 142 in all — go through a binary shift, and the encoder decides
+where to open one by searching rather than guessing. A single lower-case letter
+inside a word of capitals is actually cheapest as a one-byte binary shift, at
+eighteen bits against the nineteen a latch and the route back would cost, which
+is the kind of choice a greedy encoder gets wrong.
+
+One thing this library's Aztec does not do: **FLG(n)**, the Punct code that
+carries an ECI or an FNC1. Nothing here asks for either yet — a GS1 Aztec would
+— and an encoder that emitted one by accident would be worse than one that
+cannot.
+
+Like Data Matrix, Aztec is pure PHP only. The C++ core and the extension exist
+because QR is what gets generated in bulk, and native acceleration is
+deliberately not growing new symbologies.
 
 None of the three GS1 generators is reachable by accident. Code 128, Data Matrix
 and QR will all happily encode `(01)09501101020917` as literal parentheses —

@@ -61,6 +61,7 @@ $payload = static function (string $symbology, int $bytes) use ($registry): stri
         'gs1-128' => '(01)09501101020917(10)LOT0001',
         'gs1-data-matrix' => '(01)09501101020917(10)LOT0001',
         'gs1-qr' => '(01)09501101020917(10)LOT0001',
+        'aztec' => 'BOARDING-4471',
         'ean2' => '52',
         'ean5' => '51299',
     ];

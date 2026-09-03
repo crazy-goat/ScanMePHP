@@ -17,6 +17,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
+use CrazyGoat\ScanMePHP\Generator\Aztec\AztecOptions;
 use CrazyGoat\ScanMePHP\Generator\DataMatrix\DataMatrixOptions;
 use CrazyGoat\ScanMePHP\Generator\Qr\QrOptions;
 use CrazyGoat\ScanMePHP\ModuleStyle;
@@ -60,6 +61,28 @@ $square = $scanme->generate('ScanMePHP', 'data-matrix');
 $oblong = $scanme->generate('ScanMePHP', 'data-matrix', new DataMatrixOptions(rectangular: true));
 printf("data matrix square:      %d x %d\n", $square->getWidth(), $square->getHeight());
 printf("data matrix rectangular: %d x %d\n\n", $oblong->getWidth(), $oblong->getHeight());
+
+// Aztec has no levels either, but for a different reason: it has a percentage,
+// and the percentage is a floor rather than a target. Raising it costs a larger
+// symbol until the leftover capacity swamps the request — 40% and 80% land on
+// the same symbol here, because once the data has moved up a size there is far
+// more room to spare than either asked for.
+foreach ([5, 40, 80] as $percent) {
+    $symbol = $scanme->generate('BOARDING-4471', 'aztec', new AztecOptions(errorCorrectionPercent: $percent));
+    printf(
+        "aztec at %2d%%:  %d x %d modules, %d of %d codewords for recovery\n",
+        $percent,
+        $symbol->getWidth(),
+        $symbol->getHeight(),
+        $symbol->getMetadata()['totalWords'] - $symbol->getMetadata()['dataWords'],
+        $symbol->getMetadata()['totalWords']
+    );
+}
+
+// A size names one symbol, which is why the option is a size and not a layer
+// count: four layers is a compact 27-module symbol and a full 31-module one.
+$pinnedAztec = $scanme->generate('BOARDING-4471', 'aztec', new AztecOptions(size: 31));
+printf("aztec pinned to 31:  %d x %d modules\n\n", $pinnedAztec->getWidth(), $pinnedAztec->getHeight());
 
 echo "=== Render options change only the picture ===\n\n";
 

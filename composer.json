@@ -80,13 +80,15 @@
         "reference:gs1": ".decoders/bin/python tools/gs1_reference.py",
         "reference:gs1-qr": ".decoders/bin/python tools/gs1_qr_reference.py",
         "reference:qr": ".decoders/bin/python tools/qr_reference.py",
-        "reference:qr-agreement": "php tools/qr_agreement_fixture.php"
+        "reference:qr-agreement": "php tools/qr_agreement_fixture.php",
+        "reference:aztec": ".decoders/bin/python tools/aztec_reference.py"
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
     "scripts-descriptions": {
         "decoders:install": "Install the reference decoder and encoders the verification suite compares against",
         "test:roundtrip": "Verify every symbology against an independent barcode decoder",
-        "reference:ean-upc": "Regenerate the EAN/UPC module patterns from zxing-cpp"
+        "reference:ean-upc": "Regenerate the EAN/UPC module patterns from zxing-cpp",
+        "reference:aztec": "Regenerate the Aztec reference symbols from zxing-cpp"
     }
 }
