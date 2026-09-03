@@ -203,7 +203,7 @@ class ScanmeTest extends TestCase
         sort($registered);
 
         $this->assertSame(
-            ['aztec', 'codabar', 'code128', 'code39', 'code39ext', 'code93', 'data-matrix', 'ean13', 'ean2', 'ean5', 'ean8', 'gs1-128', 'gs1-data-matrix', 'gs1-qr', 'itf', 'itf14', 'pdf417', 'qrcode', 'upc-a', 'upc-e'],
+            ['aztec', 'codabar', 'code128', 'code39', 'code39ext', 'code93', 'data-matrix', 'ean13', 'ean2', 'ean5', 'ean8', 'gs1-128', 'gs1-data-matrix', 'gs1-qr', 'itf', 'itf14', 'maxicode', 'pdf417', 'qrcode', 'upc-a', 'upc-e'],
             $registered
         );
     }
@@ -308,28 +308,41 @@ class ScanmeTest extends TestCase
         $this->assertSame(60 * 2, $header['height'], 'no text, so no room reserved for it');
     }
 
-    public function testHexagonalModulesAreRefusedByEverySquareRenderer(): void
+    /**
+     * The shape negotiation, on the one symbology that exercises it.
+     *
+     * MaxiCode is the only symbol here whose modules are not squares, so it is
+     * the only case where a renderer can be asked for something it cannot draw.
+     * Both halves matter: the two renderers that grew hexagons have to accept
+     * it, and the five that draw character or table cells have to say so by
+     * name rather than approximate it into something unscannable.
+     */
+    public function testHexagonalModulesAreDrawnOnlyByTheRenderersThatCan(): void
     {
-        // The shape MaxiCode will produce.
-        $hexagonal = new Symbol(
-            width: 4,
-            height: 4,
-            modules: '1010010110100101',
-            dimension: Dimension::Matrix,
-            moduleShape: ModuleShape::Hexagon,
-            quietZone: QuietZone::uniform(1),
-        );
+        $drawn = [];
+        $refused = [];
 
         foreach ($this->scanme->getRegistry()->renderers() as $renderer) {
-            $this->assertFalse(
-                $renderer->getCapabilities()->supportsShape(ModuleShape::Hexagon),
-                $renderer->getFormat()
-            );
+            $format = $renderer->getFormat();
+            if ($renderer->getCapabilities()->supportsShape(ModuleShape::Hexagon)) {
+                $drawn[] = $format;
+
+                continue;
+            }
+            $refused[] = $format;
         }
+
+        sort($drawn);
+        sort($refused);
+        $this->assertSame(['png', 'svg'], $drawn);
+        $this->assertSame(
+            ['ascii-blocks', 'ascii-dots', 'ascii-half-blocks', 'html-div', 'html-table'],
+            $refused
+        );
 
         $this->expectException(IncompatibleRendererException::class);
         $this->expectExceptionMessage('cannot draw hexagon modules');
-        $this->scanme->renderSymbol($hexagonal, Format::Svg);
+        $this->scanme->render('HELLO', Symbology::MaxiCode, Format::AsciiBlocks);
     }
 
     public function testLinearBarHeightIsScaledNotFlattened(): void

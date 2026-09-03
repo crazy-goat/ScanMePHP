@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP\Tests;
 
+use CrazyGoat\ScanMePHP\Encoding\MaxiCode\Mode;
 use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
 use CrazyGoat\ScanMePHP\Exception\IncompatibleRendererException;
 use CrazyGoat\ScanMePHP\Generator\Aztec\AztecOptions;
@@ -18,6 +19,7 @@ use CrazyGoat\ScanMePHP\Generator\Itf\ItfOptions;
 use CrazyGoat\ScanMePHP\Generator\Itf\Patterns as ItfPatterns;
 use CrazyGoat\ScanMePHP\Generator\Itf14\Backend\PhpBackend as Itf14Backend;
 use CrazyGoat\ScanMePHP\Generator\Itf14\Itf14Options;
+use CrazyGoat\ScanMePHP\Generator\MaxiCode\MaxiCodeOptions;
 use CrazyGoat\ScanMePHP\Generator\Pdf417\Pdf417Options;
 use CrazyGoat\ScanMePHP\Generator\Qr\QrOptions;
 use CrazyGoat\ScanMePHP\Renderer\Options\PngOptions;
@@ -69,6 +71,7 @@ class DecoderRoundTripTest extends TestCase
         Symbology::DataMatrix->value => 'Data Matrix',
         Symbology::Aztec->value => 'Aztec',
         Symbology::Pdf417->value => 'PDF417',
+        Symbology::MaxiCode->value => 'MaxiCode',
         // As with GS1-128: the same bars, and what marks it as GS1 is an FNC1
         // the decoder reports by parenthesising what it hands back.
         Symbology::Gs1DataMatrix->value => 'Data Matrix',
@@ -357,6 +360,125 @@ class DecoderRoundTripTest extends TestCase
     }
 
     /** @return iterable<string, array{string}> */
+    /**
+     * MaxiCode's payload, in the plain mode.
+     *
+     * Every case here is a code set decision, because that is the whole of
+     * MaxiCode's high-level encoding: five overlapping sets, and a search that
+     * picks which to be in. The upper half of Latin-1 gets its own cases
+     * because sets C, D and E are where an off-by-one in a table hides — those
+     * bytes never appear in ordinary text, so nothing else would catch it.
+     *
+     * @return iterable<string, array{string}>
+     */
+    public static function maxiCodeProvider(): iterable
+    {
+        yield 'capitals only, which is set A alone' => ['HELLO WORLD'];
+        yield 'lower case, so a latch into set B' => ['hello world'];
+        yield 'mixed case, so latches both ways' => ['MiXeD CaSe TeXt'];
+        // One and two capitals inside a lower-case run are the reason set B has
+        // a two- and a three-character shift; three or more make a latch cheaper.
+        yield 'one capital inside lower case' => ['abcXdef'];
+        yield 'two capitals inside lower case' => ['abcXYdef'];
+        yield 'three capitals inside lower case' => ['abcXYZdef'];
+        yield 'four capitals inside lower case' => ['abcWXYZdef'];
+        yield 'digits short enough to stay in set A' => ['AB 10001'];
+        // Nine is the only run length that compacts, so these straddle the seam.
+        yield 'eight digits' => ['12345678'];
+        yield 'exactly nine digits' => ['123456789'];
+        yield 'ten digits' => ['1234567890'];
+        yield 'eighteen digits' => [str_repeat('9', 18)];
+        yield 'the punctuation split across sets A and B' => ['!"#$%&\'()*+,-./:;<=>?@[]^_`{|}~'];
+        yield 'a realistic label' => ['SHIP TO 123 MAIN ST APT 4'];
+        yield 'as much as the plain mode holds' => [str_repeat('A', 93)];
+    }
+
+    #[DataProvider('maxiCodeProvider')]
+    public function testAMaxiCodeScansBack(string $data): void
+    {
+        $this->assertScansBack($data, Symbology::MaxiCode->value, self::FORMAT_NAMES['maxicode']);
+    }
+
+    /**
+     * The bytes no code set holds by itself.
+     *
+     * Between them the five sets cover all 256 values, which makes MaxiCode the
+     * only symbology here that reaches every byte without a binary mode — and
+     * the only one where getting a table wrong produces a symbol that scans
+     * back as a different character rather than not at all.
+     *
+     * @return iterable<string, array{string}>
+     */
+    public static function maxiCodeBinaryProvider(): iterable
+    {
+        yield 'set C, the upper case accents' => ["\xC0\xC1\xC2\xD9\xDA\xDF"];
+        yield 'set D, the lower case accents' => ["\xE0\xE1\xE2\xF9\xFA\xFF"];
+        yield 'set E, the control characters' => ["\x00\x01\x02\x1A\x1B\x1F"];
+        yield 'the C1 range, which is split across three sets' => ["\x80\x8A\x95\x9F"];
+        yield 'every set in one payload' => ["A a \xC0 \xE0 \x01 \xA0"];
+        yield 'a byte from each of the four corners' => ["\x00\x7F\x80\xFF"];
+    }
+
+    #[DataProvider('maxiCodeBinaryProvider')]
+    public function testAMaxiCodeBinaryPayloadScansBack(string $data): void
+    {
+        $this->assertBytesScanBack($data, Symbology::MaxiCode->value, self::FORMAT_NAMES['maxicode']);
+    }
+
+    /**
+     * The structured carrier message, which the decoder hands back in front of
+     * the payload separated by group separators — which it escapes as "<GS>",
+     * so that is what the expectations hold.
+     *
+     * That is the point of modes 2 and 3 and the reason they are worth the nine
+     * codewords they cost: the routing block is a field a reader reports
+     * separately, not a prefix glued onto the data.
+     *
+     * @return iterable<string, array{MaxiCodeOptions, string, string}>
+     */
+    public static function maxiCodeStructuredProvider(): iterable
+    {
+        yield 'a nine digit postcode' => [
+            new MaxiCodeOptions(Mode::NumericPostcode, '339788292', 28, 146),
+            'PARCEL',
+            '339788292<GS>028<GS>146<GS>PARCEL',
+        ];
+        yield 'a short numeric postcode' => [
+            new MaxiCodeOptions(Mode::NumericPostcode, '1234', 840, 1),
+            'PARCEL',
+            '1234<GS>840<GS>001<GS>PARCEL',
+        ];
+        yield 'a six character postcode' => [
+            new MaxiCodeOptions(Mode::AlphanumericPostcode, 'AB1234', 826, 999),
+            'UK PARCEL',
+            'AB1234<GS>826<GS>999<GS>UK PARCEL',
+        ];
+        // Shorter than six, so the field is padded — and the padding comes back,
+        // because six positions is what the field is.
+        yield 'a postcode shorter than the field' => [
+            new MaxiCodeOptions(Mode::AlphanumericPostcode, 'W1A', 826, 1),
+            'X',
+            'W1A   <GS>826<GS>001<GS>X',
+        ];
+        yield 'as much as a structured mode holds' => [
+            new MaxiCodeOptions(Mode::NumericPostcode, '12345', 616, 42),
+            str_repeat('B', 84),
+            '12345<GS>616<GS>042<GS>' . str_repeat('B', 84),
+        ];
+    }
+
+    #[DataProvider('maxiCodeStructuredProvider')]
+    public function testAStructuredMaxiCodeScansBack(MaxiCodeOptions $options, string $data, string $expected): void
+    {
+        $this->assertScansBack(
+            $data,
+            Symbology::MaxiCode->value,
+            self::FORMAT_NAMES['maxicode'],
+            $expected,
+            $options,
+        );
+    }
+
     public static function pdf417Provider(): iterable
     {
         yield 'capitals only' => ['HELLO WORLD'];
