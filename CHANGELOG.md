@@ -766,6 +766,14 @@ number is worse than a compile error.
 
 ### Changed
 
+- **`examples/` is now a symbology gallery** rather than seven tutorial
+  scripts. One generator, `php examples/gallery.php`, builds an `index.md`
+  with every supported QR/barcode and a page per symbology showing that code
+  through every renderer — SVG and PNG as images, ASCII inline, HTML as
+  standalone files, and a renderer that cannot draw a symbol faithfully
+  saying so on the page instead of being skipped. The gallery is generated,
+  never committed: `ExamplesTest` runs the generator on every build and
+  verifies its pages against the registry.
 - **`Matrix` → `Symbol`.** Symbols are rectangular, carry a quiet zone, may
   have rows of differing heights (EAN guard bars descend below the others),
   and carry the human-readable text a linear symbology requires be printed.

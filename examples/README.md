@@ -1,25 +1,22 @@
-# Examples
+# Examples — the symbology gallery
 
-Each file is runnable on its own and prints what it is doing:
+This directory is one generator rather than a shelf of scripts:
 
 ```bash
-php examples/01_quickstart.php
+php examples/gallery.php
 ```
 
-| File | What it covers |
-| --- | --- |
-| `01_quickstart.php` | The one call this library is built around |
-| `02_symbologies.php` | Every symbology, its payload rules, and how the family relates |
-| `03_output_formats.php` | Every output format and what each is good for |
-| `04_options.php` | Generator options change the symbol; render options change the picture |
-| `05_files_and_web.php` | Files, data URIs, and serving a symbol over HTTP |
-| `06_compatibility.php` | What happens when a symbology and a renderer do not fit |
-| `07_extending.php` | Your own renderer, symbology and encoding backend |
+It writes the gallery from whatever the registry in this checkout supports:
 
-Files written by the examples land in `generated-assets/`, which is
-regenerated rather than committed — a checked-in artefact nobody regenerates
-goes stale exactly the way documentation does.
+- `index.md` — every supported QR / barcode, one row each
+- `codes/<symbology>.md` — that symbology's page: payload, capabilities,
+  and **every renderer's output** (SVG, PNG, HTML div/table, ASCII ×3),
+  with a renderer that cannot draw it faithfully saying so instead of being
+  skipped
+- `assets/<symbology>/` — the image files the pages point at
 
-`tests/ExamplesTest.php` runs all of these on every CI build and fails if any
-of them exits non-zero. That is the only reason to trust the code on this page:
-an example that nothing executes is a claim, not a fact.
+None of those are committed: a gallery is a claim about what the library
+draws *right now*, so it is regenerated the same way the tests are run —
+`tests/ExamplesTest.php` executes the generator on every CI build and fails
+if it does not complete, and a second test asserts the pages it wrote really
+cover every registered symbology and renderer.
