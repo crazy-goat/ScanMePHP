@@ -13,6 +13,8 @@ use CrazyGoat\ScanMePHP\Generator\Codabar\Delimiter;
 use CrazyGoat\ScanMePHP\Generator\Code39\Charset;
 use CrazyGoat\ScanMePHP\Generator\Code39\Code39Options;
 use CrazyGoat\ScanMePHP\Generator\Code93\Charset as Code93Charset;
+use CrazyGoat\ScanMePHP\Generator\DataBarOmni\Backend\PhpBackend;
+use CrazyGoat\ScanMePHP\Generator\DataBarOmni\DataBarOmniOptions;
 use CrazyGoat\ScanMePHP\Generator\DataMatrix\DataMatrixOptions;
 use CrazyGoat\ScanMePHP\Generator\Ean\Composite;
 use CrazyGoat\ScanMePHP\Generator\Itf\ItfOptions;
@@ -72,6 +74,12 @@ class DecoderRoundTripTest extends TestCase
         Symbology::Aztec->value => 'Aztec',
         Symbology::Pdf417->value => 'PDF417',
         Symbology::MaxiCode->value => 'MaxiCode',
+        // DataBar carries a GTIN and nothing else, so the '(01)' a scanner
+        // reports was never in the bars — it is what the symbology means. The
+        // text coming back parenthesised is therefore not evidence of an FNC1
+        // as it is for GS1-128; it is the decoder saying which symbology it
+        // thinks it read.
+        Symbology::DataBarOmni->value => 'DataBar Omni',
         // As with GS1-128: the same bars, and what marks it as GS1 is an FNC1
         // the decoder reports by parenthesising what it hands back.
         Symbology::Gs1DataMatrix->value => 'Data Matrix',
@@ -476,6 +484,66 @@ class DecoderRoundTripTest extends TestCase
             self::FORMAT_NAMES['maxicode'],
             $expected,
             $options,
+        );
+    }
+
+    /**
+     * GTINs that walk the seams of DataBar's arithmetic.
+     *
+     * The interesting payloads are not realistic article numbers, they are the
+     * values where the encoding changes shape: the point the thirteen digits
+     * split around, the first and last value a character group holds, and the
+     * ends of the range. A GTIN in the middle of a group exercises one bucket
+     * of the enumeration; these exercise its edges.
+     *
+     * @return iterable<string, array{string}>
+     */
+    public static function dataBarOmniProvider(): iterable
+    {
+        yield 'the smallest GTIN' => ['0000000000000'];
+        yield 'the largest GTIN' => ['9999999999999'];
+        yield 'one below the split' => ['0000004537076'];
+        yield 'the split itself' => ['0000004537077'];
+        yield 'one above the split' => ['0000004537078'];
+        yield 'the last value of the first inside group' => ['0000000000335'];
+        yield 'the first value of the second inside group' => ['0000000000336'];
+        yield 'the last value of the first outside group' => ['0000000255520'];
+        yield 'a book number' => ['9780306406157'];
+        yield 'a fourteen-digit GTIN with its check digit' => ['01234567890128'];
+        yield 'the application identifier spelled out' => ['(01)01234567890128'];
+        yield 'an indicator digit other than zero' => ['5901234123457'];
+    }
+
+    #[DataProvider('dataBarOmniProvider')]
+    public function testADataBarOmniScansBack(string $data): void
+    {
+        $digits = PhpBackend::normalise($data);
+
+        $this->assertScansBack(
+            $data,
+            Symbology::DataBarOmni->value,
+            self::FORMAT_NAMES['databar-omni'],
+            '(01)' . $digits,
+        );
+    }
+
+    /**
+     * The bars do not change when the symbol is printed short.
+     *
+     * GS1 lists DataBar Truncated as its own symbology, and it is the same
+     * ninety-six modules at 13X instead of 33X. What is given up is the
+     * omnidirectional scan, not the data — so a truncated symbol must still
+     * read back as the same number, and this is what says the option is a
+     * height and nothing more.
+     */
+    public function testATruncatedDataBarCarriesTheSameNumber(): void
+    {
+        $this->assertScansBack(
+            '01234567890128',
+            Symbology::DataBarOmni->value,
+            self::FORMAT_NAMES['databar-omni'],
+            '(01)01234567890128',
+            new DataBarOmniOptions(truncated: true),
         );
     }
 
