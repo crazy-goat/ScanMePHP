@@ -18,6 +18,7 @@ use CrazyGoat\ScanMePHP\Generator\DataBarOmni\Backend\PhpBackend;
 use CrazyGoat\ScanMePHP\Generator\DataBarOmni\DataBarOmniOptions;
 use CrazyGoat\ScanMePHP\Generator\DataMatrix\DataMatrixOptions;
 use CrazyGoat\ScanMePHP\Generator\Ean\Composite;
+use CrazyGoat\ScanMePHP\Generator\Gs1\ElementString;
 use CrazyGoat\ScanMePHP\Generator\Itf\ItfOptions;
 use CrazyGoat\ScanMePHP\Generator\Itf\Patterns as ItfPatterns;
 use CrazyGoat\ScanMePHP\Generator\Itf14\Backend\PhpBackend as Itf14Backend;
@@ -82,6 +83,7 @@ class DecoderRoundTripTest extends TestCase
         // thinks it read.
         Symbology::DataBarOmni->value => 'DataBar Omni',
         Symbology::DataBarLimited->value => 'DataBar Limited',
+        Symbology::DataBarExpanded->value => 'DataBar Expanded',
         // As with GS1-128: the same bars, and what marks it as GS1 is an FNC1
         // the decoder reports by parenthesising what it hands back.
         Symbology::Gs1DataMatrix->value => 'Data Matrix',
@@ -588,6 +590,56 @@ class DecoderRoundTripTest extends TestCase
             Symbology::DataBarLimited->value,
             self::FORMAT_NAMES['databar-limited'],
             '(01)' . $digits,
+        );
+    }
+
+    /**
+     * Payloads that make Expanded choose differently.
+     *
+     * The list is organised around the encodation rather than around the data:
+     * both method fields, all three modes of the general field, the latch
+     * thresholds either side of them, the FNC1 that separates two elements, and
+     * the compaction methods this library does not implement — which are here
+     * precisely because the symbol we draw for them is wider than the standard
+     * allows for and has to read back as the same element strings anyway.
+     *
+     * @return iterable<string, array{string}>
+     */
+    public static function dataBarExpandedProvider(): iterable
+    {
+        yield 'a GTIN alone' => ['(01)09501101020917'];
+        yield 'the smallest GTIN' => ['(01)00000000000000'];
+        yield 'the largest GTIN' => ['(01)99999999999997'];
+        yield 'a GTIN and a batch number' => ['(01)09501101020917(10)LOT0001'];
+        yield 'a GTIN and a serial number and a date' => ['(01)09501101020917(21)SERIAL(11)991201'];
+        yield 'a weight, which we do not compact' => ['(01)09501101020917(3103)001750'];
+        yield 'a weight and a date, which we do not compact either' => ['(01)09501101020917(3103)001750(11)991201'];
+        yield 'numeric data only' => ['(90)1234567890123456789012345678'];
+        yield 'one digit' => ['(90)1'];
+        yield 'one capital' => ['(90)A'];
+        yield 'one lowercase letter, which needs ISO 646' => ['(90)a'];
+        yield 'the whole alphabet' => ['(90)ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
+        yield 'lowercase throughout' => ['(90)abcdefghijklmnopqrstuvwxyz'];
+        yield 'punctuation only ISO 646 can say' => ['(90)!"%&*+,-./:;<=>?_'];
+        yield 'a space' => ['(90)A B'];
+        yield 'two elements separated by an FNC1' => ['(10)A(21)B'];
+        yield 'an FNC1 followed by digits' => ['(91)a1(92)1234'];
+        yield 'a digit run that just reaches the numeric latch' => ['(90)a1111O'];
+        yield 'a digit run that does not' => ['(90)a111z'];
+        yield 'a capital run that just reaches the alphanumeric latch' => ['(90)aABCDE'];
+        yield 'a capital run that does not' => ['(90)aABCD'];
+        yield 'a final lone digit written short' => ['(90)1111111111111'];
+        yield 'the longest symbol' => ['(90)111111111111111111111111111111(91)11111111111111111111111111'];
+    }
+
+    #[DataProvider('dataBarExpandedProvider')]
+    public function testADataBarExpandedScansBack(string $data): void
+    {
+        $this->assertScansBack(
+            $data,
+            Symbology::DataBarExpanded->value,
+            self::FORMAT_NAMES['databar-expanded'],
+            ElementString::parse($data)->humanReadable(),
         );
     }
 
