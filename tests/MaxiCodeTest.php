@@ -15,6 +15,7 @@ use CrazyGoat\ScanMePHP\Exception\UnsupportedDataException;
 use CrazyGoat\ScanMePHP\Generator\MaxiCode\MaxiCodeOptions;
 use CrazyGoat\ScanMePHP\Generator\MaxiCode\MaxiCodeSymbols;
 use CrazyGoat\ScanMePHP\ModuleShape;
+use CrazyGoat\ScanMePHP\RegionRole;
 use CrazyGoat\ScanMePHP\Scanme;
 use CrazyGoat\ScanMePHP\Symbology;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -96,6 +97,11 @@ class MaxiCodeTest extends TestCase
         $this->assertSame(Specs::BULLSEYE_ROW, $region->y + intdiv($region->height - 1, 2));
         $this->assertSame(1, $region->width % 2, 'an even width would put the centre between two modules');
         $this->assertSame(1, $region->height % 2);
+
+        // Unlike QR's corner patterns, this one is not a styling hint: the grid
+        // is blank where the rings go, so a renderer that ignores it draws a
+        // symbol with a hole in the middle.
+        $this->assertSame(RegionRole::RendererDrawn, $region->role);
     }
 
     /** The area the rings cover carries no modules, so it is blank in the grid. */

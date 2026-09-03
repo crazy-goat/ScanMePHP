@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CrazyGoat\ScanMePHP\Renderer;
 
 use CrazyGoat\ScanMePHP\Region;
+use CrazyGoat\ScanMePHP\RegionRole;
 use CrazyGoat\ScanMePHP\Symbol;
 
 /**
@@ -112,8 +113,15 @@ final class HexagonLattice
      */
     public static function bullseye(Symbol $symbol, Layout $layout): ?array
     {
-        $regions = $symbol->getFinderRegions();
-        $region = $regions[0] ?? null;
+        $region = null;
+        foreach ($symbol->getFinderRegions() as $candidate) {
+            if ($candidate->role === RegionRole::RendererDrawn) {
+                $region = $candidate;
+
+                break;
+            }
+        }
+
         if (!$region instanceof Region) {
             return null;
         }

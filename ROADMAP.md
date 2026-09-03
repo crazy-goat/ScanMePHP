@@ -148,6 +148,30 @@ unit of work if and when it is picked up.
 - **Minor linear codes** — MSI, Pharmacode, Code 11, Telepen. Cheap to add and
   correspondingly rare; the cost is API surface, not encoder complexity.
 
+## Tier 6 — renderer coverage, deferred
+
+The first tier here that is not about symbology coverage, which is why it is
+numbered past the ones that are: 5 is left free for a symbology tier so the
+sequence keeps meaning one thing.
+
+- **Hexagons in the HTML renderers.** MaxiCode is refused by `html-div` and
+  `html-table` today, and the reason is scope rather than capability — CSS
+  draws a hexagon with `clip-path: polygon(...)`, offsets every odd row with a
+  margin, and draws the bullseye's rings with `border-radius` and a border. It
+  would work and it would scan.
+
+  What stops it is that `HtmlRenderer` is built around one element per module
+  in a grid, with the quiet zone collapsed into a handful of sized blocks. A
+  hexagonal lattice is a second, unrelated rendering path inside the same
+  class — about the size of the job the PNG one was — and `ModuleShape::Hexagon`
+  already reports the refusal honestly, so nothing is silently wrong in the
+  meantime.
+
+  The ASCII renderers are a different matter and are **not** on this list. A
+  terminal is a fixed raster of character cells with no way to offset a row by
+  half a cell, and the bullseye is three circles; anything drawn there would be
+  a picture of a barcode rather than one.
+
 ## Adding one
 
 The bar is the same for every entry above, and it is in `AGENTS.md` under
