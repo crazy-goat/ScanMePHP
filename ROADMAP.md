@@ -15,7 +15,7 @@ not write and a decoder round trip. See `README.md` for what each one accepts.
 | Family | Generators |
 | --- | --- |
 | Matrix | `qrcode`, `data-matrix` |
-| Linear | `code128`, `code39`, `code39ext`, `code93`, `codabar`, `itf`, `itf14` |
+| Linear | `code128`, `gs1-128`, `code39`, `code39ext`, `code93`, `codabar`, `itf`, `itf14` |
 | Retail | `ean13`, `ean8`, `upc-a`, `upc-e`, `ean2`, `ean5` |
 
 ## Tier 3 — the agreed scope, still open
@@ -23,10 +23,14 @@ not write and a decoder round trip. See `README.md` for what each one accepts.
 This is what "complete" means for the v2 release. Nothing is tagged until these
 are in.
 
-- **GS1 layer** — FNC1 and application identifier parsing. Not a symbology: a
-  data layer that cuts across `code128`, `data-matrix` and `qrcode` at once.
-  Worth doing before the remaining symbologies rather than after, since every
-  one added first is another place to retrofit it into.
+- **GS1 layer, the rest of it.** `gs1-128` ships, and with it the derived
+  application identifier table (`Generator\Gs1\ApplicationIdentifier`) and the
+  FNC1 placement rule, which are the parts that are not specific to a
+  symbology. What remains is carrying the same element strings in the two
+  matrix codes — GS1 Data Matrix and GS1 QR — where FNC1 is a codeword and a
+  mode indicator rather than a symbol character. Worth doing before the
+  remaining symbologies, since every one added first is another place to
+  retrofit it into.
 - **Aztec** — reuses the parameterised GF(2^m) Reed–Solomon that QR and Data
   Matrix already share, with a different field per size. The cheapest of the
   three remaining symbologies; the spiral layout and the central finder are the

@@ -242,6 +242,7 @@ closed enum would make it a second-class one.
 $scanme->render('https://example.com', 'qrcode', 'svg');
 $scanme->render('ScanMePHP', 'data-matrix', 'svg');
 $scanme->render('SHIPMENT-4471', 'code128', 'png');
+$scanme->render('(01)09501101020917(10)LOT0001', 'gs1-128', 'png');
 $scanme->render('PART-4471', 'code39', 'png');
 $scanme->render('Part 4471/a', 'code39ext', 'png');
 $scanme->render('Part 4471/a', 'code93', 'png');
@@ -281,6 +282,43 @@ main symbol's own. What may be composed with what is a rule rather than a
 convenience: an add-on goes beside an `ean13`, `upc-a` or `upc-e`, and an EAN-8
 is refused, because GS1 defines no add-on for it and the pair would scan
 perfectly well while being a label a retail system may reject.
+
+`gs1-128` is Code 128 carrying GS1 application identifiers, written the way GS1
+prints it: `(01)09501101020917(10)LOT0001`. The parentheses are for people and
+are not in the bars. What the symbol carries is the identifiers and data run
+together, with an FNC1 wherever a scanner could not otherwise tell where one
+element string ends — plus one more directly after the start code, which is
+what makes a reader announce `]C1` and hand the data to a GS1 parser.
+
+Where those separators go is the whole job, and getting it wrong does not
+produce an unreadable symbol. It produces a readable one that says something
+else: a missing separator makes the next identifier read as more of the
+previous element's data. The rule is not "is the length fixed" either — AI
+`(402)` carries exactly seventeen digits and *still* needs a separator, because
+predefined length in GS1 means the identifier is on a published list, not that
+its length happens to be constant. So the table of 541 identifiers was derived
+by sweeping every two-, three- and four-digit string past an independent
+encoder rather than transcribed, and it is frozen in
+`tests/fixtures/gs1_ai_reference.csv`.
+
+The payload is validated as far as that table goes — the identifier has to
+exist, and its data has to be a length that identifier accepts:
+
+```php
+$scanme->generate('(01)0950110102091', 'gs1-128');  // (01) takes exactly 14 characters of data, got 13
+$scanme->generate('(05)12345678901234', 'gs1-128'); // Not a GS1 application identifier: (05)
+```
+
+It stops there. Character sets and check digits are **not** checked: `(3103)`
+is a weight to three decimals and `(3103)00018A` encodes anyway, `(11)991301`
+is the thirteenth month, and a GTIN with a wrong check digit is drawn as given.
+That is not an oversight — nothing available here can verify those rules, and a
+table nobody checked is worse than an absent one because it looks like a
+guarantee. `tests/Gs1Test.php` states the boundary so it cannot drift.
+
+One limit of the notation: data containing a parenthesis cannot be written this
+way, though GS1 permits one. It is refused with a message saying so rather than
+parsed into something you did not write.
 
 `code39` and `code39ext` are two readings of one set of bars. Standard Code 39
 carries 43 characters; extended mode reaches all of ASCII by encoding the other
@@ -352,7 +390,7 @@ any of them, so rather than ship an unchecked table, compute the one your system
 needs and append it to the payload — it is an ordinary data character either way.
 
 Aliases resolve too — `ean`, `ean-13`, `upc`, `upca`, `dm`, `ecc200`, `qr`,
-`c39`, `c93`, `i25`, `gtin-14`, `nw-7`.
+`c39`, `c93`, `i25`, `gtin-14`, `nw-7`, `ean128`.
 
 If you have a payload and are not sure which symbologies accept it, ask rather
 than guess:

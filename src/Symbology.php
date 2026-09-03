@@ -21,6 +21,7 @@ enum Symbology: string
 {
     case QrCode = 'qrcode';
     case Code128 = 'code128';
+    case Gs1128 = 'gs1-128';
     case Code39 = 'code39';
     case Code39Extended = 'code39ext';
     case Code93 = 'code93';
