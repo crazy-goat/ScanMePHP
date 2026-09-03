@@ -184,6 +184,53 @@ number is worse than a compile error.
   Omnidirectional's groups they can. Replacing that walk with an exact count
   produces different bars for 432 of the 1597 inside characters — all of which
   scan, as other numbers. Pure PHP.
+- **GS1 DataBar Expanded** (`databar-expanded`, aliases `gs1-databar-expanded`,
+  `rss-expanded`, `rss-exp`): the member of the family that carries GS1 element
+  strings rather than a GTIN — a batch number, a use-by date, a net weight, a
+  price, any of them alongside the item's number — in the parenthesised form
+  GS1-128 takes, with the separators placed from the identifier table. Four to
+  twenty-two symbol characters, up to 74 digits or 41 alphanumeric characters,
+  omnidirectional throughout, no options.
+
+  Almost nothing about it follows from the other two, and each difference is a
+  plausible symbol when guessed wrongly, so each was measured against an
+  oracle: a character is twelve bits' worth of widths rather than a mixed-radix
+  digit; the narrow-element rule sits on the odd *positions* of a character
+  rather than on its bars or its spaces, because the symbol is one alternating
+  run of elements from guard to guard and only position decides a character's
+  colours; the finder is chosen by the symbol's length rather than by the
+  checksum, so a scanner reading one pair out of a stack knows which pair it
+  read; and the checksum weights are 3^(8k+j) mod 211 with k out of a table
+  that is a different scramble for every length. The character table was found
+  by driving the last data character through all 4096 values, the finder
+  sequences one length at a time, the weights by solving a linear system over
+  GF(211) per length.
+
+  The encodation gave the least away. Decimal fields are packed ten bits per
+  three digits rather than as binary integers — which is why the AI 01 item
+  reference is 40 bits and not the 44 an integer needs, and what a carry
+  landing on 4000 instead of 4096 finally revealed. Numeric mode is seven bits
+  per digit pair, not the eleven that agrees with every general-purpose symbol
+  because the method's five-bit prefix pads it to the same place. Two further
+  rules are invisible when wrong: an FNC1 written from alphanumeric or ISO 646
+  mode returns the field to numeric mode, and a final lone digit may be four
+  bits instead of seven when that saves a symbol character. The mode-switch
+  thresholds are asymmetric in a way no reasoning about cost predicts, and two
+  of the cases that pinned them are ties the standard's encoders break by rule
+  rather than by size.
+
+  One refusal is deliberate and unlike the rest of the GS1 support here: **the
+  GTIN's check digit has to be correct**. The AI 01 field does not carry it — a
+  reader recomputes it — so a wrong digit would be silently replaced rather
+  than encoded, and a symbol that says a number the caller did not write is
+  worse than an error. Every other GS1 symbology here carries the digit as
+  given and reads it back unchanged.
+
+  Not implemented: the fourteen compaction methods for variable-measure trade
+  items, where AI 01 is paired with a weight, a price or a date. Those payloads
+  encode through the general AI 01 method instead — a correct symbol saying the
+  same element strings, one or two characters wider than the narrowest a
+  standard-complete encoder draws. Pure PHP.
 - **Hexagonal modules in the SVG and PNG renderers**, and the first time the
   shape negotiation that has been in `RendererCapabilities` all along actually
   declines something. MaxiCode's rows interlock — a row sits 0.866 of a module
