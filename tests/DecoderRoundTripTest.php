@@ -118,6 +118,7 @@ class DecoderRoundTripTest extends TestCase
         Symbology::Ean5->value,
         Symbology::Rm4scc->value,
         Symbology::Kix->value,
+        Symbology::IntelligentMail->value,
     ];
 
     public function testTheDecoderItselfIsWiredUp(): void
@@ -1629,6 +1630,17 @@ class DecoderRoundTripTest extends TestCase
                 'kix_reference.csv',
                 ['0', 'Z', '2500GG30250', '1013AV23XA', '6545CA3B', '999999999999999999'],
             ],
+            Symbology::IntelligentMail->value => [
+                'intelligent_mail_reference.csv',
+                [
+                    '00000000000000000000',
+                    '01234567094987654321',
+                    '01234567094987654321-01234',
+                    '01234567094987654321-012345678',
+                    '01234567094987654321-01234567891',
+                    '94999999999999999999-99999999999',
+                ],
+            ],
         ];
 
         foreach ($wanted as $symbology => [$fixture, $payloads]) {
@@ -1746,6 +1758,10 @@ class DecoderRoundTripTest extends TestCase
     {
         yield Symbology::Rm4scc->value => [Symbology::Rm4scc->value, 'LE28HS'];
         yield Symbology::Kix->value => [Symbology::Kix->value, '2500GG30250'];
+        yield Symbology::IntelligentMail->value => [
+            Symbology::IntelligentMail->value,
+            '01234567094987654321-01234',
+        ];
     }
 
     /**

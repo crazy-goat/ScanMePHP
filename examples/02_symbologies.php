@@ -78,6 +78,7 @@ $payloads = [
     'databar-expanded-stacked' => '(01)09501101020917(10)LOT0001',
     'rm4scc' => 'LE28HS',
     'kix' => '2500GG30250',
+    'intelligent-mail' => '01234567094987654321-01234',
 ];
 
 foreach ($payloads as $symbology => $data) {

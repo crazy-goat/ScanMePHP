@@ -46,6 +46,7 @@ enum Symbology: string
     case DataBarExpandedStacked = 'databar-expanded-stacked';
     case Rm4scc = 'rm4scc';
     case Kix = 'kix';
+    case IntelligentMail = 'intelligent-mail';
 
     /** The name the registry resolves, for either accepted form. */
     public static function nameOf(string|self $symbology): string
