@@ -13,6 +13,23 @@ class DataEncoder
 {
     private const ALPHANUMERIC_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:';
 
+    /**
+     * The mode indicator that marks a symbol as GS1, in first position.
+     *
+     * QR spells FNC1 as a mode rather than as data: the four bits sit ahead of
+     * the first real segment and carry no character count and no payload of
+     * their own. That is why this is not a case of Mode — a Mode is something
+     * a segment is *in*, and nothing is ever encoded in FNC1. The separator
+     * between element strings is a plain 0x1d byte inside the segment that
+     * follows, exactly as in Code 128.
+     *
+     * ISO/IEC 18004:2015 Table 2.
+     */
+    private const FNC1_FIRST_POSITION = 0b0101;
+
+    /** What the indicator costs, which is all a caller sizing a symbol needs. */
+    public const GS1_OVERHEAD_BITS = 4;
+
     public function encode(string $data, Mode $mode, int $version): array
     {
         $bits = [];
@@ -40,6 +57,21 @@ class DataEncoder
         };
 
         return array_merge($bits, $dataBits);
+    }
+
+    /**
+     * The same segment, announced as GS1 by four bits in front of it.
+     *
+     * @return list<int>
+     */
+    public function encodeGs1(string $data, Mode $mode, int $version): array
+    {
+        $bits = [];
+        for ($i = 3; $i >= 0; $i--) {
+            $bits[] = (self::FNC1_FIRST_POSITION >> $i) & 1;
+        }
+
+        return array_merge($bits, $this->encode($data, $mode, $version));
     }
 
     private function encodeNumeric(string $data): array

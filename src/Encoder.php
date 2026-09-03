@@ -127,6 +127,134 @@ class Encoder implements EncoderInterface
         return $matrix;
     }
 
+    /**
+     * A GS1 QR symbol: the same pipeline, with FNC1 announced in front.
+     *
+     * Deliberately not routed through FastEncoder. That encoder inlines the
+     * whole byte-mode pipeline for speed and has no place to put four extra
+     * bits ahead of the segment, so a GS1 symbol takes the readable path at
+     * every version. The cost is microseconds on an encode that a scanner
+     * reads once; the alternative is a second inlined pipeline that can drift
+     * from this one without any test noticing.
+     *
+     * The payload is the bytes a scanner reports, separators included —
+     * Gs1\ElementString::payload() produces exactly that.
+     */
+    public function encodeGs1(
+        string $payload,
+        ErrorCorrectionLevel $errorCorrectionLevel,
+        int $requestedVersion = 0
+    ): Matrix {
+        if ($payload === '') {
+            throw InvalidDataException::emptyData();
+        }
+
+        $version = $this->determineGs1Version($payload, $errorCorrectionLevel, $requestedVersion);
+        $matrix = $this->buildUnmaskedGs1($payload, $errorCorrectionLevel, $version);
+
+        $maskPattern = $this->maskSelector->selectBestMask($matrix, $errorCorrectionLevel);
+        $this->matrixBuilder->applyMaskAndFormatInfo($matrix, $errorCorrectionLevel, $maskPattern);
+
+        return $matrix;
+    }
+
+    /**
+     * The same symbol at a mask of the caller's choosing.
+     *
+     * Masking is the one step where conforming encoders legitimately differ.
+     * The penalty rules in ISO/IEC 18004 clause 7.8.3 are read differently in
+     * practice — chiefly rule 3, the 1:1:3:1:1 pattern — and ties are common,
+     * so two correct encoders routinely emit different masks for the same
+     * data. Measured over sixty random byte payloads, zxing-cpp and Nayuki's
+     * qrcodegen agree with each other on eight. Every one of those symbols
+     * scans and carries identical data.
+     *
+     * That makes a module-for-module comparison against an independent
+     * encoder meaningless unless the mask is held fixed, which is what this
+     * exists for: with the mask pinned, the comparison covers the version, the
+     * FNC1 indicator, the codewords, the error correction, the interleaving
+     * and the placement — everything the encoder actually decides.
+     */
+    public function encodeGs1AtMask(
+        string $payload,
+        ErrorCorrectionLevel $errorCorrectionLevel,
+        int $version,
+        int $maskPattern
+    ): Matrix {
+        $matrix = $this->buildUnmaskedGs1($payload, $errorCorrectionLevel, $version);
+        $this->matrixBuilder->applyMaskAndFormatInfo($matrix, $errorCorrectionLevel, $maskPattern);
+
+        return $matrix;
+    }
+
+    private function buildUnmaskedGs1(
+        string $payload,
+        ErrorCorrectionLevel $errorCorrectionLevel,
+        int $version
+    ): Matrix {
+        $encodedData = $this->dataEncoder->addTerminatorAndPadding(
+            $this->dataEncoder->encodeGs1($payload, Mode::Byte, $version),
+            $this->getTotalDataCodewords($version, $errorCorrectionLevel)
+        );
+
+        return $this->matrixBuilder->buildUnmasked(
+            $version,
+            $this->reedSolomon->encodeWithInterleaving($encodedData, $version, $errorCorrectionLevel->value),
+            []
+        );
+    }
+
+    /**
+     * Smallest version a GS1 payload fits in, counted in bits rather than
+     * characters.
+     *
+     * The capacity table above is in characters and already has the mode
+     * indicator and character count subtracted out of it, so it cannot answer
+     * for a symbol carrying four bits it does not know about. Counting the
+     * bits directly is exact, needs no second table, and stays right if the
+     * segment ever stops being byte mode.
+     */
+    public function getMinimumGs1Version(string $payload, ErrorCorrectionLevel $errorCorrectionLevel): int
+    {
+        $length = strlen($payload);
+
+        for ($version = 1; $version <= 40; $version++) {
+            $bits = DataEncoder::GS1_OVERHEAD_BITS
+                + 4
+                + Mode::Byte->getCharacterCountBits($version)
+                + $length * 8;
+
+            if ($bits <= $this->getTotalDataCodewords($version, $errorCorrectionLevel) * 8) {
+                return $version;
+            }
+        }
+
+        throw DataTooLargeException::dataExceedsMaximumCapacity($length, $errorCorrectionLevel);
+    }
+
+    private function determineGs1Version(
+        string $payload,
+        ErrorCorrectionLevel $errorCorrectionLevel,
+        int $requestedVersion
+    ): int {
+        $minimumVersion = $this->getMinimumGs1Version($payload, $errorCorrectionLevel);
+
+        if ($requestedVersion === 0) {
+            return $minimumVersion;
+        }
+
+        if ($requestedVersion < $minimumVersion) {
+            throw DataTooLargeException::dataDoesNotFitInVersion(
+                strlen($payload),
+                $requestedVersion,
+                $errorCorrectionLevel,
+                $minimumVersion
+            );
+        }
+
+        return $requestedVersion;
+    }
+
     public function getMinimumVersion(
         string $data,
         ErrorCorrectionLevel $errorCorrectionLevel,

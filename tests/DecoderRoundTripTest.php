@@ -68,6 +68,10 @@ class DecoderRoundTripTest extends TestCase
         // As with GS1-128: the same bars, and what marks it as GS1 is an FNC1
         // the decoder reports by parenthesising what it hands back.
         Symbology::Gs1DataMatrix->value => 'Data Matrix',
+        // And once more for QR, where FNC1 is a mode indicator rather than a
+        // value in the alphabet. Same tell: the text comes back parenthesised
+        // only if the decoder saw it and parsed against its own AI table.
+        Symbology::Gs1Qr->value => 'QR Code',
     ];
 
     /**
@@ -261,6 +265,28 @@ class DecoderRoundTripTest extends TestCase
     public function testAGs1DataMatrixScansBackAsItsElementStrings(string $elements): void
     {
         $this->assertScansBack($elements, Symbology::Gs1DataMatrix->value, self::FORMAT_NAMES['gs1-data-matrix']);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function gs1QrProvider(): iterable
+    {
+        yield 'one predefined element' => ['(01)09501101020917'];
+        yield 'a separator between elements' => ['(10)LOT0001(11)260101'];
+        yield 'an SSCC' => ['(00)123456789012345678'];
+        yield 'all digits across a separator' => ['(21)123456(11)991231'];
+        yield 'three elements' => ['(01)09501101020917(10)LOT0001(11)260101'];
+        // Long digit runs are where this writer would segment into numeric
+        // mode and we encode the lot as bytes — a larger symbol carrying the
+        // same data. Gs1QrTest::testDigitRunsAreEncodedAsBytes names that;
+        // this is what verifies the payload survives anyway.
+        yield 'a long digit run' => ['(01)09501101020917(21)12345678901234567890'];
+        yield 'past a single error correction block' => ['(240)' . str_repeat('X', 30) . '(10)LOT0001'];
+    }
+
+    #[DataProvider('gs1QrProvider')]
+    public function testAGs1QrScansBackAsItsElementStrings(string $elements): void
+    {
+        $this->assertScansBack($elements, Symbology::Gs1Qr->value, self::FORMAT_NAMES['gs1-qr']);
     }
 
     #[DataProvider('code128Provider')]

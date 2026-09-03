@@ -26,8 +26,16 @@ final class QrSymbols
     /** Side of each of the three finder patterns, in modules. */
     private const FINDER_SIZE = 7;
 
-    public static function fromMatrix(Matrix $matrix): Symbol
-    {
+    /**
+     * @param array<string, mixed> $metadata Anything the symbology adds on top
+     *        of the name and version every QR symbol reports. GS1 QR uses it
+     *        for the element count and the payload a scanner will hand back.
+     */
+    public static function fromMatrix(
+        Matrix $matrix,
+        string $symbology = Symbology::QrCode->value,
+        array $metadata = []
+    ): Symbol {
         $size = $matrix->getSize();
         $last = $size - self::FINDER_SIZE;
 
@@ -45,8 +53,9 @@ final class QrSymbols
                 new Region(0, $last, self::FINDER_SIZE, self::FINDER_SIZE),
             ],
             metadata: [
-                'symbology' => Symbology::QrCode->value,
+                'symbology' => $symbology,
                 'version' => $matrix->getVersion(),
+                ...$metadata,
             ],
         );
     }

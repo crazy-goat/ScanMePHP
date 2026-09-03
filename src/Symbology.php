@@ -20,6 +20,7 @@ namespace CrazyGoat\ScanMePHP;
 enum Symbology: string
 {
     case QrCode = 'qrcode';
+    case Gs1Qr = 'gs1-qr';
     case Code128 = 'code128';
     case Gs1128 = 'gs1-128';
     case Code39 = 'code39';
