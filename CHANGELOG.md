@@ -329,6 +329,41 @@ number is worse than a compile error.
   zint (`composer reference:kix`), plus the rendered PNG measured back into
   bars. That substitution is now one test over the four-state family rather than
   one per symbology.
+- **Intelligent Mail** (`intelligent-mail`, aliases `imb`, `usps-imb`,
+  `onecode`, `usps4cb`): the barcode on the front of United States mail, the one
+  that replaced POSTNET and PLANET. A twenty digit tracking code and then 0, 5,
+  9 or 11 digits of routing code, written after a hyphen or run straight on —
+  the total length says which is which. No options. Pure PHP.
+
+  Unlike the rest of the family it is not read a character at a time. The
+  payload becomes one 102-bit number, that number becomes ten thirteen-bit
+  characters, and those bits are scattered across the sixty-five bars: every
+  symbol is the same width whether it carries a routing code or not, and
+  changing one digit moves most of the bars. That is the damage tolerance —
+  mail is read at speed off folded and stamped envelopes, so a character spread
+  over the full width loses a bit to a smudge instead of being destroyed. What
+  catches the damage is an eleven-bit CRC folded into the value itself:
+  detection, not correction.
+
+  Two consequences worth knowing at the call site. The four routing code
+  lengths are four different things, not four sizes of one number — no routing
+  code and a routing code of five zeroes are different deliveries and draw
+  different symbols. And the second digit of the tracking code is the
+  endorsement digit, which runs 0 to 4; a five is refused rather than carried,
+  because it would encode as some other payload's symbol.
+
+  The 102-bit arithmetic is done by hand on thirteen bytes (`Number`), since
+  thirty-one digits do not fit in a PHP integer and this library requires no
+  extensions; overflow throws rather than wraps. The 1365-entry character table
+  is an enumeration rather than a transcription. The one real table — which bit
+  of which character each bar draws — is measured against zint rather than typed
+  out (`composer reference:intelligent-mail-placement`), the same way MaxiCode's
+  module placement is, and that measurement confirms the routing offsets, the
+  CRC and the radices along with it.
+
+  Verified with the same one-opinion caveat as the rest of the family:
+  bar for bar against zint (`composer reference:intelligent-mail`), plus the
+  rendered PNG measured back into bars.
 - **Hexagonal modules in the SVG and PNG renderers**, and the first time the
   shape negotiation that has been in `RendererCapabilities` all along actually
   declines something. MaxiCode's rows interlock — a row sits 0.866 of a module

@@ -22,6 +22,7 @@ use CrazyGoat\ScanMePHP\Generator\Ean8\Ean8Generator;
 use CrazyGoat\ScanMePHP\Generator\Gs1128\Gs1128Generator;
 use CrazyGoat\ScanMePHP\Generator\Gs1DataMatrix\Gs1DataMatrixGenerator;
 use CrazyGoat\ScanMePHP\Generator\Gs1Qr\Gs1QrGenerator;
+use CrazyGoat\ScanMePHP\Generator\IntelligentMail\IntelligentMailGenerator;
 use CrazyGoat\ScanMePHP\Generator\Itf\ItfGenerator;
 use CrazyGoat\ScanMePHP\Generator\Itf14\Itf14Generator;
 use CrazyGoat\ScanMePHP\Generator\Kix\KixGenerator;
@@ -79,6 +80,7 @@ final class Defaults
             ->addGenerator(new DataBarExpandedStackedGenerator())
             ->addGenerator(new Rm4sccGenerator())
             ->addGenerator(new KixGenerator())
+            ->addGenerator(new IntelligentMailGenerator())
             ->addRenderer(new SvgRenderer())
             ->addRenderer(new PngRenderer())
             ->addRenderer(new HtmlRenderer(HtmlMode::Div))
