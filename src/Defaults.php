@@ -20,6 +20,7 @@ use CrazyGoat\ScanMePHP\Generator\Gs1DataMatrix\Gs1DataMatrixGenerator;
 use CrazyGoat\ScanMePHP\Generator\Gs1Qr\Gs1QrGenerator;
 use CrazyGoat\ScanMePHP\Generator\Itf\ItfGenerator;
 use CrazyGoat\ScanMePHP\Generator\Itf14\Itf14Generator;
+use CrazyGoat\ScanMePHP\Generator\MaxiCode\MaxiCodeGenerator;
 use CrazyGoat\ScanMePHP\Generator\Pdf417\Pdf417Generator;
 use CrazyGoat\ScanMePHP\Generator\Qr\QrGenerator;
 use CrazyGoat\ScanMePHP\Generator\UpcA\UpcAGenerator;
@@ -65,6 +66,7 @@ final class Defaults
             ->addGenerator(new Gs1DataMatrixGenerator())
             ->addGenerator(new AztecGenerator())
             ->addGenerator(new Pdf417Generator())
+            ->addGenerator(new MaxiCodeGenerator())
             ->addRenderer(new SvgRenderer())
             ->addRenderer(new PngRenderer())
             ->addRenderer(new HtmlRenderer(HtmlMode::Div))

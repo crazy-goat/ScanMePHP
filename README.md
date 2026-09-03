@@ -2,7 +2,7 @@
 
 **A universal barcode library for PHP — with optional native C++ acceleration for QR.**
 
-Fifteen symbologies, seven output formats, one call. No dependencies, no GD, no
+Twenty-one symbologies, seven output formats, one call. No dependencies, no GD, no
 Imagick, no extensions required — then go **7–9× faster** on QR with a single
 C++ library if you generate them in volume.
 
@@ -19,7 +19,7 @@ echo $scanme->render('5901234123457', 'ean13', 'png');
 
 ## Why ScanMePHP?
 
-**📇 Fifteen symbologies, one API**
+**📇 Twenty-one symbologies, one API**
 
 | Symbology | Accepts | Notes |
 | --- | --- | --- |
@@ -243,6 +243,7 @@ $scanme->render('https://example.com', 'qrcode', 'svg');
 $scanme->render('ScanMePHP', 'data-matrix', 'svg');
 $scanme->render('BOARDING-4471', 'aztec', 'svg');
 $scanme->render('SHIP TO: 123 Main St.', 'pdf417', 'svg');
+$scanme->render('SHIP TO 123 MAIN ST', 'maxicode', 'svg');
 $scanme->render('SHIPMENT-4471', 'code128', 'png');
 $scanme->render('(01)09501101020917(10)LOT0001', 'gs1-128', 'png');
 $scanme->render('(01)09501101020917(10)LOT0001', 'gs1-data-matrix', 'svg');
@@ -500,6 +501,79 @@ applies — worth knowing because zxing declares binary data with one and
 therefore produces a different symbol for the same bytes. And it emits no
 **macro block**, so a payload too large for one symbol is refused rather than
 split across several.
+
+### MaxiCode
+
+`maxicode` is the odd one out of everything here, and deliberately so: its
+modules are hexagons on interlocking rows rather than squares on a grid, its
+finder is three concentric rings in the middle rather than patterns in the
+corners, and it is always the same size — 33 rows, 144 codewords, one fixed
+amount of error correction. There is no version to pick, no layer count and no
+error correction level, so a payload determines every module of the symbol.
+
+```php
+$scanme->render('SHIP TO 123 MAIN ST', 'maxicode', 'svg');
+```
+
+It holds 93 codewords: about 93 characters of upper-case text, or 138 digits,
+since nine digits compact into six codewords.
+
+**What a caller chooses is the mode**, and the mode is a real decision rather
+than a preference. Modes 2 and 3 spend the nine codewords nearest the bullseye
+on a *structured carrier message* — a postcode, an ISO country code and a
+carrier's service class — so a scanner can read a parcel's destination out of
+the middle of a symbol it has not finished reading. That is what MaxiCode is
+for, and it is why those two modes hold 84 codewords of payload instead of 93.
+
+```php
+use CrazyGoat\ScanMePHP\Encoding\MaxiCode\Mode;
+use CrazyGoat\ScanMePHP\Generator\MaxiCode\MaxiCodeOptions;
+
+// A numeric postcode, up to nine digits.
+$scanme->render('PARCEL 4471', 'maxicode', 'svg', new MaxiCodeOptions(
+    mode: Mode::NumericPostcode,
+    postcode: '339788292',
+    country: 840,
+    service: 1,
+));
+
+// Six characters, for a postcode that is not all digits.
+$scanme->render('PARCEL 4471', 'maxicode', 'svg', new MaxiCodeOptions(
+    mode: Mode::AlphanumericPostcode,
+    postcode: 'W1A1AA',
+    country: 826,
+    service: 1,
+));
+```
+
+A reader reports the three fields separately from the payload, which is the
+whole point: the routing block is a field, not a prefix glued onto the data.
+Mode 3's postcode is six positions rather than a string of six, so a shorter one
+comes back padded with spaces.
+
+The remaining modes are `Mode::Standard`, which is the default and is the plain
+symbol, and `Mode::ReaderProgramming`, which is a symbol a scanner is meant to
+obey rather than report. **Mode 5**, the enhanced error correction variant, is
+not implemented — its data and check split is not the plain mode's, and nothing
+available to verify it against writes one.
+
+MaxiCode takes **binary data directly** and reaches every byte without a binary
+mode, which nothing else here does: its five code sets between them carry all
+256 values. Which set to be in at each character is a search rather than a rule,
+because the sets overlap — a space is in all five and a comma in three — and the
+search is exact with no lookahead limit.
+
+**Only the SVG and PNG renderers can draw it.** This is the one symbology whose
+module shape is not a square, so it is the one case where the renderer
+negotiation built into the library actually declines something: the ASCII and
+HTML renderers paint character and table cells, there is no honest way to
+approximate a hexagonal lattice with those, and they say so by name rather than
+emit a picture that looks like a symbol and does not scan.
+
+```php
+$scanme->supports('maxicode', 'svg');           // true
+$scanme->supports('maxicode', 'ascii-blocks');  // false
+```
 
 Like Data Matrix, Aztec is pure PHP only. The C++ core and the extension exist
 because QR is what gets generated in bulk, and native acceleration is
@@ -795,7 +869,7 @@ $qr->getBackendSelector()->force('portable'); // pin one, for a benchmark or a t
 | `bitset` | v1–v27 | 64-bit PHP | baseline (bitset fast path) |
 | `portable` | v1–v40 | PHP 8.2+, 32- or 64-bit | baseline — same fast path for v1–v27, scalar pipeline for v28–v40 |
 
-The other six symbologies are pure PHP throughout and encode in single-digit
+The other twenty symbologies are pure PHP throughout and encode in single-digit
 microseconds; for them the renderer is the cost that matters.
 
 ### Capacity (Byte Mode)

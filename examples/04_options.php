@@ -16,9 +16,11 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
+use CrazyGoat\ScanMePHP\Encoding\MaxiCode\Mode;
 use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
 use CrazyGoat\ScanMePHP\Generator\Aztec\AztecOptions;
 use CrazyGoat\ScanMePHP\Generator\DataMatrix\DataMatrixOptions;
+use CrazyGoat\ScanMePHP\Generator\MaxiCode\MaxiCodeOptions;
 use CrazyGoat\ScanMePHP\Generator\Pdf417\Pdf417Options;
 use CrazyGoat\ScanMePHP\Generator\Qr\QrOptions;
 use CrazyGoat\ScanMePHP\ModuleStyle;
@@ -111,6 +113,30 @@ foreach ([0, 4, 8] as $level) {
         new Pdf417Options(errorCorrectionLevel: $level, columns: 6)
     );
     printf("pdf417 at level %d:  %d rows\n", $level, $symbol->getMetadata()['rows']);
+}
+echo "\n";
+
+// MaxiCode has nothing at all to size or grade: one shape, one amount of error
+// correction. Its option changes what the symbol *means* instead. Modes 2 and 3
+// spend the nine codewords nearest the bullseye on a parcel's destination, so a
+// scanner can route it without reading the rest — which costs those nine
+// codewords of payload.
+$carriers = [
+    'plain' => new MaxiCodeOptions(),
+    'numeric postcode' => new MaxiCodeOptions(Mode::NumericPostcode, '339788292', 840, 1),
+    'six characters' => new MaxiCodeOptions(Mode::AlphanumericPostcode, 'W1A1AA', 826, 1),
+];
+
+foreach ($carriers as $label => $options) {
+    $symbol = $scanme->generate('SHIP TO 123 MAIN ST', 'maxicode', $options);
+    printf(
+        "maxicode, %-17s mode %d, %d x %d modules, %d codewords left over\n",
+        $label . ':',
+        $symbol->getMetadata()['mode'],
+        $symbol->getWidth(),
+        $symbol->getHeight(),
+        $symbol->getMetadata()['padCodewords']
+    );
 }
 echo "\n";
 
