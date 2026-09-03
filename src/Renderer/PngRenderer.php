@@ -44,7 +44,7 @@ final class PngRenderer implements RendererInterface
     public function getCapabilities(): RendererCapabilities
     {
         return new RendererCapabilities(
-            moduleShapes: [ModuleShape::Square],
+            moduleShapes: [ModuleShape::Square, ModuleShape::Hexagon],
             text: true,
             // 1-bit grayscale: a module is on or off, and so is a glyph pixel.
             color: false,
@@ -60,6 +60,10 @@ final class PngRenderer implements RendererInterface
         $options = $options instanceof PngOptions ? $options : new PngOptions();
         $layout = Layout::of($symbol, $options);
         $mod = $options->moduleSize;
+
+        if ($symbol->getModuleShape() === ModuleShape::Hexagon) {
+            return $this->hexagonal($symbol, $layout, $options);
+        }
 
         $bands = $this->bands($symbol, $layout, $options);
 
@@ -133,6 +137,143 @@ final class PngRenderer implements RendererInterface
         }
 
         return $this->encoder->encodeScanlines($raw, $pixelWidth, $pixelHeight, $options->compressionLevel);
+    }
+
+    /**
+     * A hexagonal lattice, rasterised a pixel row at a time.
+     *
+     * The square path cannot be reused for this and it is not a matter of
+     * shape. That path leans on two things a hexagonal lattice does not have:
+     * every module row is identical to the pixel rows below it, so the PNG
+     * "same as above" filter carries a whole row for the cost of one, and every
+     * module is a rectangle on integer pixel boundaries. Here the rows
+     * interlock, each pixel row cuts two staggered rows of hexagons at a
+     * different width, and the bullseye is three rings that follow no grid at
+     * all. So every scanline is drawn for real.
+     *
+     * MaxiCode has no human-readable text, which is why none is drawn: the text
+     * machinery above is not skipped here, it has nothing to do.
+     */
+    private function hexagonal(Symbol $symbol, Layout $layout, PngOptions $options): string
+    {
+        $mod = $options->moduleSize;
+        $height = $layout->quietZone->top
+            + HexagonLattice::height($layout->height)
+            + $layout->quietZone->bottom;
+
+        $pixelWidth = $layout->totalWidth * $mod;
+        $pixelHeight = (int) ceil($height * $mod);
+        $bytesPerRow = intdiv($pixelWidth + 7, 8);
+
+        $spans = [];
+        foreach ($symbol->rows() as $row => $modules) {
+            $centreY = HexagonLattice::centreY($layout, $row);
+            for ($column = 0, $columns = \strlen($modules); $column < $columns; $column++) {
+                if ($modules[$column] !== '1') {
+                    continue;
+                }
+
+                $centreX = HexagonLattice::centreX($layout, $row, $column);
+                foreach ($this->hexagon($centreX, $centreY, $mod, $pixelHeight) as $span) {
+                    $spans[] = $span;
+                }
+            }
+        }
+
+        $centre = HexagonLattice::bullseye($symbol, $layout);
+        if ($centre !== null) {
+            foreach (HexagonLattice::RING_RADII as $radius) {
+                foreach ($this->ring($centre[0], $centre[1], $radius, $mod, $pixelHeight) as $span) {
+                    $spans[] = $span;
+                }
+            }
+        }
+
+        $rows = array_fill(0, $pixelHeight, str_repeat('0', $pixelWidth));
+        // One run of dark pixels to cut every span out of, rather than a
+        // str_repeat() per span: a full symbol paints several thousand of them.
+        $dark = str_repeat('1', $pixelWidth);
+        foreach ($spans as [$pixelRow, $from, $to]) {
+            $first = max(0, (int) round($from));
+            $last = min($pixelWidth, (int) round($to));
+            if ($last > $first) {
+                $rows[$pixelRow] = substr_replace($rows[$pixelRow], substr($dark, 0, $last - $first), $first, $last - $first);
+            }
+        }
+
+        $pixels = [
+            '0' => $options->invert ? '1' : '0',
+            '1' => $options->invert ? '0' : '1',
+        ];
+        $padding = str_repeat($options->invert ? '1' : '0', $bytesPerRow * 8 - $pixelWidth);
+
+        $raw = '';
+        foreach ($rows as $pixelRow) {
+            // '1' is dark here and dark is bit 0 in 1-bit grayscale, so the
+            // rows are inverted on the way out rather than on the way in.
+            $raw .= "\x00" . PngEncoder::packBits(strtr(strtr($pixelRow, $pixels), '01', '10') . $padding, $bytesPerRow);
+        }
+
+        return $this->encoder->encodeScanlines($raw, $pixelWidth, $pixelHeight, $options->compressionLevel);
+    }
+
+    /**
+     * The pixel spans one hexagon covers, as row, left edge, right edge.
+     *
+     * @return list<array{int, float, float}>
+     */
+    private function hexagon(float $centreX, float $centreY, int $mod, int $rows): array
+    {
+        $first = max(0, (int) floor(($centreY - HexagonLattice::HALF_HEIGHT) * $mod));
+        $last = min($rows - 1, (int) ceil(($centreY + HexagonLattice::HALF_HEIGHT) * $mod));
+
+        $spans = [];
+        for ($pixelRow = $first; $pixelRow <= $last; $pixelRow++) {
+            $halfWidth = HexagonLattice::halfWidthAt(($pixelRow + 0.5) / $mod - $centreY);
+            if ($halfWidth > 0.0) {
+                $spans[] = [$pixelRow, ($centreX - $halfWidth) * $mod, ($centreX + $halfWidth) * $mod];
+            }
+        }
+
+        return $spans;
+    }
+
+    /**
+     * The pixel spans one stroked ring of the bullseye covers.
+     *
+     * Above and below the inner circle the ring is solid and one span does it;
+     * beside it the row crosses the annulus twice and takes two.
+     *
+     * @return list<array{int, float, float}>
+     */
+    private function ring(float $centreX, float $centreY, float $radius, int $mod, int $rows): array
+    {
+        $outer = $radius + HexagonLattice::RING_STROKE / 2;
+        $inner = $radius - HexagonLattice::RING_STROKE / 2;
+
+        $first = max(0, (int) floor(($centreY - $outer) * $mod));
+        $last = min($rows - 1, (int) ceil(($centreY + $outer) * $mod));
+
+        $spans = [];
+        for ($pixelRow = $first; $pixelRow <= $last; $pixelRow++) {
+            $dy = ($pixelRow + 0.5) / $mod - $centreY;
+            if (abs($dy) >= $outer) {
+                continue;
+            }
+
+            $out = sqrt($outer * $outer - $dy * $dy);
+            if (abs($dy) >= $inner) {
+                $spans[] = [$pixelRow, ($centreX - $out) * $mod, ($centreX + $out) * $mod];
+
+                continue;
+            }
+
+            $in = sqrt($inner * $inner - $dy * $dy);
+            $spans[] = [$pixelRow, ($centreX - $out) * $mod, ($centreX - $in) * $mod];
+            $spans[] = [$pixelRow, ($centreX + $in) * $mod, ($centreX + $out) * $mod];
+        }
+
+        return $spans;
     }
 
     /**

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP\Encoding\Aztec;
 
+use CrazyGoat\ScanMePHP\Encoding\ReedSolomonGf2m;
 use CrazyGoat\ScanMePHP\Exception\DataTooLargeException;
 
 /**

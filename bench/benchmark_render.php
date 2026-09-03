@@ -62,7 +62,8 @@ $payload = static function (string $symbology, int $bytes) use ($registry): stri
         'gs1-data-matrix' => '(01)09501101020917(10)LOT0001',
         'gs1-qr' => '(01)09501101020917(10)LOT0001',
         'aztec' => 'BOARDING-4471',
-    'pdf417' => 'SHIP TO: 123 Main St.',
+        'pdf417' => 'SHIP TO: 123 Main St.',
+        'maxicode' => 'SHIP TO 123 MAIN ST',
         'ean2' => '52',
         'ean5' => '51299',
     ];
@@ -124,6 +125,14 @@ $renderers = $format === 'all' ? $registry->renderers() : [$registry->getRendere
 $results = [];
 
 foreach ($renderers as $renderer) {
+    // MaxiCode's hexagons are the one shape a renderer can decline, and a
+    // renderer that cannot draw them would be timed drawing something else.
+    if (!$renderer->getCapabilities()->supportsShape($symbol->getModuleShape())) {
+        printf("%-18s %12s %12s %10s\n", $renderer->getFormat(), '-', '-', 'no hexagons');
+
+        continue;
+    }
+
     $options = $optionsFor($renderer);
     $bytes = \strlen($renderer->render($symbol, $options));
     $microseconds = $bench(static fn (): string => $renderer->render($symbol, $options), $iterations);
