@@ -80,6 +80,7 @@ $payloads = [
     'kix' => '2500GG30250',
     'intelligent-mail' => '01234567094987654321-01234',
     'australia-post' => '96130590AB CD',
+    'micro-qr' => 'LOT4471',
 ];
 
 foreach ($payloads as $symbology => $data) {

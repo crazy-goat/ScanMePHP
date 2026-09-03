@@ -28,6 +28,7 @@ use CrazyGoat\ScanMePHP\Generator\Itf\ItfGenerator;
 use CrazyGoat\ScanMePHP\Generator\Itf14\Itf14Generator;
 use CrazyGoat\ScanMePHP\Generator\Kix\KixGenerator;
 use CrazyGoat\ScanMePHP\Generator\MaxiCode\MaxiCodeGenerator;
+use CrazyGoat\ScanMePHP\Generator\MicroQr\MicroQrGenerator;
 use CrazyGoat\ScanMePHP\Generator\Pdf417\Pdf417Generator;
 use CrazyGoat\ScanMePHP\Generator\Qr\QrGenerator;
 use CrazyGoat\ScanMePHP\Generator\Rm4scc\Rm4sccGenerator;
@@ -53,6 +54,7 @@ final class Defaults
     {
         return (new Registry())
             ->addGenerator(new QrGenerator())
+            ->addGenerator(new MicroQrGenerator())
             ->addGenerator(new Gs1QrGenerator())
             ->addGenerator(new Code128Generator())
             ->addGenerator(new Gs1128Generator())

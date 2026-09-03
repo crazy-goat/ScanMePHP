@@ -24,11 +24,16 @@ class DataTooLargeException extends Exception
      * Symbology-neutral variant, for the codeword-counting symbologies whose
      * capacity is a symbol size rather than a version plus a correction level.
      */
-    public static function forSymbolSize(int $needed, int $capacity, string $symbolSize): self
-    {
+    public static function forSymbolSize(
+        int $needed,
+        int $capacity,
+        string $symbolSize,
+        string $unit = 'codewords'
+    ): self {
         return new self(sprintf(
-            'Data needs %d codewords but %s holds %d',
+            'Data needs %d %s but %s holds %d',
             $needed,
+            $unit,
             $symbolSize,
             $capacity
         ));

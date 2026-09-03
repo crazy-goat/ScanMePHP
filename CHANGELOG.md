@@ -401,6 +401,57 @@ number is worse than a compile error.
   measured back into bars — and the parity additionally checked by its
   definition, with the syndromes of every symbol asserted zero in a field the
   test builds for itself.
+- **Micro QR Code** (`micro-qr`, aliases `microqr`, `micro-qrcode`): QR for the
+  cases where a QR symbol will not fit. Version 1 QR is twenty-one modules
+  across before its four-module quiet zone, so twenty-nine all told, and holds
+  seventeen bytes; the smallest Micro QR is eleven with a two-module quiet zone,
+  so fifteen — a quarter of the area. Four sizes, M1 to M4, up to thirty-five
+  digits or fifteen bytes. Pure PHP; the C++ core and the extension stay
+  QR-only.
+
+  Almost nothing in Micro QR is a constant. The mode indicator is nought, one,
+  two or three bits; the character count is a different width in each version
+  *and* each mode; the terminator is three, five, seven or nine zeroes; and M1
+  and M3 end on **half a codeword** — a four-bit final data codeword that is a
+  whole byte to Reed–Solomon and four modules to the matrix. Getting that
+  alignment backwards produces a symbol with every module in the right place
+  and its error correction computed over a different message, which is exactly
+  the kind of mistake a fixture has to be built to find, so the reference
+  fixture draws both versions at every stopping place with a non-zero nibble.
+
+  Three things at the call site. **M1 has no error correction level** — its two
+  check codewords detect a misread and cannot repair one — so pinning a level
+  beside `Version::M1` is refused rather than ignored. **There is no level H**
+  anywhere in the symbology and Q exists only at M4. **M1 and M2 have no byte
+  mode**, so a refusal distinguishes a payload that is too long from one that
+  the version has no alphabet for; telling a caller to shorten `abc` would send
+  them somewhere there is nothing to find. Versions are `Version::M1` to
+  `Version::M4` rather than plain integers, because `version: 2` means
+  twenty-five modules across for QR and thirteen here.
+
+  The four mask patterns are QR's numbers 1, 4, 6 and 7 renumbered 0 to 3, and
+  the mask is chosen by a rule that is the mirror image of QR's: count the dark
+  modules along the two edges furthest from the single finder and take the
+  *highest* score, because those two edges are all a scanner has to find the
+  symbol's extent.
+
+  **The payload is split between modes rather than encoded in one.** `LOT4471`
+  is seven alphanumeric characters and forty-five bits as one segment; as `LOT`
+  alphanumeric and `4471` numeric it is forty-four, and one bit is sometimes a
+  whole version in a symbology whose largest holds a hundred and twenty-eight.
+  The split is a shortest path rather than a greedy scan, so it is never longer
+  than the single segment it replaces. This is the first mode selection in the
+  library — the QR pipeline is still byte-mode only — and it is what
+  `Encoding\Segment` was extracted for, so that QR's alphanumeric table and
+  Micro QR's are one table.
+
+  Verified two ways rather than one, which no symbology in the postal family
+  could manage: module for module against zint (`composer reference:micro-qr`),
+  and read back by zxing-cpp, a different project, at every version, level,
+  mode and mask. Where the two encoders split a payload differently — eight
+  payloads in nine hundred, all of one shape — the fixture records zint's own
+  split, read back out of its modules, and the suite asserts the claim that
+  survives: ours is never the longer encoding.
 - **Hexagonal modules in the SVG and PNG renderers**, and the first time the
   shape negotiation that has been in `RendererCapabilities` all along actually
   declines something. MaxiCode's rows interlock — a row sits 0.866 of a module

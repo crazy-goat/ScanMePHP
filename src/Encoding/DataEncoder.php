@@ -4,15 +4,11 @@ declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP\Encoding;
 
-use CrazyGoat\ScanMePHP\Exception\InvalidDataException;
-
 /**
  * @internal Part of the QR encoding pipeline.
  */
 class DataEncoder
 {
-    private const ALPHANUMERIC_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:';
-
     /**
      * The mode indicator that marks a symbol as GS1, in first position.
      *
@@ -74,77 +70,22 @@ class DataEncoder
         return array_merge($bits, $this->encode($data, $mode, $version));
     }
 
+    /** @return list<int> */
     private function encodeNumeric(string $data): array
     {
-        $bits = [];
-
-        for ($i = 0; $i < strlen($data); $i += 3) {
-            $group = substr($data, $i, 3);
-            $value = (int) $group;
-            $numDigits = strlen($group);
-
-            $numBits = match ($numDigits) {
-                1 => 4,
-                2 => 7,
-                3 => 10,
-                default => throw InvalidDataException::incompatibleMode('Numeric', $group),
-            };
-
-            for ($j = $numBits - 1; $j >= 0; $j--) {
-                $bits[] = ($value >> $j) & 1;
-            }
-        }
-
-        return $bits;
+        return Segment::numeric($data);
     }
 
+    /** @return list<int> */
     private function encodeAlphanumeric(string $data): array
     {
-        $bits = [];
-
-        for ($i = 0; $i < strlen($data); $i += 2) {
-            if ($i + 1 < strlen($data)) {
-                // Two characters: 11 bits
-                $char1 = strpos(self::ALPHANUMERIC_CHARS, $data[$i]);
-                $char2 = strpos(self::ALPHANUMERIC_CHARS, $data[$i + 1]);
-
-                if ($char1 === false || $char2 === false) {
-                    throw InvalidDataException::incompatibleMode('Alphanumeric', $data);
-                }
-
-                $value = $char1 * 45 + $char2;
-                for ($j = 10; $j >= 0; $j--) {
-                    $bits[] = ($value >> $j) & 1;
-                }
-            } else {
-                // Single character: 6 bits
-                $char1 = strpos(self::ALPHANUMERIC_CHARS, $data[$i]);
-
-                if ($char1 === false) {
-                    throw InvalidDataException::incompatibleMode('Alphanumeric', $data);
-                }
-
-                for ($j = 5; $j >= 0; $j--) {
-                    $bits[] = ($char1 >> $j) & 1;
-                }
-            }
-        }
-
-        return $bits;
+        return Segment::alphanumeric($data);
     }
 
+    /** @return list<int> */
     private function encodeByte(string $data): array
     {
-        $bits = [];
-
-        for ($i = 0; $i < strlen($data); $i++) {
-            $byte = ord($data[$i]);
-            for ($j = 7; $j >= 0; $j--) {
-                $bits[] = ($byte >> $j) & 1;
-            }
-        }
-
-        return $bits;
+        return Segment::byte($data);
     }
 
     private function encodeKanji(string $data): array
