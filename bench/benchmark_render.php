@@ -73,6 +73,7 @@ $payload = static function (string $symbology, int $bytes) use ($registry): stri
         'intelligent-mail' => '01234567094987654321-01234',
         'australia-post' => '96130590AB CD',
         'micro-qr' => 'LOT4471',
+    'rmqr' => 'LOT4471',
         'ean2' => '52',
         'ean5' => '51299',
     ];

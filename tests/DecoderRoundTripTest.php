@@ -127,7 +127,39 @@ class DecoderRoundTripTest extends TestCase
         Symbology::Kix->value,
         Symbology::IntelligentMail->value,
         Symbology::AustraliaPost->value,
+        // rMQR is the one entry here that no decoder can read rather than one
+        // no decoder carries: zxing-cpp lists RMQRCode among its formats and
+        // decodes neither our symbols nor zint's own. It is gated by
+        // testTheDecoderStillCannotReadAnRmqrSymbol(), which fails the day it
+        // learns to, and until then RmqrReferenceTest compares every module of
+        // all sixty-four cells against zint.
+        Symbology::Rmqr->value,
     ];
+
+    /**
+     * The rMQR exemption is still deserved.
+     *
+     * Every other entry in {@see NO_STANDALONE_READER} is a symbology no free
+     * decoder carries. rMQR is one the decoder *claims* to carry — the format
+     * constant is there — and cannot actually read, which is a harder thing to
+     * keep honest, because a version bump could quietly fix it and leave the
+     * exemption standing. So this asks: it renders a symbol, offers it to the
+     * decoder with rMQR the only format it is looking for, and fails when
+     * something comes back. The repair when it fails is to delete the
+     * exemption and add a round-trip provider, not to loosen this.
+     */
+    public function testTheDecoderStillCannotReadAnRmqrSymbol(): void
+    {
+        $this->requireDecoder();
+
+        $png = $this->renderForScanning('LOT4471', Symbology::Rmqr->value);
+
+        self::assertSame(
+            [],
+            Decoder::decode($png, 'RMQRCode'),
+            'zxing-cpp reads rMQR now, so the round-trip exemption has to go',
+        );
+    }
 
     public function testTheDecoderItselfIsWiredUp(): void
     {
