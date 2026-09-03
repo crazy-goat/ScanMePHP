@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace CrazyGoat\ScanMePHP\Tests;
 
 use CrazyGoat\ScanMePHP\Exception\UnsupportedDataException;
-use CrazyGoat\ScanMePHP\Generator\Code128\Encoder;
+use CrazyGoat\ScanMePHP\Generator\DataMatrix\AsciiEncodation;
+use CrazyGoat\ScanMePHP\Generator\DataMatrix\DataMatrixOptions;
 use CrazyGoat\ScanMePHP\Generator\Gs1\ApplicationIdentifier;
 use CrazyGoat\ScanMePHP\Generator\Gs1\ElementString;
 use CrazyGoat\ScanMePHP\Generator\Gs1128\Gs1128Generator;
+use CrazyGoat\ScanMePHP\Generator\Gs1DataMatrix\Gs1DataMatrixGenerator;
 use CrazyGoat\ScanMePHP\Scanme;
 use CrazyGoat\ScanMePHP\Symbology;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -55,8 +57,8 @@ class Gs1Test extends TestCase
     {
         // (10) is variable length, but nothing follows it, so there is nothing
         // to separate it from and the FNC1 would be a wasted character.
-        $this->assertStringEndsNotWith(Encoder::FNC1, ElementString::parse('(11)991231(10)ABC')->payload());
-        $this->assertStringEndsNotWith(Encoder::FNC1, ElementString::parse('(10)ABC')->payload());
+        $this->assertStringEndsNotWith(ElementString::SEPARATOR, ElementString::parse('(11)991231(10)ABC')->payload());
+        $this->assertStringEndsNotWith(ElementString::SEPARATOR, ElementString::parse('(10)ABC')->payload());
     }
 
     public function testTheHumanReadableFormIsWhatWasWritten(): void
@@ -131,6 +133,32 @@ class Gs1Test extends TestCase
         $this->assertTrue(ElementString::isParsable('(01)09501101020911'));
     }
 
+    /**
+     * Where the Data Matrix module fixture stops, and why.
+     *
+     * zxing-cpp switches to C40 encodation once a letter run is long enough to
+     * pay for the latch. This library implements ASCII encodation only — a
+     * documented choice in AsciiEncodation, not a GS1 matter — so past that
+     * point the two encoders stop producing comparable symbols and
+     * gs1_dm_reference.csv holds no such case. The decoder round trip carries
+     * them instead.
+     *
+     * Pinning the codeword count here is what keeps that boundary honest: if
+     * an alternative encodation ever lands, this fails and the fixture can
+     * grow to cover what it could not before.
+     */
+    public function testLetterRunsAreWhereTheMatrixFixtureStops(): void
+    {
+        $payload = ElementString::parse('(01)09501101020917(21)ABCDEFGHIJ(10)LOT0001')->payload();
+
+        // 38 bytes become 27 codewords: '010950110102091721' is 18 digits
+        // pairing into 9, then ten letters at one each; '10LOT0001' is 1 + 3
+        // + 2; plus the FNC1 in front and the one standing in for the
+        // separator. C40 would pack three of those letters into two codewords.
+        $this->assertSame(38, \strlen($payload));
+        $this->assertSame(27, \count(AsciiEncodation::encodeGs1($payload)));
+    }
+
     // ------------------------------------------------------------ the symbol
 
     public function testTheSymbolIsCode128BarsWithOneMoreCharacter(): void
@@ -161,6 +189,71 @@ class Gs1Test extends TestCase
         foreach (['gs1-128', 'gs1128', 'ean128', 'ean-128', 'ucc128'] as $name) {
             $this->assertTrue($registry->hasGenerator($name), $name);
         }
+
+        foreach (['gs1-data-matrix', 'gs1-datamatrix', 'gs1dm'] as $name) {
+            $this->assertTrue($registry->hasGenerator($name), $name);
+        }
+    }
+
+    // ------------------------------------------------------ GS1 Data Matrix
+
+    /**
+     * The two GS1 symbologies carry the same payload, spelled differently.
+     *
+     * FNC1 is a symbol character in Code 128 and a codeword in Data Matrix,
+     * but what it separates is identical — which is the point of parsing the
+     * element strings once, in a layer that knows about neither.
+     */
+    public function testBothGs1SymbologiesCarryTheSamePayload(): void
+    {
+        $elements = '(10)LOT0001(11)260101';
+
+        $this->assertSame(
+            $this->scanme->generate($elements, Symbology::Gs1128)->getMetadataValue('payload'),
+            $this->scanme->generate($elements, Symbology::Gs1DataMatrix)->getMetadataValue('payload'),
+        );
+    }
+
+    public function testAGs1DataMatrixIsNotAPlainOneWithParentheses(): void
+    {
+        $elements = '(10)LOT0001';
+
+        // Data Matrix takes any byte string, so it will happily encode the
+        // parenthesised form as literal characters — a symbol that scans,
+        // carrying data no GS1 system expects. The two must not be the same
+        // bars, and the plain generator must not claim to make a GS1 symbol.
+        $this->assertNotSame(
+            $this->scanme->generate($elements, Symbology::DataMatrix)->toModuleString(),
+            $this->scanme->generate($elements, Symbology::Gs1DataMatrix)->toModuleString(),
+        );
+    }
+
+    public function testTheMatrixMetadataSaysWhatAScannerWillReport(): void
+    {
+        $symbol = $this->scanme->generate('(10)ABC123(11)991231', Symbology::Gs1DataMatrix);
+
+        $this->assertSame('gs1-data-matrix', $symbol->getMetadataValue('symbology'));
+        $this->assertSame(2, $symbol->getMetadataValue('elements'));
+        $this->assertSame("10ABC123\x1d11991231", $symbol->getMetadataValue('payload'));
+    }
+
+    #[DataProvider('refusedProvider')]
+    public function testTheMatrixRefusesTheSamePayloads(string $data): void
+    {
+        $this->assertFalse((new Gs1DataMatrixGenerator())->canEncode($data), $data);
+
+        $this->expectException(UnsupportedDataException::class);
+        $this->scanme->generate($data, Symbology::Gs1DataMatrix);
+    }
+
+    public function testAMatrixSizeTooSmallForThePayloadIsRefused(): void
+    {
+        $generator = new Gs1DataMatrixGenerator();
+        $elements = '(01)09501101020917(10)LOT0001(11)260101';
+
+        // 10x10 holds three data codewords, which is not this.
+        $this->assertFalse($generator->canEncode($elements, new DataMatrixOptions(size: '10x10')));
+        $this->assertTrue($generator->canEncode($elements, new DataMatrixOptions(size: '26x26')));
     }
 
     /**

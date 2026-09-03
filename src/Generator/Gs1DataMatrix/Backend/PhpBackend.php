@@ -2,22 +2,24 @@
 
 declare(strict_types=1);
 
-namespace CrazyGoat\ScanMePHP\Generator\DataMatrix\Backend;
+namespace CrazyGoat\ScanMePHP\Generator\Gs1DataMatrix\Backend;
 
 use CrazyGoat\ScanMePHP\Generator\BackendInterface;
 use CrazyGoat\ScanMePHP\Generator\DataMatrix\AsciiEncodation;
 use CrazyGoat\ScanMePHP\Generator\DataMatrix\DataMatrixOptions;
 use CrazyGoat\ScanMePHP\Generator\DataMatrix\SymbolBuilder;
+use CrazyGoat\ScanMePHP\Generator\Gs1\ElementString;
 use CrazyGoat\ScanMePHP\Options\GeneratorOptionsInterface;
 use CrazyGoat\ScanMePHP\Symbol;
 use CrazyGoat\ScanMePHP\Symbology;
 
 /**
- * Data Matrix ECC200 in pure PHP.
+ * GS1 Data Matrix in pure PHP.
  *
- * Reuses the shared GF(2^8) Reed–Solomon encoder, configured with ECC200's own
- * primitive polynomial and generator base — the arithmetic is the same as QR's,
- * the parameters are not.
+ * Parses the element strings, turns them into codewords with FNC1 where the
+ * application identifier table says a separator goes, and hands them to the
+ * same builder plain Data Matrix uses. Nothing here knows about symbol sizes
+ * or Reed–Solomon, which is the point.
  */
 final class PhpBackend implements BackendInterface
 {
@@ -45,10 +47,18 @@ final class PhpBackend implements BackendInterface
 
     public function encode(string $data, ?GeneratorOptionsInterface $options = null): Symbol
     {
+        $elements = ElementString::parse($data);
+        $payload = $elements->payload();
+
         return $this->builder->build(
-            AsciiEncodation::encode($data),
+            AsciiEncodation::encodeGs1($payload),
             $options instanceof DataMatrixOptions ? $options : new DataMatrixOptions(),
-            Symbology::DataMatrix->value,
+            Symbology::Gs1DataMatrix->value,
+            [
+                'elements' => \count($elements->elements),
+                // What a scanner hands back, FNC1 separators included.
+                'payload' => $payload,
+            ],
         );
     }
 }

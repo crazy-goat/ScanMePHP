@@ -15,6 +15,7 @@ use CrazyGoat\ScanMePHP\Generator\Ean2\Ean2Generator;
 use CrazyGoat\ScanMePHP\Generator\Ean5\Ean5Generator;
 use CrazyGoat\ScanMePHP\Generator\Ean8\Ean8Generator;
 use CrazyGoat\ScanMePHP\Generator\Gs1128\Gs1128Generator;
+use CrazyGoat\ScanMePHP\Generator\Gs1DataMatrix\Gs1DataMatrixGenerator;
 use CrazyGoat\ScanMePHP\Generator\Itf\ItfGenerator;
 use CrazyGoat\ScanMePHP\Generator\Itf14\Itf14Generator;
 use CrazyGoat\ScanMePHP\Generator\Qr\QrGenerator;
@@ -57,6 +58,7 @@ final class Defaults
             ->addGenerator(new ItfGenerator())
             ->addGenerator(new Itf14Generator())
             ->addGenerator(new DataMatrixGenerator())
+            ->addGenerator(new Gs1DataMatrixGenerator())
             ->addRenderer(new SvgRenderer())
             ->addRenderer(new PngRenderer())
             ->addRenderer(new HtmlRenderer(HtmlMode::Div))

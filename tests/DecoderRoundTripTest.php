@@ -65,6 +65,9 @@ class DecoderRoundTripTest extends TestCase
         // coming back parenthesised.
         Symbology::Gs1128->value => 'Code 128',
         Symbology::DataMatrix->value => 'Data Matrix',
+        // As with GS1-128: the same bars, and what marks it as GS1 is an FNC1
+        // the decoder reports by parenthesising what it hands back.
+        Symbology::Gs1DataMatrix->value => 'Data Matrix',
     ];
 
     /**
@@ -237,6 +240,27 @@ class DecoderRoundTripTest extends TestCase
     public function testAGs1128ScansBackAsItsElementStrings(string $elements): void
     {
         $this->assertScansBack($elements, Symbology::Gs1128->value, self::FORMAT_NAMES['gs1-128']);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function gs1DataMatrixProvider(): iterable
+    {
+        yield 'one predefined element' => ['(01)09501101020917'];
+        yield 'a separator between elements' => ['(10)LOT0001(11)260101'];
+        yield 'an SSCC' => ['(00)123456789012345678'];
+        yield 'all digits across a separator' => ['(21)123456(11)991231'];
+        yield 'three elements' => ['(01)09501101020917(10)LOT0001(11)260101'];
+        // Past where the module fixture can reach: this writer would use C40
+        // and we use ASCII, so the symbols differ while both are correct.
+        // Gs1Test::testLetterRunsAreWhereTheMatrixFixtureStops names the
+        // boundary; this is what verifies the payload anyway.
+        yield 'a long letter run' => ['(01)09501101020917(21)ABCDEFGHIJ(10)LOT0001'];
+    }
+
+    #[DataProvider('gs1DataMatrixProvider')]
+    public function testAGs1DataMatrixScansBackAsItsElementStrings(string $elements): void
+    {
+        $this->assertScansBack($elements, Symbology::Gs1DataMatrix->value, self::FORMAT_NAMES['gs1-data-matrix']);
     }
 
     #[DataProvider('code128Provider')]
