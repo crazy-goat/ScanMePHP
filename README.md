@@ -267,6 +267,7 @@ $scanme->render('51299', 'ean5', 'svg');
 $scanme->render('LE28HS', 'rm4scc', 'svg');
 $scanme->render('2500GG30250', 'kix', 'svg');
 $scanme->render('01234567094987654321-01234', 'intelligent-mail', 'svg');
+$scanme->render('96130590', 'australia-post', 'svg');
 ```
 
 `ean2` and `ean5` are the add-on symbols printed beside a main barcode — the
@@ -926,9 +927,47 @@ caveat — and, because a symbol this scattered is either right or wrong nearly
 everywhere at once, the encoder was matched against zint one step at a time
 before it was written: `tools/intelligent_mail_placement.py`.
 
+### Australia Post
+
+The Customer Barcode on the front of Australian mail. An eight-digit sorting
+code — the Delivery Point Identifier — and, optionally, a field of the mailer's
+own information:
+
+```php
+use CrazyGoat\ScanMePHP\Generator\AustraliaPost\AustraliaPostOptions;
+use CrazyGoat\ScanMePHP\Generator\AustraliaPost\Format;
+
+$scanme->render('96130590', 'australia-post', 'svg');
+$scanme->render('96130590AB CD', 'australia-post', 'svg');
+$scanme->render('96130590', 'australia-post', 'svg', new AustraliaPostOptions(Format::ReplyPaid));
+```
+
+It is the only postal code here that can **repair** what it reads. RM4SCC has a
+check character and Intelligent Mail has a CRC; both can say a symbol is wrong
+and neither can say what it should have been. This one spends four of its
+codewords on Reed–Solomon over GF(64) and corrects two of them outright.
+
+The customer information field is sized in *bars*, not characters, which is why
+the lengths it takes look arbitrary and are not: 5 or 10 characters, or 8 or 15
+digits. Nothing in the symbol records which of the two character tables a field
+is written in — its width does, and only its width — so a field of five digits
+is text and a field of eight is numbers, whatever the digits happen to be. A
+half-filled field is refused rather than padded out, because padding it is not
+ours to invent: filler bars in the middle of a text field index as lower-case
+letters, so the symbol would say something we made up.
+
+The Format Control Code is an option and not part of the payload. The same
+sorting code drawn as Reply Paid and drawn as ordinary mail are two different
+articles, and nothing in the data string says which was meant. The two wider
+Standard codes are not a choice at all — they follow from how much customer
+information there is.
+
+Verified against zint like the rest of the family, with the same one-opinion
+caveat.
+
 Aliases resolve too — `ean`, `ean-13`, `upc`, `upca`, `dm`, `ecc200`, `qr`,
 `c39`, `c93`, `i25`, `gtin-14`, `nw-7`, `ean128`, `gs1dm`, `royal-mail`,
-`postnl`, `imb`, `onecode`.
+`postnl`, `imb`, `onecode`, `auspost`.
 
 If you have a payload and are not sure which symbologies accept it, ask rather
 than guess:

@@ -47,6 +47,7 @@ enum Symbology: string
     case Rm4scc = 'rm4scc';
     case Kix = 'kix';
     case IntelligentMail = 'intelligent-mail';
+    case AustraliaPost = 'australia-post';
 
     /** The name the registry resolves, for either accepted form. */
     public static function nameOf(string|self $symbology): string

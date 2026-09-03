@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP;
 
+use CrazyGoat\ScanMePHP\Generator\AustraliaPost\AustraliaPostGenerator;
 use CrazyGoat\ScanMePHP\Generator\Aztec\AztecGenerator;
 use CrazyGoat\ScanMePHP\Generator\Codabar\CodabarGenerator;
 use CrazyGoat\ScanMePHP\Generator\Code128\Code128Generator;
@@ -81,6 +82,7 @@ final class Defaults
             ->addGenerator(new Rm4sccGenerator())
             ->addGenerator(new KixGenerator())
             ->addGenerator(new IntelligentMailGenerator())
+            ->addGenerator(new AustraliaPostGenerator())
             ->addRenderer(new SvgRenderer())
             ->addRenderer(new PngRenderer())
             ->addRenderer(new HtmlRenderer(HtmlMode::Div))
