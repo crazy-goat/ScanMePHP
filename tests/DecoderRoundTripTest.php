@@ -6,6 +6,7 @@ namespace CrazyGoat\ScanMePHP\Tests;
 
 use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
 use CrazyGoat\ScanMePHP\Exception\IncompatibleRendererException;
+use CrazyGoat\ScanMePHP\Generator\Aztec\AztecOptions;
 use CrazyGoat\ScanMePHP\Generator\Codabar\CodabarOptions;
 use CrazyGoat\ScanMePHP\Generator\Codabar\Delimiter;
 use CrazyGoat\ScanMePHP\Generator\Code39\Charset;
@@ -65,6 +66,7 @@ class DecoderRoundTripTest extends TestCase
         // coming back parenthesised.
         Symbology::Gs1128->value => 'Code 128',
         Symbology::DataMatrix->value => 'Data Matrix',
+        Symbology::Aztec->value => 'Aztec',
         // As with GS1-128: the same bars, and what marks it as GS1 is an FNC1
         // the decoder reports by parenthesising what it hands back.
         Symbology::Gs1DataMatrix->value => 'Data Matrix',
@@ -287,6 +289,80 @@ class DecoderRoundTripTest extends TestCase
     public function testAGs1QrScansBackAsItsElementStrings(string $elements): void
     {
         $this->assertScansBack($elements, Symbology::Gs1Qr->value, self::FORMAT_NAMES['gs1-qr']);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function aztecProvider(): iterable
+    {
+        yield 'one mode' => ['HELLO'];
+        yield 'a latch into lower case' => ['hello world'];
+        yield 'digits' => ['0123456789'];
+        yield 'the two-character punctuation codes' => ["END. NEXT, THEN: DONE\r\nLINE2"];
+        yield 'a shift back to capitals' => ['helloXworld'];
+        yield 'the whole punctuation table' => ['!"#$%&\'()*+,-./:;<=>?[]{}'];
+        yield 'the mixed table' => ["@\\^_`|~\x7f"];
+        yield 'a realistic ticket' => ['https://example.com/ticket/ABC123?seat=14C'];
+        // Past compact into full, where the codeword width and the Galois
+        // field both change and the reference grid appears.
+        yield 'a full symbol' => [str_repeat('Mixed Case 123. ', 30)];
+        yield 'ten-bit codewords' => [str_repeat('A', 400)];
+        yield 'twelve-bit codewords' => [str_repeat('A', 1600)];
+    }
+
+    #[DataProvider('aztecProvider')]
+    public function testAnAztecScansBack(string $data): void
+    {
+        $this->assertScansBack($data, Symbology::Aztec->value, self::FORMAT_NAMES['aztec']);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function aztecBinaryProvider(): iterable
+    {
+        yield 'high bytes' => ["\x80\xff\x00\x7f"];
+        yield 'the control characters no mode holds' => ["A\x0e\x1aB"];
+        // The binary run's length field is five bits up to 31 bytes and
+        // sixteen after that. Both sides of that and the step across it.
+        yield 'a run of thirty-one' => ['X' . str_repeat("\x80", 31) . 'Y'];
+        yield 'a run of thirty-two' => ['X' . str_repeat("\x80", 32) . 'Y'];
+        yield 'a run of thirty-three' => ['X' . str_repeat("\x80", 33) . 'Y'];
+        yield 'a long run' => [str_repeat("\x00\xff", 200)];
+    }
+
+    #[DataProvider('aztecBinaryProvider')]
+    public function testAnAztecWithBinaryDataScansBack(string $data): void
+    {
+        $this->assertBytesScanBack($data, Symbology::Aztec->value, self::FORMAT_NAMES['aztec']);
+    }
+
+    /**
+     * A pinned size and a raised percentage both still scan.
+     *
+     * An option that can produce an unreadable symbol is a way to hand a caller
+     * a barcode that fails at the gate, so every value the option accepts has
+     * to survive a real scanner — the same reason every QR mask is scanned.
+     *
+     * @return iterable<string, array{AztecOptions}>
+     */
+    public static function aztecOptionProvider(): iterable
+    {
+        foreach ([0, 23, 33, 50, 90] as $percent) {
+            yield sprintf('%d%% error correction', $percent) => [new AztecOptions(errorCorrectionPercent: $percent)];
+        }
+
+        foreach ([15, 27, 31, 37, 57, 67, 113] as $size) {
+            yield sprintf('pinned to %d modules', $size) => [new AztecOptions(size: $size)];
+        }
+    }
+
+    #[DataProvider('aztecOptionProvider')]
+    public function testAnAztecScansBackWithEveryOption(AztecOptions $options): void
+    {
+        $this->assertScansBack(
+            'SCANME',
+            Symbology::Aztec->value,
+            self::FORMAT_NAMES['aztec'],
+            generatorOptions: $options
+        );
     }
 
     /** @return iterable<string, array{int}> */

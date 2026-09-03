@@ -11,13 +11,20 @@ namespace CrazyGoat\ScanMePHP\Encoding;
  * Two things differ between the standards and both are constructor arguments:
  *
  *  - the field's **primitive polynomial**, which fixes the multiplication
- *    table — QR uses 0x11D, Data Matrix ECC200 and Aztec use 0x12D;
+ *    table — QR uses 0x11D and Data Matrix ECC200 uses 0x12D;
  *  - the **generator base**, the first power of α in
  *    `prod (x - a^i)` — QR starts at α⁰, ECC200 at α¹.
  *
  * Getting either wrong still produces plausible-looking codewords, so the
  * tests anchor each configuration on a published vector rather than on this
  * implementation agreeing with itself.
+ *
+ * Aztec is not here, though its eight-bit band shares ECC200's field. It needs
+ * five fields in one symbol family, chosen by the layer count, and this class
+ * is deliberately hardcoded to GF(256): the factor table is exactly 256 rows
+ * and the inner loop has no log lookups, which is what makes it fast enough
+ * for QR's hot path. See Encoding\Aztec\ReedSolomonGf2m for the general
+ * version, which is plain because nothing about Aztec is hot.
  *
  * @internal Shared encoding primitive, not part of the public API.
  */

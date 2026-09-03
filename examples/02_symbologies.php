@@ -69,6 +69,7 @@ $payloads = [
     'ean2' => '52',
     'ean5' => '51299',
     'data-matrix' => 'ScanMePHP',
+    'aztec' => 'BOARDING-4471',
 ];
 
 foreach ($payloads as $symbology => $data) {
