@@ -54,8 +54,21 @@ static bool parse_csv_line(const std::string& line, std::string& url, int& ecl, 
     return true;
 }
 
+// The C++ core against the PHP encoder's output, frozen.
+//
+// Not a reference fixture: tests/fixtures/qr_reference.csv is that one, and it
+// comes from Nayuki's qrcodegen with the mask pinned, which is what says the
+// PHP encoder is right. This test compares against tests/fixtures/
+// qr_agreement.csv, which holds that encoder's own output — because the thing
+// worth checking about this core is not that it independently arrives at some
+// mask, but that it reaches the same symbol, mask included. The mask is not
+// something either this core or the bitset fast path can be told, so it cannot
+// be compared against the reference directly.
+//
+// QrAgreementFixtureTest keeps the file honest; the PHP backends skip it and
+// compare against the encoder in memory.
 int main(int argc, char* argv[]) {
-    const char* csv_path = argc > 1 ? argv[1] : "../../tests/fixtures/qr_reference.csv";
+    const char* csv_path = argc > 1 ? argv[1] : "../../tests/fixtures/qr_agreement.csv";
     std::ifstream fin(csv_path);
     if (!fin) {
         std::fprintf(stderr, "Cannot open %s\n", csv_path);
