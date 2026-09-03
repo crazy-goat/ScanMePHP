@@ -266,6 +266,7 @@ $scanme->render('52', 'ean2', 'svg');
 $scanme->render('51299', 'ean5', 'svg');
 $scanme->render('LE28HS', 'rm4scc', 'svg');
 $scanme->render('2500GG30250', 'kix', 'svg');
+$scanme->render('01234567094987654321-01234', 'intelligent-mail', 'svg');
 ```
 
 `ean2` and `ean5` are the add-on symbols printed beside a main barcode — the
@@ -889,9 +890,45 @@ first character begins, so keep the margin the renderers put there.
 It is verified the same way RM4SCC is, against zint and by measuring the
 rendered pixels back into bars, with the same one-opinion caveat.
 
+### Intelligent Mail
+
+The barcode on the front of United States mail, the one that replaced POSTNET
+and PLANET. Sixty-five four-state bars carrying a twenty digit tracking code
+and up to eleven digits of delivery point:
+
+```php
+$scanme->render('01234567094987654321-01234', 'intelligent-mail', 'svg');
+```
+
+The routing code is written after a hyphen, or run straight on — the total
+length says which is which, because it can only be 20, 25, 29 or 31 digits. The
+four routing lengths are four different things rather than four sizes of the
+same number: no routing code and a routing code of five zeroes are different
+deliveries, and the encoder keeps them apart.
+
+Two things about it are unlike anything else in this library. **The width says
+nothing.** Every Intelligent Mail symbol ever printed is sixty-five bars wide,
+with or without a routing code. **And nothing in it is local.** The payload
+becomes one 102-bit number, that number becomes ten thirteen-bit characters,
+and those bits are scattered across the whole symbol — change one digit and
+most of the bars move. That is the error tolerance: mail is read at speed off
+envelopes that are folded and stamped, and spreading each character over the
+full width means damage in one place costs a bit from many characters instead
+of destroying one of them. What catches the damage is an eleven-bit CRC folded
+into the value itself — detection, not correction.
+
+The second digit of the tracking code is the endorsement digit and runs 0 to 4
+only. A five there is refused rather than carried, because it would encode as
+some other payload's symbol.
+
+Verified against zint like the rest of the family, with the same one-opinion
+caveat — and, because a symbol this scattered is either right or wrong nearly
+everywhere at once, the encoder was matched against zint one step at a time
+before it was written: `tools/intelligent_mail_placement.py`.
+
 Aliases resolve too — `ean`, `ean-13`, `upc`, `upca`, `dm`, `ecc200`, `qr`,
 `c39`, `c93`, `i25`, `gtin-14`, `nw-7`, `ean128`, `gs1dm`, `royal-mail`,
-`postnl`.
+`postnl`, `imb`, `onecode`.
 
 If you have a payload and are not sure which symbologies accept it, ask rather
 than guess:

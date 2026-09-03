@@ -92,7 +92,9 @@
         "reference:databar-expanded-stacked": ".decoders/bin/python tools/databar_expanded_stacked_reference.py",
         "reference:four-state-check": ".decoders/bin/python tools/four_state.py --self-check",
         "reference:rm4scc": ".decoders/bin/python tools/rm4scc_reference.py",
-        "reference:kix": ".decoders/bin/python tools/kix_reference.py"
+        "reference:kix": ".decoders/bin/python tools/kix_reference.py",
+        "reference:intelligent-mail": ".decoders/bin/python tools/intelligent_mail_reference.py",
+        "reference:intelligent-mail-placement": ".decoders/bin/python tools/intelligent_mail_placement.py"
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
@@ -111,6 +113,8 @@
         "reference:databar-expanded-stacked": "Regenerate the GS1 DataBar Expanded Stacked reference symbols from zxing-cpp",
         "reference:four-state-check": "Re-measure how zint draws a four-state bar, which is how those fixtures are read",
         "reference:rm4scc": "Regenerate the RM4SCC reference symbols from zint",
-        "reference:kix": "Regenerate the KIX reference symbols from zint"
+        "reference:kix": "Regenerate the KIX reference symbols from zint",
+        "reference:intelligent-mail": "Regenerate the Intelligent Mail reference symbols from zint",
+        "reference:intelligent-mail-placement": "Re-measure which bit of which character each of Intelligent Mail's 65 bars draws"
     }
 }
