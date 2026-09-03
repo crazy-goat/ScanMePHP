@@ -242,6 +242,7 @@ closed enum would make it a second-class one.
 $scanme->render('https://example.com', 'qrcode', 'svg');
 $scanme->render('ScanMePHP', 'data-matrix', 'svg');
 $scanme->render('BOARDING-4471', 'aztec', 'svg');
+$scanme->render('SHIP TO: 123 Main St.', 'pdf417', 'svg');
 $scanme->render('SHIPMENT-4471', 'code128', 'png');
 $scanme->render('(01)09501101020917(10)LOT0001', 'gs1-128', 'png');
 $scanme->render('(01)09501101020917(10)LOT0001', 'gs1-data-matrix', 'svg');
@@ -438,6 +439,67 @@ One thing this library's Aztec does not do: **FLG(n)**, the Punct code that
 carries an ECI or an FNC1. Nothing here asks for either yet — a GS1 Aztec would
 — and an encoder that emitted one by accident would be worse than one that
 cannot.
+
+### PDF417
+
+`pdf417` is a stack of independently readable linear rows, which is why driving
+licences, boarding passes and shipping labels are printed with it: a scanner
+recovers the data from a few sweeps across the symbol rather than needing the
+whole thing square in frame. It holds roughly 1850 characters of text or 1100
+bytes of binary data.
+
+```php
+$scanme->render('SHIP TO: 123 Main St.', 'pdf417', 'svg');
+```
+
+**Its shape is a request, not a consequence of the data.** Any grid with enough
+cells holds the codewords and the cells left over become pad codewords, so the
+column count is the caller's to pick, and so is a floor under the row count for
+anyone who wants a minimum printed height.
+
+```php
+use CrazyGoat\ScanMePHP\Generator\Pdf417\Pdf417Options;
+
+$scanme->render('SHIP TO: 123 Main St.', 'pdf417', 'svg', new Pdf417Options(columns: 4, rows: 10));
+```
+
+There are one to thirty data columns and three to ninety rows. Every row also
+carries a start pattern, a row indicator on each side and a stop pattern, which
+together cost the width of four data columns whatever the row holds — the price
+of each row standing alone. A one-column symbol spends four fifths of its width
+on structure, which is why the default is six columns rather than the narrowest
+shape that fits.
+
+**It has nine real error correction levels**, 0 to 8, each doubling the previous
+one's check codewords: two at level 0 and 512 at level 8.
+
+```php
+$scanme->render('SHIP TO: 123 Main St.', 'pdf417', 'svg', new Pdf417Options(errorCorrectionLevel: 5));
+```
+
+The default is the level ISO/IEC 15438 recommends for the amount of data, which
+is what a reader expects to find. Raise it for a label that will be scuffed or
+partly covered — but note that the higher levels need room: level 8's 512 check
+codewords do not fit in a symbol narrower than six columns.
+
+**Rows are three modules tall**, and that height is presentation rather than
+data. PDF417 rows carry nothing vertically — each is a complete linear code — so
+their height exists only to give a scanner's sweep something to hit. Three is
+the convention and what readers expect; `rowHeight` changes it.
+
+PDF417 also takes **binary data directly**. It has three compaction modes — text
+with four submodes, numeric in base 900, and byte — and the encoder chooses
+between them by searching rather than guessing, so a run of digits long enough
+to pay for the switch goes through numeric compaction and a single byte that no
+submode spells costs a shift rather than a mode latch. The search is exact and
+has no tuning constant in it.
+
+Two things this library's PDF417 does not do. It emits no **ECI header**, so
+bytes are passed through as they are and the reader's charset assumption
+applies — worth knowing because zxing declares binary data with one and
+therefore produces a different symbol for the same bytes. And it emits no
+**macro block**, so a payload too large for one symbol is refused rather than
+split across several.
 
 Like Data Matrix, Aztec is pure PHP only. The C++ core and the extension exist
 because QR is what gets generated in bulk, and native acceleration is

@@ -38,6 +38,7 @@ enum Symbology: string
     case DataMatrix = 'data-matrix';
     case Aztec = 'aztec';
     case Gs1DataMatrix = 'gs1-data-matrix';
+    case Pdf417 = 'pdf417';
 
     /** The name the registry resolves, for either accepted form. */
     public static function nameOf(string|self $symbology): string

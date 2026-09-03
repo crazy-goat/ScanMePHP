@@ -25,3 +25,4 @@ review-reports/
 
 # Written by the files in examples/; `php examples/03_output_formats.php` rebuilds them.
 /examples/generated-assets/
+__pycache__/
