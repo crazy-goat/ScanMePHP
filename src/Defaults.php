@@ -11,6 +11,7 @@ use CrazyGoat\ScanMePHP\Generator\Code39\Code39Generator;
 use CrazyGoat\ScanMePHP\Generator\Code39\Mode as Code39Mode;
 use CrazyGoat\ScanMePHP\Generator\Code93\Code93Generator;
 use CrazyGoat\ScanMePHP\Generator\DataBarExpanded\DataBarExpandedGenerator;
+use CrazyGoat\ScanMePHP\Generator\DataBarExpandedStacked\DataBarExpandedStackedGenerator;
 use CrazyGoat\ScanMePHP\Generator\DataBarLimited\DataBarLimitedGenerator;
 use CrazyGoat\ScanMePHP\Generator\DataBarOmni\DataBarOmniGenerator;
 use CrazyGoat\ScanMePHP\Generator\DataMatrix\DataMatrixGenerator;
@@ -73,6 +74,7 @@ final class Defaults
             ->addGenerator(new DataBarOmniGenerator())
             ->addGenerator(new DataBarLimitedGenerator())
             ->addGenerator(new DataBarExpandedGenerator())
+            ->addGenerator(new DataBarExpandedStackedGenerator())
             ->addRenderer(new SvgRenderer())
             ->addRenderer(new PngRenderer())
             ->addRenderer(new HtmlRenderer(HtmlMode::Div))
