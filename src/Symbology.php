@@ -42,6 +42,7 @@ enum Symbology: string
     case MaxiCode = 'maxicode';
     case DataBarOmni = 'databar-omni';
     case DataBarLimited = 'databar-limited';
+    case DataBarExpanded = 'databar-expanded';
 
     /** The name the registry resolves, for either accepted form. */
     public static function nameOf(string|self $symbology): string

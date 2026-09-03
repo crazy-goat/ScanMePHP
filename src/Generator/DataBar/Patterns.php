@@ -188,6 +188,122 @@ final class Patterns
     /** Half-patterns a Limited finder is built from. */
     public const LIMITED_FINDER_HALVES = 21;
 
+    /** The prime the Expanded checksum lives in. */
+    public const EXPANDED_MODULUS = 211;
+
+    /**
+     * Expanded's character groups: 4096 values in five buckets.
+     *
+     * Read the two rows as *positions*, not colours. An Expanded character is
+     * four bars and four spaces summing to seventeen, and whether its first
+     * element is a bar or a space depends on where the character sits in the
+     * symbol — the whole symbol is one alternating run of elements, so the
+     * phase falls out of the layout rather than the value. What the table fixes
+     * is that the odd-numbered elements of a character sum to an even number,
+     * and the 'bar' row here names those; 'space' names the even-numbered ones.
+     * {@see character()} is therefore called with $spaceFirst false and the
+     * result reversed for the right-hand character of a pair.
+     *
+     * The combinations row is Expanded's divisor, and the last group's is
+     * larger than the group itself: 204 even combinations for 108 values, so
+     * two thirds of that group's widths are never drawn. That is the standard's
+     * arithmetic, not a rounding here — the value is split by 204 regardless.
+     *
+     * @var CharacterTable
+     */
+    public const EXPANDED = [
+        'elements' => 4,
+        'offsets' => [0, 348, 1388, 2948, 3988],
+        'combinations' => [4, 20, 52, 104, 204],
+        'barModules' => [12, 10, 8, 6, 4],
+        'spaceModules' => [5, 7, 9, 11, 13],
+        'widestBar' => [7, 5, 4, 3, 1],
+        'widestSpace' => [2, 4, 5, 6, 8],
+        'narrowBar' => true,
+        'narrowSpace' => false,
+        'barsVaryFastest' => false,
+    ];
+
+    /** Values an Expanded character carries: twelve bits, all of them used. */
+    public const EXPANDED_VALUES = 4096;
+
+    /**
+     * Expanded's six finder patterns.
+     *
+     * Fifteen modules and five elements each, ending in two single modules like
+     * every other finder in the family. Unlike Omnidirectional's, these are not
+     * the checksum: which one goes where is decided by the number of characters
+     * alone, and the checksum lives in a data character of its own.
+     *
+     * @var list<list<int>>
+     */
+    public const EXPANDED_FINDERS = [
+        [1, 8, 4, 1, 1],
+        [3, 6, 4, 1, 1],
+        [3, 4, 6, 1, 1],
+        [3, 2, 8, 1, 1],
+        [2, 6, 5, 1, 1],
+        [2, 2, 9, 1, 1],
+    ];
+
+    /**
+     * Which finder goes in which pair, keyed by the number of pairs.
+     *
+     * A scanner reading one pair out of a stack has to know which pair it read,
+     * and this sequence is how: no two pairs of a symbol share a finder unless
+     * the symbol is long enough that the ambiguity is resolvable. The sequences
+     * follow no rule that generates them — they are a table in the standard and
+     * a table here, measured from the oracle one length at a time.
+     *
+     * @var array<int, list<int>>
+     */
+    public const EXPANDED_FINDER_SEQUENCES = [
+        2 => [0, 0],
+        3 => [0, 1, 1],
+        4 => [0, 2, 1, 3],
+        5 => [0, 4, 1, 3, 2],
+        6 => [0, 4, 1, 3, 3, 5],
+        7 => [0, 4, 1, 3, 4, 5, 5],
+        8 => [0, 0, 1, 1, 2, 2, 3, 3],
+        9 => [0, 0, 1, 1, 2, 2, 3, 4, 4],
+        10 => [0, 0, 1, 1, 2, 2, 3, 4, 5, 5],
+        11 => [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5],
+    ];
+
+    /**
+     * The checksum's weighting sequence, keyed by the number of data
+     * characters.
+     *
+     * Each entry is a starting index: data character i weighs its widths by
+     * 3^(8k), 3^(8k+1) ... 3^(8k+7) modulo 211, where k is the entry. The first
+     * character always weighs by the powers from zero; after that the order is
+     * scrambled, and it is scrambled differently for every length. Every value
+     * here was solved for against the oracle rather than transcribed.
+     *
+     * @var array<int, list<int>>
+     */
+    public const EXPANDED_WEIGHTS = [
+        3 => [0, 1, 2],
+        4 => [0, 5, 6, 3],
+        5 => [0, 5, 6, 3, 4],
+        6 => [0, 9, 10, 3, 4, 13],
+        7 => [0, 9, 10, 3, 4, 13, 14],
+        8 => [0, 17, 18, 3, 4, 13, 14, 7],
+        9 => [0, 17, 18, 3, 4, 13, 14, 7, 8],
+        10 => [0, 17, 18, 3, 4, 13, 14, 11, 12, 21],
+        11 => [0, 17, 18, 3, 4, 13, 14, 11, 12, 21, 22],
+        12 => [0, 17, 18, 3, 4, 13, 14, 15, 16, 21, 22, 19],
+        13 => [0, 17, 18, 3, 4, 13, 14, 15, 16, 21, 22, 19, 20],
+        14 => [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+        15 => [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+        16 => [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 17, 18, 15],
+        17 => [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 17, 18, 15, 16],
+        18 => [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 17, 18, 19, 20, 21],
+        19 => [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 17, 18, 19, 20, 21, 22],
+        20 => [0, 1, 2, 3, 4, 5, 6, 7, 8, 13, 14, 11, 12, 17, 18, 15, 16, 21, 22, 19],
+        21 => [0, 1, 2, 3, 4, 5, 6, 7, 8, 13, 14, 11, 12, 17, 18, 15, 16, 21, 22, 19, 20],
+    ];
+
     /**
      * One data character's element widths, bars and spaces interleaved.
      *
@@ -338,6 +454,49 @@ final class Patterns
         }
 
         return $checksum;
+    }
+
+
+    /**
+     * The Expanded checksum residue of a symbol's data characters.
+     *
+     * Not the same shape as {@see checksum()}: the weights are still powers of
+     * three, but which power a character starts from comes out of
+     * {@see EXPANDED_WEIGHTS} rather than from its position, and the whole
+     * check *character* is 211 x (characters - 3) plus this residue — a value
+     * that reaches 4008 and so needs the twelve-bit character space that the
+     * data itself never fills.
+     *
+     * @param list<list<int>> $characters every data character's widths, in order
+     */
+    public static function expandedChecksum(array $characters): int
+    {
+        $sequence = self::EXPANDED_WEIGHTS[\count($characters)]
+            ?? throw new \InvalidArgumentException(sprintf(
+                'DataBar Expanded has no weighting sequence for %d data characters',
+                \count($characters)
+            ));
+
+        $checksum = 0;
+        foreach ($characters as $index => $widths) {
+            $weight = self::powerOfThree(8 * $sequence[$index], self::EXPANDED_MODULUS);
+            foreach ($widths as $width) {
+                $checksum = ($checksum + $width * $weight) % self::EXPANDED_MODULUS;
+                $weight = $weight * 3 % self::EXPANDED_MODULUS;
+            }
+        }
+
+        return $checksum;
+    }
+
+    private static function powerOfThree(int $exponent, int $modulus): int
+    {
+        $power = 1;
+        for ($i = 0; $i < $exponent; $i++) {
+            $power = $power * 3 % $modulus;
+        }
+
+        return $power;
     }
 
     /**

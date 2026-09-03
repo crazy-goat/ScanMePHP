@@ -66,6 +66,7 @@ $payload = static function (string $symbology, int $bytes) use ($registry): stri
         'maxicode' => 'SHIP TO 123 MAIN ST',
         'databar-omni' => '01234567890128',
         'databar-limited' => '01234567890128',
+        'databar-expanded' => '(01)09501101020917(10)LOT0001',
         'ean2' => '52',
         'ean5' => '51299',
     ];
