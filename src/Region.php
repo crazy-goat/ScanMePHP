@@ -11,6 +11,10 @@ namespace CrazyGoat\ScanMePHP;
  * Generators use this to point renderers at structurally special areas — the
  * QR finder patterns, for instance — so a renderer can treat them differently
  * without knowing which symbology it is drawing.
+ *
+ * The {@see RegionRole} says whether drawing it is optional. For almost
+ * everything it is: the modules are in the grid and the region is a styling
+ * hint. MaxiCode's bullseye is the exception and the reason the role exists.
  */
 final class Region
 {
@@ -19,6 +23,7 @@ final class Region
         public readonly int $y,
         public readonly int $width,
         public readonly int $height,
+        public readonly RegionRole $role = RegionRole::InGrid,
     ) {
     }
 

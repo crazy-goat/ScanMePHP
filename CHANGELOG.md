@@ -149,6 +149,30 @@ number is worse than a compile error.
   region emits a symbol with a hole where its finder should be. The ASCII and
   HTML renderers refuse a hexagonal symbol by name, which is better than
   approximating it into something that looks like a barcode and does not scan.
+
+  The two refusals are not the same kind of thing, and the docblocks now say so.
+  A terminal genuinely cannot draw this: its cells are a fixed raster with no
+  way to offset a row by half a cell. HTML could — `clip-path` draws a hexagon
+  and `border-radius` a ring — and refuses because `HtmlRenderer` is built
+  around one element per module in a grid, so a lattice is a second rendering
+  path rather than a variation. That is scope, it is recorded as Tier 6 in
+  ROADMAP.md, and claiming otherwise in `ModuleShape`'s docblock was overstating
+  the case.
+- **`RegionRole`**, which makes the difference between a finder a renderer may
+  style and a finder a renderer must draw something the type system can see.
+  Finder regions started as a hint — QR reports its three corner patterns so the
+  SVG renderer can round them, and a renderer that ignores them draws the same
+  scannable symbol. MaxiCode's bullseye is not a hint: three concentric rings
+  are not modules, the grid is blank where the finder goes, and ignoring the
+  region produces a symbol with a hole in the middle.
+
+  So the same field was carrying two contracts and the difference was invisible
+  — both were a rectangle of modules. `RendererCapabilities::$drawnRegions` now
+  declares which renderers can supply one, `Compatibility` refuses the pair by
+  name, and the refusal is independent of module shape: a square-moduled symbol
+  with a renderer-drawn finder is refused for that reason alone. Every existing
+  region defaults to `RegionRole::InGrid`, so QR, Aztec and the rest are
+  unchanged.
 - **`Encoding\MaxiCode\Placement`**, the second measured table here, and the
   measurement is arranged so that trusting the oracle is not what makes it
   right. `tools/maxicode_placement.py` computes all 144 codewords itself — code

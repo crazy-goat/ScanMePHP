@@ -8,6 +8,7 @@ use CrazyGoat\ScanMePHP\ModuleShape;
 use CrazyGoat\ScanMePHP\ModuleStyle;
 use CrazyGoat\ScanMePHP\Options\RenderOptionsInterface;
 use CrazyGoat\ScanMePHP\Region;
+use CrazyGoat\ScanMePHP\RegionRole;
 use CrazyGoat\ScanMePHP\Renderer\Options\SvgOptions;
 use CrazyGoat\ScanMePHP\Symbol;
 use CrazyGoat\ScanMePHP\TextRegion;
@@ -38,6 +39,7 @@ final class SvgRenderer implements RendererInterface
             color: true,
             nonUniformRows: true,
             positionedText: true,
+            drawnRegions: true,
             optionsClass: SvgOptions::class,
         );
     }
@@ -233,7 +235,15 @@ final class SvgRenderer implements RendererInterface
         }
 
         $result = '';
-        $regions = $options->roundFinderRegions ? $symbol->getFinderRegions() : [];
+        // Only the regions the grid actually holds: a renderer-drawn one has
+        // no modules to round off, and MaxiCode's bullseye takes the hexagon
+        // path below instead.
+        $regions = $options->roundFinderRegions
+            ? array_values(array_filter(
+                $symbol->getFinderRegions(),
+                static fn (Region $region): bool => $region->role === RegionRole::InGrid
+            ))
+            : [];
         if ($regions !== []) {
             $result = $this->finderRegions($regions, $rows, $x, $y, $rowPixelHeight, $mod, $color);
             // Blanked so the run matcher below cannot draw them a second time.

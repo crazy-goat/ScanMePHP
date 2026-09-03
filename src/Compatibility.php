@@ -47,6 +47,12 @@ final class Compatibility
             );
         }
 
+        if (!$capabilities->supportsRegions($symbol->getFinderRegions())) {
+            $reasons[] = 'part of the symbology\'s finder is not in the module grid and has to be drawn '
+                . 'by the renderer — concentric rings are not modules — and this renderer draws only '
+                . 'what the grid holds';
+        }
+
         $wantsText = !$options instanceof AbstractRenderOptions || $options->showText;
         $regions = $symbol->getTextRegions();
         if ($wantsText && $regions !== []) {
