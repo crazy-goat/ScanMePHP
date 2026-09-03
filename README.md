@@ -244,6 +244,7 @@ $scanme->render('ScanMePHP', 'data-matrix', 'svg');
 $scanme->render('SHIPMENT-4471', 'code128', 'png');
 $scanme->render('(01)09501101020917(10)LOT0001', 'gs1-128', 'png');
 $scanme->render('(01)09501101020917(10)LOT0001', 'gs1-data-matrix', 'svg');
+$scanme->render('(01)09501101020917(10)LOT0001', 'gs1-qr', 'svg');
 $scanme->render('PART-4471', 'code39', 'png');
 $scanme->render('Part 4471/a', 'code39ext', 'png');
 $scanme->render('Part 4471/a', 'code93', 'png');
@@ -332,10 +333,31 @@ use CrazyGoat\ScanMePHP\Generator\DataMatrix\DataMatrixOptions;
 $scanme->render('(01)09501101020917', 'gs1-data-matrix', 'svg', new DataMatrixOptions(rectangular: true));
 ```
 
-Neither GS1 generator is reachable by accident. Code 128 and Data Matrix will
-both happily encode `(01)09501101020917` as literal parentheses — bars that
-scan, carrying data no GS1 system expects — so `canEncode()` asks a different
-question for the GS1 pair, and `generatorsFor()` separates them.
+`gs1-qr` is the third spelling of the same thing, and the odd one out. Code 128
+spells FNC1 as a symbol character and Data Matrix as a codeword — both values in
+the same alphabet as the data. QR spells it as a **mode indicator**: four bits
+in front of the first segment, carrying no character count and no data of their
+own. So nothing about the payload changes, and the separators inside it stay the
+same `\x1d` bytes the other two carry.
+
+```php
+use CrazyGoat\ScanMePHP\Generator\Qr\QrOptions;
+use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
+
+$scanme->render('(01)09501101020917(10)LOT0001', 'gs1-qr', 'svg', new QrOptions(ErrorCorrectionLevel::High));
+```
+
+It takes the same `QrOptions` as plain QR, and has one limit plain QR does not:
+only the pure-PHP backend. The C++ core reached through the extension and
+through FFI exposes `encode(data, len, ecl)` and has nowhere to put the
+indicator, and native acceleration is deliberately not growing new symbologies.
+A GS1 QR therefore encodes in PHP even where the extension is loaded, which
+costs microseconds on a symbol a scanner reads once.
+
+None of the three GS1 generators is reachable by accident. Code 128, Data Matrix
+and QR will all happily encode `(01)09501101020917` as literal parentheses —
+a symbol that scans, carrying data no GS1 system expects — so `canEncode()` asks
+a different question for the GS1 three, and `generatorsFor()` separates them.
 
 `code39` and `code39ext` are two readings of one set of bars. Standard Code 39
 carries 43 characters; extended mode reaches all of ASCII by encoding the other
