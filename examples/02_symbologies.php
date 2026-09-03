@@ -73,6 +73,7 @@ $payloads = [
     'pdf417' => 'SHIP TO: 123 Main St.',
     'maxicode' => 'SHIP TO 123 MAIN ST',
     'databar-omni' => '01234567890128',
+    'databar-limited' => '01234567890128',
 ];
 
 foreach ($payloads as $symbology => $data) {

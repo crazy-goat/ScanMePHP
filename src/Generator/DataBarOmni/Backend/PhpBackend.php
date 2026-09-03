@@ -97,7 +97,7 @@ final class PhpBackend implements BackendInterface
             Patterns::character($right % Patterns::INSIDE_VALUES, Patterns::INSIDE, true),
         ];
 
-        $checksum = Patterns::checksum(array_merge(...$characters));
+        $checksum = Patterns::checksum(array_merge(...$characters), Patterns::OMNI_MODULUS);
 
         // Nine finders squared is 81 pairs and the checksum has 79 values, so
         // two pairs address nothing. Which two is a decision of the standard
@@ -114,11 +114,11 @@ final class PhpBackend implements BackendInterface
             1,
             1,
             ...$characters[0],
-            ...Patterns::FINDERS[intdiv($checksum, 9)],
+            ...Patterns::OMNI_FINDERS[intdiv($checksum, 9)],
             ...Patterns::mirror($characters[1]),
             ...Patterns::mirror([
                 ...$characters[2],
-                ...Patterns::FINDERS[$checksum % 9],
+                ...Patterns::OMNI_FINDERS[$checksum % 9],
                 ...Patterns::mirror($characters[3]),
             ]),
             1,
