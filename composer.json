@@ -78,7 +78,9 @@
         "reference:codabar": ".decoders/bin/python tools/codabar_reference.py",
         "reference:code128": ".decoders/bin/python tools/code128_reference.py",
         "reference:gs1": ".decoders/bin/python tools/gs1_reference.py",
-        "reference:gs1-qr": ".decoders/bin/python tools/gs1_qr_reference.py"
+        "reference:gs1-qr": ".decoders/bin/python tools/gs1_qr_reference.py",
+        "reference:qr": ".decoders/bin/python tools/qr_reference.py",
+        "reference:qr-agreement": "php tools/qr_agreement_fixture.php"
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
