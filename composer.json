@@ -86,7 +86,8 @@
         "reference:pdf417-table": ".decoders/bin/python tools/pdf417_codeword_table.py",
         "reference:maxicode": ".decoders/bin/python tools/maxicode_reference.py",
         "reference:maxicode-placement": ".decoders/bin/python tools/maxicode_placement.py",
-        "reference:databar": ".decoders/bin/python tools/databar_reference.py"
+        "reference:databar": ".decoders/bin/python tools/databar_reference.py",
+        "reference:databar-limited": ".decoders/bin/python tools/databar_limited_reference.py"
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
@@ -99,6 +100,7 @@
         "reference:pdf417-table": "Re-measure the PDF417 codeword pattern table, the one table here that cannot be derived",
         "reference:maxicode": "Regenerate the MaxiCode reference symbols from zxing-cpp",
         "reference:maxicode-placement": "Re-measure where MaxiCode's 144 codewords write their bits",
-        "reference:databar": "Regenerate the GS1 DataBar reference symbols from zxing-cpp"
+        "reference:databar": "Regenerate the GS1 DataBar Omnidirectional reference symbols from zxing-cpp",
+        "reference:databar-limited": "Regenerate the GS1 DataBar Limited reference symbols from zxing-cpp"
     }
 }

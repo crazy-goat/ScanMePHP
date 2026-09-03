@@ -65,6 +65,7 @@ $payload = static function (string $symbology, int $bytes) use ($registry): stri
         'pdf417' => 'SHIP TO: 123 Main St.',
         'maxicode' => 'SHIP TO 123 MAIN ST',
         'databar-omni' => '01234567890128',
+        'databar-limited' => '01234567890128',
         'ean2' => '52',
         'ean5' => '51299',
     ];

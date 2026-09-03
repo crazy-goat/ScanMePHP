@@ -259,6 +259,7 @@ $scanme->render('04252614', 'upc-e', 'svg');
 $scanme->render('1234567890', 'itf', 'svg');
 $scanme->render('1234567890123', 'itf14', 'svg');
 $scanme->render('01234567890128', 'databar-omni', 'svg');
+$scanme->render('01234567890128', 'databar-limited', 'svg');
 $scanme->render('52', 'ean2', 'svg');
 $scanme->render('51299', 'ean5', 'svg');
 ```
@@ -636,6 +637,27 @@ ninety-six modules printed at 13X instead of 33X. What a truncated symbol gives
 up is the omnidirectional scan — a beam crossing it at an angle no longer meets
 a full row of it — not the data. So it is a preference here rather than a second
 generator, because the modules do not change.
+
+`databar-limited` carries the same GTIN in seventy-four modules instead of
+ninety-six, for labels where that last quarter of width is the difference
+between fitting and not.
+
+```php
+$scanme->render('01234567890128', 'databar-limited', 'svg');
+```
+
+It costs two things. **It takes indicator digits 0 and 1 only** — the value has
+to fit in 2013571 squared, so a GTIN-14 beginning with 2 is a real number with
+no Limited symbol, and asking for one is refused rather than truncated. **And it
+is not omnidirectional**, so it belongs where a scanner is passed over the label
+rather than where goods are swept past a window.
+
+Underneath it shares Omnidirectional's arithmetic and almost none of its
+numbers: characters of seven bars and seven spaces rather than four and four,
+the narrow-element rule on the bars rather than the spaces, and a single finder
+chosen from eighty-nine patterns rather than two chosen from nine. It does have
+a small quiet zone, and only on one side — five modules to the right of the
+symbol, none to the left, because the left guard is itself a space.
 
 Like Data Matrix, Aztec is pure PHP only. The C++ core and the extension exist
 because QR is what gets generated in bulk, and native acceleration is
