@@ -16,6 +16,7 @@ use CrazyGoat\ScanMePHP\Generator\Ean5\Ean5Generator;
 use CrazyGoat\ScanMePHP\Generator\Ean8\Ean8Generator;
 use CrazyGoat\ScanMePHP\Generator\Gs1128\Gs1128Generator;
 use CrazyGoat\ScanMePHP\Generator\Gs1DataMatrix\Gs1DataMatrixGenerator;
+use CrazyGoat\ScanMePHP\Generator\Gs1Qr\Gs1QrGenerator;
 use CrazyGoat\ScanMePHP\Generator\Itf\ItfGenerator;
 use CrazyGoat\ScanMePHP\Generator\Itf14\Itf14Generator;
 use CrazyGoat\ScanMePHP\Generator\Qr\QrGenerator;
@@ -41,6 +42,7 @@ final class Defaults
     {
         return (new Registry())
             ->addGenerator(new QrGenerator())
+            ->addGenerator(new Gs1QrGenerator())
             ->addGenerator(new Code128Generator())
             ->addGenerator(new Gs1128Generator())
             // One class, two registry entries: the reading mode is part of

@@ -34,6 +34,23 @@ number is worse than a compile error.
   that makes a reader announce `]C1`. The bars are Code 128 bars and the same
   encoder draws them; what makes it a different generator is that
   `canEncode()` has a different question to answer.
+- **GS1 QR** (`gs1-qr`, aliases `gs1-qrcode`, `gs1qr`): the third and last
+  spelling of FNC1, and the odd one out — a *mode indicator*, four bits ahead
+  of the first segment, rather than a value in the same alphabet as the data.
+  The payload is unchanged from the other two, separators included. Pure PHP
+  only: the C++ core exposes `encode(data, len, ecl)` and has nowhere to put
+  the indicator, and native acceleration stays QR-only by design.
+  Verified against Nayuki's qrcodegen module for module
+  (`tests/fixtures/gs1_qr_reference.csv`, 44 symbols) with the mask held fixed,
+  which is a boundary worth stating: masking is the one step where conforming
+  QR encoders legitimately disagree. ISO/IEC 18004 clause 7.8.3 says to score
+  all eight and take the lowest, but the rules — chiefly rule 3, the 1:1:3:1:1
+  pattern — are read differently in practice and ties are ordinary. Over sixty
+  random byte payloads, zxing-cpp and qrcodegen produced the same modules eight
+  times. All eight maskings carry identical data and all of them scan, so the
+  fixture pins the mask rather than asserting it, and the comparison still
+  covers the version, the FNC1 indicator, the codewords, the error correction,
+  the interleaving and the placement. `tests/Gs1QrTest.php` declares it.
 - **GS1 Data Matrix** (`gs1-data-matrix`, aliases `gs1-datamatrix`, `gs1dm`):
   the same element strings in an ECC200 symbol. FNC1 is codeword 232 here
   rather than a symbol character — one in front, one per separator — and
