@@ -87,7 +87,8 @@
         "reference:maxicode": ".decoders/bin/python tools/maxicode_reference.py",
         "reference:maxicode-placement": ".decoders/bin/python tools/maxicode_placement.py",
         "reference:databar": ".decoders/bin/python tools/databar_reference.py",
-        "reference:databar-limited": ".decoders/bin/python tools/databar_limited_reference.py"
+        "reference:databar-limited": ".decoders/bin/python tools/databar_limited_reference.py",
+        "reference:databar-expanded": ".decoders/bin/python tools/databar_expanded_reference.py"
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
@@ -101,6 +102,7 @@
         "reference:maxicode": "Regenerate the MaxiCode reference symbols from zxing-cpp",
         "reference:maxicode-placement": "Re-measure where MaxiCode's 144 codewords write their bits",
         "reference:databar": "Regenerate the GS1 DataBar Omnidirectional reference symbols from zxing-cpp",
-        "reference:databar-limited": "Regenerate the GS1 DataBar Limited reference symbols from zxing-cpp"
+        "reference:databar-limited": "Regenerate the GS1 DataBar Limited reference symbols from zxing-cpp",
+        "reference:databar-expanded": "Regenerate the GS1 DataBar Expanded reference symbols from zxing-cpp"
     }
 }

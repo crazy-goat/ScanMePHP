@@ -260,6 +260,7 @@ $scanme->render('1234567890', 'itf', 'svg');
 $scanme->render('1234567890123', 'itf14', 'svg');
 $scanme->render('01234567890128', 'databar-omni', 'svg');
 $scanme->render('01234567890128', 'databar-limited', 'svg');
+$scanme->render('(01)09501101020917(10)LOT0001', 'databar-expanded', 'svg');
 $scanme->render('52', 'ean2', 'svg');
 $scanme->render('51299', 'ean5', 'svg');
 ```
@@ -658,6 +659,50 @@ the narrow-element rule on the bars rather than the spaces, and a single finder
 chosen from eighty-nine patterns rather than two chosen from nine. It does have
 a small quiet zone, and only on one side — five modules to the right of the
 symbol, none to the left, because the left guard is itself a space.
+
+#### DataBar Expanded
+
+`databar-expanded` is the one in the family that carries more than a number. It
+takes GS1 element strings — a batch number, a use-by date, a net weight, a
+price, any of them alongside the GTIN — in the same parenthesised form GS1-128
+takes, and places the separators a reader needs between variable-length
+elements from the identifier table rather than from the caller.
+
+```php
+$scanme->render('(01)09501101020917(10)LOT0001', 'databar-expanded', 'svg');
+$scanme->render('(90)ANY GS1 DATA', 'databar-expanded', 'svg');
+```
+
+The symbol grows with the data: four to twenty-two symbol characters, which is
+102 to 543 modules, holding up to 74 digits or 41 alphanumeric characters. It
+stays omnidirectional the whole way, at 34X tall, and asks for no quiet zone —
+its guard patterns do that work.
+
+Two things are worth knowing before you reach for it.
+
+**The GTIN's check digit has to be right.** The AI 01 field carries the
+indicator digit and twelve digits of item reference and a reader recomputes the
+fourteenth, so a wrong check digit would be silently replaced rather than
+encoded. It is refused instead, which is the opposite of what every other GS1
+symbology here does — those carry the digit as given and read it back
+unchanged.
+
+**The compaction methods for variable-measure trade items are not
+implemented.** Where the standard pairs AI 01 with a weight, a price or a date
+and gives fourteen extra encodation methods for saving a character or two, this
+library uses the general AI 01 method: the symbol is correct, scans to the same
+element strings, and is one or two characters wider than the narrowest a
+standard-complete encoder would draw.
+
+Underneath, it shares the family's enumeration and none of its numbers. A
+character is twelve bits' worth of widths rather than a mixed-radix digit; the
+narrow-element rule sits on the odd *positions* of a character rather than on
+its bars or its spaces, because the symbol is one alternating run of elements
+from guard to guard and nothing but position decides a character's colours; the
+finder is chosen by the symbol's length rather than by the checksum, so that a
+scanner reading one pair knows which pair it read; and the checksum weights are
+powers of three modulo 211 taken in an order that is a different scramble for
+every length.
 
 Like Data Matrix, Aztec is pure PHP only. The C++ core and the extension exist
 because QR is what gets generated in bulk, and native acceleration is
