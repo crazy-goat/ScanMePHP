@@ -34,6 +34,18 @@ number is worse than a compile error.
   that makes a reader announce `]C1`. The bars are Code 128 bars and the same
   encoder draws them; what makes it a different generator is that
   `canEncode()` has a different question to answer.
+- **The QR mask pattern as an option** — `QrOptions(mask: 0..7)`, null and
+  automatic by default, honoured by `qrcode` and `gs1-qr` alike. Which of the
+  eight to use is a preference rather than a requirement: all eight carry
+  identical data, all of them scan, and conforming encoders disagree about it
+  routinely. A caller reproducing another system's symbols byte for byte, or
+  pinning output for a golden-file test, was previously unable to say which
+  one. Pinning narrows backend selection exactly as pinning a version already
+  did, via the new `QrBackendInterface::supportsForcedMask()`; only the
+  portable encoder can honour it, and a registry without one reports the pin by
+  name instead of quietly ignoring it. Every mask is round-tripped through the
+  decoder for both symbologies, since an option that can produce an unreadable
+  symbol is a way to fail at the till.
 - **GS1 QR** (`gs1-qr`, aliases `gs1-qrcode`, `gs1qr`): the third and last
   spelling of FNC1, and the odd one out — a *mode indicator*, four bits ahead
   of the first segment, rather than a value in the same alphabet as the data.

@@ -44,6 +44,11 @@ final class NativeBackend implements QrBackendInterface
         return 0;
     }
 
+    public function supportsForcedMask(): bool
+    {
+        return false;
+    }
+
     public function encode(string $data, ?GeneratorOptionsInterface $options = null): Symbol
     {
         $level = $options instanceof QrOptions

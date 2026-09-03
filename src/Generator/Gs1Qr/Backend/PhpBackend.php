@@ -47,8 +47,18 @@ final class PhpBackend implements BackendInterface
         $options = $options instanceof QrOptions ? $options : new QrOptions();
         $this->encoder ??= new Encoder();
 
+        $level = $options->errorCorrection;
+        $matrix = $options->mask === null
+            ? $this->encoder->encodeGs1($payload, $level, $options->version ?? 0)
+            : $this->encoder->encodeGs1AtMask(
+                $payload,
+                $level,
+                $options->version ?? $this->encoder->getMinimumGs1Version($payload, $level),
+                $options->mask,
+            );
+
         return QrSymbols::fromMatrix(
-            $this->encoder->encodeGs1($payload, $options->errorCorrection, $options->version ?? 0),
+            $matrix,
             Symbology::Gs1Qr->value,
             [
                 'elements' => \count($elements->elements),
