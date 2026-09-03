@@ -243,6 +243,7 @@ $scanme->render('https://example.com', 'qrcode', 'svg');
 $scanme->render('ScanMePHP', 'data-matrix', 'svg');
 $scanme->render('SHIPMENT-4471', 'code128', 'png');
 $scanme->render('(01)09501101020917(10)LOT0001', 'gs1-128', 'png');
+$scanme->render('(01)09501101020917(10)LOT0001', 'gs1-data-matrix', 'svg');
 $scanme->render('PART-4471', 'code39', 'png');
 $scanme->render('Part 4471/a', 'code39ext', 'png');
 $scanme->render('Part 4471/a', 'code93', 'png');
@@ -320,6 +321,22 @@ One limit of the notation: data containing a parenthesis cannot be written this
 way, though GS1 permits one. It is refused with a message saying so rather than
 parsed into something you did not write.
 
+`gs1-data-matrix` carries the same element strings in an ECC200 symbol. The
+table and the parsing are shared; what differs is only how FNC1 is spelled —
+a symbol character in Code 128, codeword 232 here. It takes the same
+`DataMatrixOptions` as plain Data Matrix.
+
+```php
+use CrazyGoat\ScanMePHP\Generator\DataMatrix\DataMatrixOptions;
+
+$scanme->render('(01)09501101020917', 'gs1-data-matrix', 'svg', new DataMatrixOptions(rectangular: true));
+```
+
+Neither GS1 generator is reachable by accident. Code 128 and Data Matrix will
+both happily encode `(01)09501101020917` as literal parentheses — bars that
+scan, carrying data no GS1 system expects — so `canEncode()` asks a different
+question for the GS1 pair, and `generatorsFor()` separates them.
+
 `code39` and `code39ext` are two readings of one set of bars. Standard Code 39
 carries 43 characters; extended mode reaches all of ASCII by encoding the other
 85 bytes as two characters each, so `'Part 4471/a'` becomes a symbol as wide as
@@ -390,7 +407,7 @@ any of them, so rather than ship an unchecked table, compute the one your system
 needs and append it to the payload — it is an ordinary data character either way.
 
 Aliases resolve too — `ean`, `ean-13`, `upc`, `upca`, `dm`, `ecc200`, `qr`,
-`c39`, `c93`, `i25`, `gtin-14`, `nw-7`, `ean128`.
+`c39`, `c93`, `i25`, `gtin-14`, `nw-7`, `ean128`, `gs1dm`.
 
 If you have a payload and are not sure which symbologies accept it, ask rather
 than guess:

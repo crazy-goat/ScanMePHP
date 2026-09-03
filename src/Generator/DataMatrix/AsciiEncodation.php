@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP\Generator\DataMatrix;
 
+use CrazyGoat\ScanMePHP\Generator\Gs1\ElementString;
+
 /**
  * ECC200 ASCII encodation (ISO/IEC 16022 §5.2.3).
  *
@@ -21,6 +23,16 @@ final class AsciiEncodation
 {
     /** Codeword that escapes the next byte into the 128–255 range. */
     private const UPPER_SHIFT = 235;
+
+    /**
+     * FNC1. In the first position it marks the symbol as GS1 Data Matrix;
+     * later it terminates an element string of variable length.
+     *
+     * It is a codeword rather than a byte, which is the whole difference
+     * between GS1 here and GS1 in Code 128 — there it is a symbol character in
+     * either set, here it is one of the 256 values ASCII encodation can emit.
+     */
+    private const FNC1 = 232;
 
     /** First pad codeword; the rest are randomised. */
     private const PAD = 129;
@@ -50,6 +62,37 @@ final class AsciiEncodation
                 $codewords[] = $byte - 128 + 1;
             }
             $i++;
+        }
+
+        return $codewords;
+    }
+
+    /**
+     * The same, for a GS1 payload.
+     *
+     * One FNC1 codeword in front, which is what makes a reader announce ']d2'
+     * and hand the data to a GS1 parser, and one for each separator inside.
+     * The separators arrive as ASCII GS — byte for byte what a scanner reports
+     * — because that is the form ElementString produces and the form
+     * Code 128 carries, so one payload builder serves both.
+     *
+     * Digit pairs cannot straddle a separator, and do not need to be stopped
+     * from doing so: GS is not a digit.
+     *
+     * @return list<int> Data codewords, before padding
+     */
+    public static function encodeGs1(string $payload): array
+    {
+        $codewords = [self::FNC1];
+
+        foreach (explode(ElementString::SEPARATOR, $payload) as $index => $element) {
+            if ($index > 0) {
+                $codewords[] = self::FNC1;
+            }
+
+            foreach (self::encode($element) as $codeword) {
+                $codewords[] = $codeword;
+            }
         }
 
         return $codewords;

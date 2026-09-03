@@ -34,6 +34,12 @@ number is worse than a compile error.
   that makes a reader announce `]C1`. The bars are Code 128 bars and the same
   encoder draws them; what makes it a different generator is that
   `canEncode()` has a different question to answer.
+- **GS1 Data Matrix** (`gs1-data-matrix`, aliases `gs1-datamatrix`, `gs1dm`):
+  the same element strings in an ECC200 symbol. FNC1 is codeword 232 here
+  rather than a symbol character — one in front, one per separator — and
+  everything downstream of encodation is shared with plain Data Matrix through
+  the new `DataMatrix\SymbolBuilder`, so size selection, block interleaving
+  and the finder frame cannot drift between them.
 - **The GS1 application identifier table**
   (`Generator\Gs1\ApplicationIdentifier`, 541 identifiers). Derived, not
   transcribed: `tools/gs1_reference.py` sweeps every two-, three- and

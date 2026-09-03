@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP\Tests;
 
+use CrazyGoat\ScanMePHP\Generator\DataMatrix\DataMatrixOptions;
 use CrazyGoat\ScanMePHP\Generator\Gs1\ApplicationIdentifier;
 use CrazyGoat\ScanMePHP\Generator\Gs1\ElementString;
 use CrazyGoat\ScanMePHP\Scanme;
@@ -62,6 +63,23 @@ class Gs1ReferenceTest extends TestCase
         fclose($handle);
     }
 
+    /** @return \Generator<string, array{string, string, string, string}> */
+    public static function matrixProvider(): \Generator
+    {
+        $handle = fopen(__DIR__ . '/fixtures/gs1_dm_reference.csv', 'r');
+        if ($handle === false) {
+            return;
+        }
+
+        fgetcsv($handle, 0, ',', '"', '');
+        while (($row = fgetcsv($handle, 0, ',', '"', '')) !== false) {
+            [$elements, $size, $payloadHex, $modules] = $row;
+            yield $elements => [$elements, $size, $payloadHex, $modules];
+        }
+
+        fclose($handle);
+    }
+
     #[DataProvider('identifierProvider')]
     public function testTheIdentifierTableMatchesAnIndependentEncoder(
         string $ai,
@@ -104,6 +122,41 @@ class Gs1ReferenceTest extends TestCase
         );
 
         $this->assertSame(\strlen($expected), $symbol->getWidth(), "width of {$elements}");
+        $this->assertSame($expected, $symbol->toModuleString(), "modules for {$elements}");
+    }
+
+    /**
+     * GS1 Data Matrix, module for module, at a size the reference chose.
+     *
+     * The size is forced rather than compared because the two encoders
+     * disagree about which symbol to reach for — zxing-cpp takes the smallest
+     * by area and will pick a rectangle, this library prefers a square unless
+     * asked. That is a preference, not a fact about the encoding, and pinning
+     * it here would test the preference instead of the codewords. What is
+     * being compared is everything downstream: the FNC1 codeword in front, the
+     * ones standing in for separators, how digit pairing works around them,
+     * Reed-Solomon, placement and the finder frame.
+     */
+    #[DataProvider('matrixProvider')]
+    public function testTheMatrixModulesMatchAnIndependentEncoder(
+        string $elements,
+        string $size,
+        string $payloadHex,
+        string $expected
+    ): void {
+        $symbol = Scanme::create()->generate(
+            $elements,
+            Symbology::Gs1DataMatrix,
+            new DataMatrixOptions(size: $size)
+        );
+
+        $this->assertSame(
+            $payloadHex,
+            bin2hex(ElementString::parse($elements)->payload()),
+            "separator placement in {$elements}"
+        );
+
+        $this->assertSame($size, $symbol->getMetadataValue('size'), "size of {$elements}");
         $this->assertSame($expected, $symbol->toModuleString(), "modules for {$elements}");
     }
 
