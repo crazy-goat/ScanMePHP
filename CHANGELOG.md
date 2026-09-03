@@ -270,6 +270,38 @@ number is worse than a compile error.
   decoder, and an odd number of pairs does not — under any of the twelve layouts
   we could construct for it. Rather than emit a symbol nothing has read, those
   widths are refused. Pure PHP.
+- **RM4SCC** (`rm4scc`, aliases `royal-mail`, `royal-mail-4state`,
+  `rm4scc-cbc`): the Royal Mail 4-State Customer Code, and the first symbology
+  here whose data is in the height of a bar rather than in the width of a bar
+  or a space. Digits and capitals, one to fifty of them, typically a postcode
+  and a delivery point suffix. No options. Pure PHP.
+
+  Every bar crosses a central tracker band and carries two bits — whether it
+  also reaches up, and whether it reaches down. Each character spends exactly
+  two ascenders and two descenders across its four bars, which is the
+  symbology's error detection: a bar misread by one state breaks the count, so
+  a reader refuses the character instead of reporting a different one.
+
+  There is no character table. Six four-bit patterns carry two bits each, and a
+  character's place in the alphabet is its pair of them read as a base-six
+  number; the check character is the same arithmetic over the sums, with the
+  nibbles worth 1 to 6 rather than 0 to 5. That last detail is not decoration —
+  the two conventions disagree exactly when a sum is a multiple of six, which is
+  a six-character postcode.
+
+  The bar height is a render option rather than a generator one, and it scales
+  the ascender, tracker and descender together — 3 : 2 : 3, Royal Mail's 1.9mm,
+  1.25mm and 1.9mm — because the ratio between the three is what a bar means.
+  `AbstractRenderOptions::resolveRowHeights()` has done this since the renderers
+  were written; this is the first symbology that needs it.
+
+  It is verified differently from everything else here, and the difference is
+  worth knowing. No free decoder reads a four-state postal code, so there is no
+  round trip: the bars are compared with zint's (`composer reference:rm4scc`),
+  and the rendered PNG is measured back into bars and compared with the same,
+  which gates the render path without pretending to be a second opinion on the
+  bars. One independent encoder where the rest of the library has an encoder
+  and a decoder.
 - **Hexagonal modules in the SVG and PNG renderers**, and the first time the
   shape negotiation that has been in `RendererCapabilities` all along actually
   declines something. MaxiCode's rows interlock — a row sits 0.866 of a module

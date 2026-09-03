@@ -19,6 +19,7 @@ use CrazyGoat\ScanMePHP\Generator\DataBarOmni\Backend\PhpBackend;
 use CrazyGoat\ScanMePHP\Generator\DataBarOmni\DataBarOmniOptions;
 use CrazyGoat\ScanMePHP\Generator\DataMatrix\DataMatrixOptions;
 use CrazyGoat\ScanMePHP\Generator\Ean\Composite;
+use CrazyGoat\ScanMePHP\Generator\FourState\State;
 use CrazyGoat\ScanMePHP\Generator\Gs1\ElementString;
 use CrazyGoat\ScanMePHP\Generator\Itf\ItfOptions;
 use CrazyGoat\ScanMePHP\Generator\Itf\Patterns as ItfPatterns;
@@ -98,20 +99,24 @@ class DecoderRoundTripTest extends TestCase
     /**
      * The symbologies zxing-cpp will not report on their own.
      *
-     * An add-on is not an article number — it is a fragment printed beside
-     * one — and zxing-cpp has no reader for a lone EAN-2 or EAN-5, only an
-     * option to pick one up next to a main symbol. So these two are gated by
-     * testAnAddOnScansBackBesideAMainSymbol() instead of by a case of their
-     * own, and listing them here is what keeps that substitution deliberate: a
-     * symbology may be absent from FORMAT_NAMES only by appearing in this
-     * list, never by being forgotten.
+     * Two different reasons, one rule. An add-on is not an article number — it
+     * is a fragment printed beside one — and zxing-cpp has no reader for a
+     * lone EAN-2 or EAN-5, only an option to pick one up next to a main
+     * symbol, so those two are gated by testAnAddOnScansBackBesideAMainSymbol()
+     * instead. RM4SCC it cannot read at all: no free decoder carries a
+     * four-state postal code, so that one is gated by
+     * testRm4sccRendersTheBarsItsReferenceEncoderDrew(), which reads the bars
+     * back out of the rendered pixels and compares them with zint's.
      *
-     * If a future zxing-cpp learns to read these standalone, the composite
-     * test still passes and this list should shrink.
+     * Listing them here is what keeps a substitution deliberate: a symbology
+     * may be absent from FORMAT_NAMES only by appearing in this list, never by
+     * being forgotten. Each entry has a test below that fails when its reason
+     * stops being true, so an exemption cannot quietly outlive it.
      */
     private const NO_STANDALONE_READER = [
         Symbology::Ean2->value,
         Symbology::Ean5->value,
+        Symbology::Rm4scc->value,
     ];
 
     public function testTheDecoderItselfIsWiredUp(): void
@@ -1571,6 +1576,146 @@ class DecoderRoundTripTest extends TestCase
 
         self::assertSame('9788375780642', $alone[0]['text']);
         self::assertSame('978837578064251299', $withAddOn[0]['text']);
+    }
+
+    /**
+     * RM4SCC's substitute for a round trip: the pixels, read as bars.
+     *
+     * There is no decoder to hand this PNG to — no free one reads a four-state
+     * postal code — so the gate is built the other way round. The rendered
+     * image is measured back into the state letters zint's own drawings are
+     * measured into (`tools/four_state.py`), and those are compared with what
+     * zint drew for the same payload.
+     *
+     * What that buys over the reference fixture, which already compares the
+     * module grid, is everything after the grid: the PNG encoder, the module
+     * size, the quiet zone, and the three row heights — a band flattened or
+     * scaled wrongly is invisible in a module string and fatal on an envelope.
+     * What it does not buy is a second opinion on the bars themselves. Nothing
+     * available offers one, which is why this is declared in
+     * NO_STANDALONE_READER rather than counted as a round trip.
+     *
+     * @param string $data the payload
+     * @param string $expected the bars zint drew for it
+     */
+    #[DataProvider('rm4sccProvider')]
+    public function testRm4sccRendersTheBarsItsReferenceEncoderDrew(string $data, string $expected): void
+    {
+        $png = $this->renderForScanning($data, Symbology::Rm4scc->value);
+
+        self::assertSame($expected, $this->barsInThePng($png), "bars rendered for {$data}");
+    }
+
+    /** Payloads out of the reference fixture, with the bars it holds for them. */
+    public static function rm4sccProvider(): \Generator
+    {
+        $wanted = ['0', 'Z', 'LE28HS', 'BX11LT1A', 'SW1A1AA9Z', '0123', 'WXYZ'];
+
+        $handle = fopen(__DIR__ . '/fixtures/rm4scc_reference.csv', 'r');
+        self::assertNotFalse($handle, 'the RM4SCC reference fixture is missing');
+
+        fgetcsv($handle, 0, ',', '"', '');
+        while (($row = fgetcsv($handle, 0, ',', '"', '')) !== false) {
+            [$data, $states] = $row;
+            if (\in_array($data, $wanted, true)) {
+                yield $data => [$data, $states];
+            }
+        }
+
+        fclose($handle);
+    }
+
+    /**
+     * The bars of a rendered four-state symbol, measured out of the image.
+     *
+     * Deliberately ignorant of everything the encoder decided. The bars are
+     * found as runs of dark columns, and a bar's state is which edges of the
+     * symbol's own ink its column reaches — so a wrong module size, a wrong
+     * quiet zone or a wrong row height changes the picture without changing
+     * this reading, which is what makes the comparison worth making.
+     */
+    private function barsInThePng(string $png): string
+    {
+        $image = imagecreatefromstring($png);
+        self::assertNotFalse($image, 'the PNG did not decode');
+
+        $width = imagesx($image);
+        $height = imagesy($image);
+
+        // The PNG renderer writes a palette image, where imagecolorat() gives
+        // an index rather than a colour. Reading it as one would make every
+        // pixel dark and every symbol a single bar.
+        $palette = !imageistruecolor($image);
+
+        /** @var list<list<int>> $dark one entry per column: the rows with ink in them */
+        $dark = [];
+        for ($x = 0; $x < $width; $x++) {
+            $rows = [];
+            for ($y = 0; $y < $height; $y++) {
+                $colour = imagecolorat($image, $x, $y);
+                $red = $palette
+                    ? imagecolorsforindex($image, $colour)['red']
+                    : ($colour >> 16) & 0xFF;
+
+                if ($red < 128) {
+                    $rows[] = $y;
+                }
+            }
+            $dark[] = $rows;
+        }
+
+        $top = $height;
+        $bottom = -1;
+        foreach ($dark as $rows) {
+            foreach ($rows as $y) {
+                $top = min($top, $y);
+                $bottom = max($bottom, $y);
+            }
+        }
+
+        self::assertGreaterThan(-1, $bottom, 'the rendered symbol has no ink in it');
+
+        $states = '';
+        $inBar = false;
+        $barTop = $height;
+        $barBottom = -1;
+
+        foreach ([...$dark, []] as $rows) {
+            if ($rows !== []) {
+                $inBar = true;
+                $barTop = min($barTop, min($rows));
+                $barBottom = max($barBottom, max($rows));
+                continue;
+            }
+
+            if ($inBar) {
+                $states .= State::of($barTop === $top, $barBottom === $bottom)->value;
+                $inBar = false;
+                $barTop = $height;
+                $barBottom = -1;
+            }
+        }
+
+        return $states;
+    }
+
+    /**
+     * The RM4SCC exemption, held to its own terms.
+     *
+     * The day a free decoder reads a four-state postal code, this fails and
+     * says which list to shrink.
+     */
+    public function testRm4sccIsStillUnreadableByTheDecoder(): void
+    {
+        $this->requireDecoder();
+
+        $png = $this->renderForScanning('LE28HS', Symbology::Rm4scc->value);
+
+        self::assertSame(
+            [],
+            Decoder::decode($png, null, 'read'),
+            'zxing-cpp now reads RM4SCC; NO_STANDALONE_READER can shrink and it needs a real round trip'
+        );
     }
 
     /**
