@@ -59,6 +59,11 @@ class DecoderRoundTripTest extends TestCase
         // an ITF-14, and a decoder reports both as ITF.
         Symbology::Itf->value => 'ITF',
         Symbology::Itf14->value => 'ITF',
+        // GS1-128 is Code 128 bars: the FNC1 after the start code is what
+        // makes a reader hand the data to a GS1 parser, and no decoder reports
+        // it as a format of its own. What proves the FNC1 was seen is the text
+        // coming back parenthesised.
+        Symbology::Gs1128->value => 'Code 128',
         Symbology::DataMatrix->value => 'Data Matrix',
     ];
 
@@ -202,6 +207,36 @@ class DecoderRoundTripTest extends TestCase
         }
 
         return $out;
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function gs1128Provider(): iterable
+    {
+        yield 'one predefined element' => ['(01)09501101020917'];
+        yield 'two predefined elements' => ['(01)09501101020917(3103)000189'];
+        yield 'a variable element alone' => ['(10)LOT0001'];
+        yield 'a separator between elements' => ['(10)LOT0001(11)260101'];
+        yield 'predefined before variable needs none' => ['(11)260101(10)LOT0001'];
+        yield 'an SSCC' => ['(00)123456789012345678'];
+        yield 'fixed length that is not predefined' => ['(402)12345678901234567(10)X'];
+        yield 'three elements' => ['(01)09501101020917(10)LOT0001(11)260101'];
+        yield 'digits across a separator' => ['(10)1234567(11)991231'];
+        yield 'a long one' => ['(01)09501101020917(21)ABCDEFGHIJ(10)LOT0001(11)260101(17)261231'];
+    }
+
+    /**
+     * The decoder reports a GS1-128 by handing back the parenthesised form.
+     *
+     * That is a stronger statement than the bars decoding. zxing-cpp writes
+     * those parentheses only when it saw an FNC1 after the start code and
+     * parsed the payload against its own application identifier table — so a
+     * separator we placed wrongly comes back as different element strings, not
+     * as a decode failure.
+     */
+    #[DataProvider('gs1128Provider')]
+    public function testAGs1128ScansBackAsItsElementStrings(string $elements): void
+    {
+        $this->assertScansBack($elements, Symbology::Gs1128->value, self::FORMAT_NAMES['gs1-128']);
     }
 
     #[DataProvider('code128Provider')]
