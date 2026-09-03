@@ -264,6 +264,7 @@ $scanme->render('(01)09501101020917(10)LOT0001', 'databar-expanded', 'svg');
 $scanme->render('(01)09501101020917(10)LOT0001', 'databar-expanded-stacked', 'svg');
 $scanme->render('52', 'ean2', 'svg');
 $scanme->render('51299', 'ean5', 'svg');
+$scanme->render('LE28HS', 'rm4scc', 'svg');
 ```
 
 `ean2` and `ean5` are the add-on symbols printed beside a main barcode — the
@@ -819,15 +820,58 @@ disagree with one another and nothing this library can verify against implements
 any of them, so rather than ship an unchecked table, compute the one your system
 needs and append it to the payload — it is an ordinary data character either way.
 
+### RM4SCC
+
+The Royal Mail 4-State Customer Code — the marks along the bottom of a British
+envelope. It is the first symbology here that carries its data in the *height*
+of a bar rather than in the width of a bar or a space:
+
+```php
+$scanme->render('LE28HS', 'rm4scc', 'svg');
+$scanme->render('BX11LT1A', 'rm4scc', 'png');
+```
+
+Every bar crosses a central tracker band; what varies is whether it also
+reaches up, down, both or neither. So a bar is two bits, a character is four
+bars, and each character spends exactly two ascenders and two descenders — that
+count is the symbology's error detection, letting a reader refuse a bar it
+misread instead of reporting a different letter. It is also why a sorting
+machine can read one off an envelope moving at speed, where a linear symbol's
+narrow spaces would not survive the print.
+
+There is no character table in this library, because there is nothing to
+transcribe: six four-bit patterns carry two bits each, and a character's place
+in the alphabet is its pair of them read as a base-six number. The check
+character is the same arithmetic over the sums.
+
+It takes no options. The one thing a caller might want to change is the height,
+and that is a render option — `barHeight` scales the ascender, tracker and
+descender together rather than flattening them, because the ratio between the
+three is what a bar means:
+
+```php
+// 3 : 2 : 3 by default, which is Royal Mail's 1.9mm : 1.25mm : 1.9mm.
+$scanme->render('LE28HS', 'rm4scc', 'png', new PngOptions(barHeight: 32));
+```
+
+One thing to know about how it is verified. No free decoder reads a four-state
+postal code — zxing-cpp neither writes nor reads one — so unlike every other
+symbology here, RM4SCC is not gated by handing a rendered PNG to a scanner and
+requiring the payload back. It is checked against zint instead, bar for bar,
+and the rendered image is measured back into bars and compared with what zint
+drew. That is one independent opinion where the rest of the library has two,
+and it is written down in [AGENTS.md](AGENTS.md) rather than left to be
+discovered.
+
 Aliases resolve too — `ean`, `ean-13`, `upc`, `upca`, `dm`, `ecc200`, `qr`,
-`c39`, `c93`, `i25`, `gtin-14`, `nw-7`, `ean128`, `gs1dm`.
+`c39`, `c93`, `i25`, `gtin-14`, `nw-7`, `ean128`, `gs1dm`, `royal-mail`.
 
 If you have a payload and are not sure which symbologies accept it, ask rather
 than guess:
 
 ```php
 $scanme->getRegistry()->generatorsFor('036000291452');
-// ['qrcode', 'code128', 'code39', 'code39ext', 'code93', 'codabar', 'ean13', 'upc-a', 'itf', 'data-matrix']
+// ['qrcode', 'code128', 'code39', 'code39ext', 'code93', 'codabar', 'ean13', 'upc-a', 'itf', 'data-matrix', 'aztec', 'pdf417', 'maxicode', 'rm4scc']
 ```
 
 And to see what is installed, with the rules each one enforces:

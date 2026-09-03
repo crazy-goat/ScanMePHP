@@ -44,6 +44,7 @@ enum Symbology: string
     case DataBarLimited = 'databar-limited';
     case DataBarExpanded = 'databar-expanded';
     case DataBarExpandedStacked = 'databar-expanded-stacked';
+    case Rm4scc = 'rm4scc';
 
     /** The name the registry resolves, for either accepted form. */
     public static function nameOf(string|self $symbology): string
