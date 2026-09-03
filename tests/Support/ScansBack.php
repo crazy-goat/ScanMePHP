@@ -89,6 +89,42 @@ trait ScansBack
         );
     }
 
+    /**
+     * The same gate for a payload that is not text.
+     *
+     * The decoder escapes anything unprintable in the text it reports — a
+     * 0x80 byte comes back as "<U+80>" — so a payload with high bytes in it
+     * can only be compared as bytes. Aztec is the first symbology here where
+     * that matters rather than being a curiosity: its binary shift is a
+     * documented feature with a length field that changes width partway
+     * through, and a symbol that does not survive a scanner proves it wrong.
+     */
+    protected function assertBytesScanBack(
+        string $data,
+        string $generator,
+        string $expectedFormat,
+        ?object $generatorOptions = null,
+    ): void {
+        $this->requireDecoder();
+
+        $symbols = Decoder::decode(
+            $this->renderForScanning($data, $generator, $generatorOptions)
+        );
+
+        self::assertCount(
+            1,
+            $symbols,
+            sprintf('expected exactly one %s symbol for %s, got %d', $generator, self::describe($data), \count($symbols))
+        );
+        self::assertSame($expectedFormat, $symbols[0]['format']);
+        self::assertTrue($symbols[0]['valid'], 'the decoder reported the symbol as invalid');
+        self::assertSame(
+            array_values(unpack('C*', $data) ?: []),
+            $symbols[0]['bytes'],
+            sprintf('%s byte round-trip for %s', $generator, self::describe($data))
+        );
+    }
+
     /** Payloads may be binary or long; keep failure messages readable. */
     private static function describe(string $data): string
     {
