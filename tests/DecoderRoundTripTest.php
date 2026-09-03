@@ -289,6 +289,44 @@ class DecoderRoundTripTest extends TestCase
         $this->assertScansBack($elements, Symbology::Gs1Qr->value, self::FORMAT_NAMES['gs1-qr']);
     }
 
+    /** @return iterable<string, array{int}> */
+    public static function maskProvider(): iterable
+    {
+        for ($mask = QrOptions::MIN_MASK; $mask <= QrOptions::MAX_MASK; $mask++) {
+            yield sprintf('mask %d', $mask) => [$mask];
+        }
+    }
+
+    /**
+     * All eight maskings scan. That is the claim the option rests on.
+     *
+     * Pinning a mask is only a safe thing to expose if every choice produces a
+     * readable symbol — otherwise the option is a way to hand a caller a
+     * barcode that fails at the till. The automatic path picks one of these
+     * eight, so this also widens what the round trip covers for plain QR.
+     */
+    #[DataProvider('maskProvider')]
+    public function testAQrScansBackAtEveryMask(int $mask): void
+    {
+        $this->assertScansBack(
+            'https://example.com/order/4471',
+            Symbology::QrCode->value,
+            self::FORMAT_NAMES['qrcode'],
+            generatorOptions: new QrOptions(mask: $mask),
+        );
+    }
+
+    #[DataProvider('maskProvider')]
+    public function testAGs1QrScansBackAtEveryMask(int $mask): void
+    {
+        $this->assertScansBack(
+            '(01)09501101020917(10)LOT0001',
+            Symbology::Gs1Qr->value,
+            self::FORMAT_NAMES['gs1-qr'],
+            generatorOptions: new QrOptions(mask: $mask),
+        );
+    }
+
     #[DataProvider('code128Provider')]
     public function testCode128ScansBack(string $data): void
     {

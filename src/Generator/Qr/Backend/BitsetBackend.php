@@ -49,6 +49,11 @@ final class BitsetBackend implements QrBackendInterface
         return FastEncoder::MAX_VERSION;
     }
 
+    public function supportsForcedMask(): bool
+    {
+        return false;
+    }
+
     public function encode(string $data, ?GeneratorOptionsInterface $options = null): Symbol
     {
         $this->encoder ??= new FastEncoder();
