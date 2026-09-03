@@ -83,7 +83,9 @@
         "reference:qr-agreement": "php tools/qr_agreement_fixture.php",
         "reference:aztec": ".decoders/bin/python tools/aztec_reference.py",
         "reference:pdf417": ".decoders/bin/python tools/pdf417_reference.py",
-        "reference:pdf417-table": ".decoders/bin/python tools/pdf417_codeword_table.py"
+        "reference:pdf417-table": ".decoders/bin/python tools/pdf417_codeword_table.py",
+        "reference:maxicode": ".decoders/bin/python tools/maxicode_reference.py",
+        "reference:maxicode-placement": ".decoders/bin/python tools/maxicode_placement.py"
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
@@ -93,6 +95,8 @@
         "reference:ean-upc": "Regenerate the EAN/UPC module patterns from zxing-cpp",
         "reference:aztec": "Regenerate the Aztec reference symbols from zxing-cpp",
         "reference:pdf417": "Regenerate the PDF417 reference symbols from zxing-cpp",
-        "reference:pdf417-table": "Re-measure the PDF417 codeword pattern table, the one table here that cannot be derived"
+        "reference:pdf417-table": "Re-measure the PDF417 codeword pattern table, the one table here that cannot be derived",
+        "reference:maxicode": "Regenerate the MaxiCode reference symbols from zxing-cpp",
+        "reference:maxicode-placement": "Re-measure where MaxiCode's 144 codewords write their bits"
     }
 }

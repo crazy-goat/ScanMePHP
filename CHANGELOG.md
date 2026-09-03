@@ -99,6 +99,81 @@ number is worse than a compile error.
   different symbol for the same bytes. No macro block means a payload too large
   for one symbol is refused rather than split across several. Like Aztec,
   PDF417 is pure PHP only; native acceleration stays QR-only by design.
+- **MaxiCode** (`maxicode`, aliases `maxi-code`, `ups-code`): hexagons around a
+  bullseye, one fixed size, made for parcels. It is the odd one out of
+  everything here — the modules are hexagons on interlocking rows rather than
+  squares on a grid, the finder is three concentric rings in the middle rather
+  than patterns in the corners, and there is no version, no layer count and no
+  error correction level to choose. 93 codewords: about 93 characters of upper
+  case text, or 138 digits, since nine digits compact into six codewords.
+
+  `MaxiCodeOptions` carries the **mode**, and unlike every other option in this
+  library it changes what the symbol *means* rather than how it is drawn. Modes
+  2 and 3 spend the nine codewords nearest the bullseye on a structured carrier
+  message — a postcode, an ISO country code and a carrier's service class —
+  which a reader reports as three fields in front of the payload rather than as
+  a prefix glued onto it. That is what the symbology is for, and it is why those
+  two modes hold 84 codewords of payload instead of 93. Mode 2's postcode is up
+  to nine digits and mode 3's is six positions rather than a string of six, so a
+  shorter one comes back space-padded.
+
+  Binary payloads work directly, and MaxiCode is the only symbology here that
+  reaches every byte with **no binary mode at all**: its five code sets between
+  them carry all 256 values. Which set to be in is a search rather than a rule,
+  because they overlap — a space is in all five, a comma in three — and it is
+  exact, with five states, one pass and no lookahead limit. Ties are the normal
+  case and two cost-neutral rules break them: a latch waits until a character
+  the open set cannot write, and a single shift beats an equal-cost latch while
+  a two- or three-character shift loses to one.
+
+  Not implemented: **mode 5**, the enhanced error correction variant. Its
+  secondary message splits 68 data codewords against 56 check ones rather than
+  84 against 40, the interleaving is not the plain mode's, and nothing available
+  to check against writes one — a sweep of thirty candidate splits produced no
+  symbol a reader would accept, so shipping a guess would mean shipping a mode
+  that cannot be verified. Like Aztec and PDF417, MaxiCode is pure PHP only.
+- **Hexagonal modules in the SVG and PNG renderers**, and the first time the
+  shape negotiation that has been in `RendererCapabilities` all along actually
+  declines something. MaxiCode's rows interlock — a row sits 0.866 of a module
+  below the one above and every odd row is offset half a module — so a renderer
+  cannot substitute a hexagon for a square and be done: the canvas is shorter
+  than the row count suggests, and the PNG writer's "this scanline is the same
+  as the one above" trick, which carries a whole module row for the cost of one,
+  does not apply at all. `Renderer\HexagonLattice` holds the geometry both
+  renderers share.
+
+  The bullseye is the other half of it. Three concentric rings are not modules
+  and have no representation in a grid of light and dark cells, so the symbol
+  reports it as a finder region and the renderer draws it from the radii — a
+  real division of labour rather than a hint, since a renderer that ignores the
+  region emits a symbol with a hole where its finder should be. The ASCII and
+  HTML renderers refuse a hexagonal symbol by name, which is better than
+  approximating it into something that looks like a barcode and does not scan.
+- **`Encoding\MaxiCode\Placement`**, the second measured table here, and the
+  measurement is arranged so that trusting the oracle is not what makes it
+  right. `tools/maxicode_placement.py` computes all 144 codewords itself — code
+  sets, then Reed–Solomon in three blocks — and matches each of the 974 lattice
+  positions to the (codeword, bit) whose value it tracks across a hundred
+  payloads. A position and a bit that agree on a hundred independent symbols are
+  the same thing, and the match confirms the arithmetic and the placement
+  together: three of the four candidate interleavings of the secondary message
+  line up under 600 of 813 varying positions, and the right one lines up with
+  every single one.
+
+  Two things that cannot reach: the mode codeword is constant across those
+  payloads, so its six cells were found by exhausting the primary message's
+  error correction instead — with five of RS(20,10)'s five correctable errors
+  already spent, one more flipped module breaks decoding if and only if it
+  belongs to a codeword, and exactly six cells do. And bits 3 to 5 of that
+  codeword are zero in every mode the standard defines, so no symbol can
+  distinguish them; the order used is the one the regular blocks use and it is
+  recorded as undetermined rather than passed off as measured.
+
+  The raster is useless for any of this, which is worth stating because every
+  other fixture here samples one: MaxiCode's modules are hexagons, so one pixel
+  is not one module, and three attempts at fitting the lattice to a raster
+  disagreed with each other across scales before the SVG turned out to state it
+  exactly.
 - **`Encoding\Pdf417\ReedSolomonGf929`**, Reed–Solomon over a prime field.
   Neither existing implementation generalises to it, and not for want of
   trying: over GF(2^m) addition *is* exclusive-or, which is why both of the
@@ -123,7 +198,7 @@ number is worse than a compile error.
   guards the result by re-deriving every cluster and checking each is a
   bijection over patterns that are seventeen modules of eight elements one to
   six wide starting with a bar.
-- **`Encoding\Aztec\ReedSolomonGf2m`**, Reed–Solomon over GF(2^m) for any m.
+- **`Encoding\ReedSolomonGf2m`**, Reed–Solomon over GF(2^m) for any m.
   `ReedSolomon256` could not be reused: it is deliberately hardcoded to GF(256)
   — a 256-row factor table and no log lookups in the inner loop — because that
   is what makes it fast enough for QR's hot path, and Aztec needs five fields in
@@ -131,7 +206,9 @@ number is worse than a compile error.
   layer count. Widening the tuned class would have cost QR for no gain here.
   The new class is anchored two ways: against the published ISO/IEC 16022
   Annex R vector through the field it shares with Data Matrix, and end to end
-  through the Aztec fixture for the other four.
+  through the Aztec fixture for the other four. It sits in `Encoding` rather
+  than `Encoding\Aztec` because MaxiCode turned out to need GF(64) too — the
+  same field, the same primitive polynomial, and no change to the class.
 - **A real reference fixture for QR** (`tests/fixtures/qr_reference.csv`,
   regenerated by `composer reference:qr` from Nayuki's qrcodegen). QR is the
   oldest code here and its fixture predated the rule that every symbology is

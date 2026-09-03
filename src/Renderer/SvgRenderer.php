@@ -33,7 +33,7 @@ final class SvgRenderer implements RendererInterface
     public function getCapabilities(): RendererCapabilities
     {
         return new RendererCapabilities(
-            moduleShapes: [ModuleShape::Square],
+            moduleShapes: [ModuleShape::Square, ModuleShape::Hexagon],
             text: true,
             color: true,
             nonUniformRows: true,
@@ -50,6 +50,8 @@ final class SvgRenderer implements RendererInterface
 
         $lines = $options->resolveTextLines($symbol);
 
+        $hexagonal = $symbol->getModuleShape() === ModuleShape::Hexagon;
+
         $canvasWidth = $layout->totalWidth * $mod;
         // Text sits outside the quiet zone rather than inside it: drawing it
         // into the symbol's own box would either overlap the quiet zone or fall
@@ -57,7 +59,14 @@ final class SvgRenderer implements RendererInterface
         // digits therefore go above the whole symbol, not into the gap over its
         // shorter bars — see Ean\Composite.
         $aboveRows = \count($lines['above']) * self::TEXT_ROWS;
-        $canvasHeight = ($layout->totalHeight + $aboveRows + (\count($lines['below']) * self::TEXT_ROWS)) * $mod;
+        // A hexagonal lattice is shorter than its row count suggests, because
+        // the rows interlock: 33 rows of MaxiCode are under 29 modules tall.
+        $symbolHeight = $hexagonal
+            ? $layout->quietZone->top + HexagonLattice::height($layout->height) + $layout->quietZone->bottom
+            : (float) $layout->totalHeight;
+        $canvasHeight = (int) ceil(
+            ($symbolHeight + $aboveRows + (\count($lines['below']) * self::TEXT_ROWS)) * $mod
+        );
 
         $svg = sprintf(
             '<?xml version="1.0" encoding="UTF-8"?>' . "\n"
@@ -77,7 +86,9 @@ final class SvgRenderer implements RendererInterface
             $background
         );
 
-        $svg .= $this->modules($symbol, $layout, $options, $aboveRows);
+        $svg .= $hexagonal
+            ? $this->hexagons($symbol, $layout, $options, $aboveRows)
+            : $this->modules($symbol, $layout, $options, $aboveRows);
 
         $foreground = $this->escapeColor($options->getEffectiveForegroundColor());
 
@@ -87,7 +98,7 @@ final class SvgRenderer implements RendererInterface
             $svg .= $this->line($line, $layout, $baseline, $mod, $foreground);
         }
 
-        $baseline = $aboveRows + $layout->totalHeight;
+        $baseline = $aboveRows + (int) ceil($symbolHeight);
         foreach ($lines['below'] as $line) {
             $baseline += self::TEXT_ROWS;
             $svg .= $this->line($line, $layout, $baseline, $mod, $foreground);
@@ -117,6 +128,69 @@ final class SvgRenderer implements RendererInterface
         }
 
         return $svg;
+    }
+
+    /**
+     * A hexagonal lattice: one hexagon per dark module, plus the bullseye.
+     *
+     * Every hexagon is the same shape, so the path is built once as a relative
+     * outline and repeated after a move — which is what keeps a symbol with
+     * eight hundred modules to a single path element.
+     *
+     * The bullseye is drawn whatever the module style says, because it is not
+     * styling: it is the finder, and a MaxiCode symbol without it is not a
+     * MaxiCode symbol. It is stroked rather than filled so that the light gaps
+     * between the rings are the background showing through.
+     */
+    private function hexagons(Symbol $symbol, Layout $layout, SvgOptions $options, int $topOffset): string
+    {
+        $mod = $options->moduleSize;
+        $color = $this->escapeColor($options->getEffectiveForegroundColor());
+        $invert = $options->invert;
+
+        $outline = '';
+        foreach (HexagonLattice::corners(0.0, 0.0) as $index => [$x, $y]) {
+            $outline .= ($index === 0 ? 'm' : 'l') . $this->number($x * $mod) . ' ' . $this->number($y * $mod);
+        }
+
+        $path = '';
+        foreach ($symbol->rows() as $row => $modules) {
+            for ($column = 0, $columns = \strlen($modules); $column < $columns; $column++) {
+                if (($modules[$column] === '1') === $invert) {
+                    continue;
+                }
+
+                $x = HexagonLattice::centreX($layout, $row, $column) * $mod;
+                $y = (HexagonLattice::centreY($layout, $row) + $topOffset) * $mod;
+                $path .= 'M' . $this->number($x) . ' ' . $this->number($y) . $outline . 'z';
+            }
+        }
+
+        $svg = $path === '' ? '' : '  <path fill="' . $color . '" d="' . $path . '"/>' . "\n";
+
+        $centre = HexagonLattice::bullseye($symbol, $layout);
+        if ($centre === null) {
+            return $svg;
+        }
+
+        foreach (HexagonLattice::RING_RADII as $radius) {
+            $svg .= sprintf(
+                '  <circle cx="%s" cy="%s" r="%s" fill="none" stroke="%s" stroke-width="%s"/>' . "\n",
+                $this->number($centre[0] * $mod),
+                $this->number(($centre[1] + $topOffset) * $mod),
+                $this->number($radius * $mod),
+                $color,
+                $this->number(HexagonLattice::RING_STROKE * $mod),
+            );
+        }
+
+        return $svg;
+    }
+
+    /** A coordinate with no more precision than a renderer can use. */
+    private function number(float $value): string
+    {
+        return rtrim(rtrim(sprintf('%.2F', $value), '0'), '.');
     }
 
     /**
