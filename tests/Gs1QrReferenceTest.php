@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP\Tests;
 
+use CrazyGoat\ScanMePHP\Defaults;
 use CrazyGoat\ScanMePHP\Encoder;
 use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
 use CrazyGoat\ScanMePHP\Generator\Gs1\ElementString;
+use CrazyGoat\ScanMePHP\Generator\Qr\QrOptions;
+use CrazyGoat\ScanMePHP\Symbology;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -18,6 +21,10 @@ use PHPUnit\Framework\TestCase;
  * encoders legitimately disagree. Held fixed, the comparison still covers the
  * version, the FNC1 indicator, the codewords, the error correction, the
  * interleaving and the placement. Gs1QrTest declares that boundary.
+ *
+ * Holding it fixed is done with the same QrOptions a caller has, which is what
+ * makes reproducing another system's symbols an ordinary thing to ask for
+ * rather than something only this test can reach.
  */
 final class Gs1QrReferenceTest extends TestCase
 {
@@ -65,10 +72,14 @@ final class Gs1QrReferenceTest extends TestCase
             'The two encoders disagree about the smallest symbol that fits'
         );
 
-        $matrix = $encoder->encodeGs1AtMask($payload, $level, $version, $mask);
+        // Through the public API rather than the encoder, now that the mask is
+        // an option: what the fixture pins is then the symbol a caller gets.
+        $symbol = Defaults::registry()
+            ->getGenerator(Symbology::Gs1Qr->value)
+            ->generate($elements, new QrOptions($level, version: $version, mask: $mask));
 
-        $this->assertSame($size, $matrix->getSize());
-        $this->assertSame($expected, $matrix->toModuleString());
+        $this->assertSame($size, $symbol->getWidth());
+        $this->assertSame($expected, $symbol->toModuleString());
     }
 
     /**

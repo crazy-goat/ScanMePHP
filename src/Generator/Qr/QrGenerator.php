@@ -86,28 +86,46 @@ final class QrGenerator implements GeneratorInterface
     /**
      * The fastest backend that can satisfy this particular request.
      *
-     * Normally that is simply the fastest available one. A pinned version
-     * narrows the field: the C++ core cannot be told which version to use, and
-     * the bitset encoder can only be pinned up to version 27, so those
-     * requests drop to a pure-PHP backend rather than silently ignoring the
-     * version the caller asked for.
+     * Normally that is simply the fastest available one. Pinning narrows the
+     * field, and the two things a caller can pin narrow it differently: the
+     * C++ core can be told neither a version nor a mask, the bitset encoder
+     * can be told a version up to 27 but not a mask, and only the portable
+     * encoder takes both. So a pinned request drops to whichever backend can
+     * honour it rather than silently ignoring what the caller asked for.
      */
     private function resolveBackend(?GeneratorOptionsInterface $options): BackendInterface
     {
         $version = $options instanceof QrOptions ? $options->version : null;
-        if ($version === null) {
+        $mask = $options instanceof QrOptions ? $options->mask : null;
+
+        if ($version === null && $mask === null) {
             return $this->selector->require($this->getCapabilities()->title);
         }
 
         $backend = $this->selector->bestMatching(
             static fn (BackendInterface $candidate): bool => $candidate instanceof QrBackendInterface
-                && $candidate->supportsForcedVersion()
-                && $candidate->getMaxForcedVersion() >= $version
+                && ($version === null || ($candidate->supportsForcedVersion()
+                    && $candidate->getMaxForcedVersion() >= $version))
+                && ($mask === null || $candidate->supportsForcedMask())
         );
 
         return $backend ?? throw NoBackendAvailableException::forSymbology(
-            sprintf('%s pinned to version %d', $this->getCapabilities()->title, $version),
+            $this->describePinned($version, $mask),
             $this->selector->names()
         );
+    }
+
+    private function describePinned(?int $version, ?int $mask): string
+    {
+        $pinned = [];
+        if ($version !== null) {
+            $pinned[] = sprintf('version %d', $version);
+        }
+
+        if ($mask !== null) {
+            $pinned[] = sprintf('mask %d', $mask);
+        }
+
+        return sprintf('%s pinned to %s', $this->getCapabilities()->title, implode(' and ', $pinned));
     }
 }

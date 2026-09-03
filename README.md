@@ -347,12 +347,36 @@ use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
 $scanme->render('(01)09501101020917(10)LOT0001', 'gs1-qr', 'svg', new QrOptions(ErrorCorrectionLevel::High));
 ```
 
-It takes the same `QrOptions` as plain QR, and has one limit plain QR does not:
+It takes the same `QrOptions` as plain QR — including the mask below — and has
+one limit plain QR does not:
 only the pure-PHP backend. The C++ core reached through the extension and
 through FFI exposes `encode(data, len, ecl)` and has nowhere to put the
 indicator, and native acceleration is deliberately not growing new symbologies.
 A GS1 QR therefore encodes in PHP even where the extension is loaded, which
 costs microseconds on a symbol a scanner reads once.
+
+`QrOptions` also carries the **mask pattern**, and it is worth saying why that
+is an option rather than an implementation detail. A QR symbol is masked with
+one of eight patterns to break up runs of same-coloured modules, and ISO/IEC
+18004 says to score all eight and take the lowest. In practice the scoring
+rules — chiefly rule 3, the 1:1:3:1:1 pattern — are read differently and ties
+are ordinary, so conforming encoders routinely pick different masks for the
+same data. Over sixty random byte payloads, zxing-cpp and Nayuki's qrcodegen
+produced the same modules eight times. All eight maskings carry identical data
+and every one of them scans.
+
+So which one to use is a preference, and the caller gets it:
+
+```php
+$scanme->render('https://example.com', 'qrcode', 'svg', new QrOptions(mask: 3));
+```
+
+Leave it alone unless you are reproducing another system's symbols byte for
+byte or pinning output for a golden-file test. Pinning it narrows the backend
+the same way pinning a version does — the C++ core takes only
+`encode(data, len, ecl)` and the bitset encoder scores its masks inside an
+inlined hot path, so the request drops to the portable encoder, and a registry
+without one reports the pin by name rather than ignoring it.
 
 None of the three GS1 generators is reachable by accident. Code 128, Data Matrix
 and QR will all happily encode `(01)09501101020917` as literal parentheses —
