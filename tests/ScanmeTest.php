@@ -15,6 +15,8 @@ use CrazyGoat\ScanMePHP\Generator\Qr\QrOptions;
 use CrazyGoat\ScanMePHP\ModuleShape;
 use CrazyGoat\ScanMePHP\ModuleStyle;
 use CrazyGoat\ScanMePHP\QuietZone;
+use CrazyGoat\ScanMePHP\Region;
+use CrazyGoat\ScanMePHP\RegionRole;
 use CrazyGoat\ScanMePHP\Renderer\Options\AsciiOptions;
 use CrazyGoat\ScanMePHP\Renderer\Options\HtmlOptions;
 use CrazyGoat\ScanMePHP\Renderer\Options\PngOptions;
@@ -343,6 +345,74 @@ class ScanmeTest extends TestCase
         $this->expectException(IncompatibleRendererException::class);
         $this->expectExceptionMessage('cannot draw hexagon modules');
         $this->scanme->render('HELLO', Symbology::MaxiCode, Format::AsciiBlocks);
+    }
+
+    /**
+     * The other half of the negotiation, and the one that is not about shape.
+     *
+     * A finder region used to be a hint — QR reports its corner patterns so a
+     * renderer can round them, and ignoring that draws the same scannable
+     * symbol. MaxiCode's bullseye is not a hint: three concentric rings are not
+     * modules, the grid is blank where the finder goes, and a renderer that
+     * paints only what the grid holds leaves a hole in the middle.
+     *
+     * The symbol here is deliberately square-moduled, so the refusal is proved
+     * to come from the region rather than from the hexagons it happens to
+     * accompany in the only symbology that has both.
+     */
+    public function testAFinderTheGridDoesNotHoldIsRefusedOnItsOwn(): void
+    {
+        $square = new Symbol(
+            width: 4,
+            height: 4,
+            modules: '1010010110100101',
+            dimension: Dimension::Matrix,
+            quietZone: QuietZone::uniform(1),
+            finderRegions: [new Region(1, 1, 2, 2, RegionRole::RendererDrawn)],
+        );
+
+        foreach ($this->scanme->getRegistry()->renderers() as $renderer) {
+            $capabilities = $renderer->getCapabilities();
+            $this->assertSame(
+                \in_array($renderer->getFormat(), ['svg', 'png'], true),
+                $capabilities->supportsRegions($square->getFinderRegions()),
+                $renderer->getFormat()
+            );
+            // The module shape is square, so nothing else can be the reason.
+            $this->assertTrue($capabilities->supportsShape(ModuleShape::Square));
+        }
+
+        $this->scanme->renderSymbol($square, Format::Svg);
+
+        $this->expectException(IncompatibleRendererException::class);
+        $this->expectExceptionMessage('has to be drawn by the renderer');
+        $this->scanme->renderSymbol($square, Format::HtmlDiv);
+    }
+
+    /**
+     * Everything except MaxiCode reports regions that are only a hint, and a
+     * renderer that ignores them is still correct. If a symbology ever changes
+     * its mind about that, it has to say so in the role.
+     */
+    public function testEveryOtherSymbologysFinderRegionsAreOnlyAHint(): void
+    {
+        $checked = 0;
+
+        foreach (['qrcode', 'aztec', 'data-matrix', 'pdf417', 'code128'] as $symbology) {
+            $regions = $this->scanme->generate('HELLO', $symbology)->getFinderRegions();
+
+            foreach ($regions as $region) {
+                $this->assertSame(RegionRole::InGrid, $region->role, $symbology);
+                $checked++;
+            }
+        }
+
+        $this->assertGreaterThan(0, $checked, 'at least QR reports three of them');
+        $this->assertTrue(
+            $this->scanme->getRegistry()->getRenderer(Format::AsciiBlocks)
+                ->getCapabilities()->supportsRegions($regions),
+            'a hint is drawable by every renderer, including the ones that ignore it'
+        );
     }
 
     public function testLinearBarHeightIsScaledNotFlattened(): void

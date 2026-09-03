@@ -50,6 +50,7 @@ final class PngRenderer implements RendererInterface
             color: false,
             nonUniformRows: true,
             positionedText: true,
+            drawnRegions: true,
             textCharacters: implode('', BitmapFont::characters()),
             optionsClass: PngOptions::class,
         );
