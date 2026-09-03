@@ -19,6 +19,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
 use CrazyGoat\ScanMePHP\Generator\Aztec\AztecOptions;
 use CrazyGoat\ScanMePHP\Generator\DataMatrix\DataMatrixOptions;
+use CrazyGoat\ScanMePHP\Generator\Pdf417\Pdf417Options;
 use CrazyGoat\ScanMePHP\Generator\Qr\QrOptions;
 use CrazyGoat\ScanMePHP\ModuleStyle;
 use CrazyGoat\ScanMePHP\Renderer\Options\AsciiOptions;
@@ -83,6 +84,35 @@ foreach ([5, 40, 80] as $percent) {
 // count: four layers is a compact 27-module symbol and a full 31-module one.
 $pinnedAztec = $scanme->generate('BOARDING-4471', 'aztec', new AztecOptions(size: 31));
 printf("aztec pinned to 31:  %d x %d modules\n\n", $pinnedAztec->getWidth(), $pinnedAztec->getHeight());
+
+// PDF417 does have nine real levels, and unlike the two above it also lets the
+// caller choose the symbol's shape — because the shape is not implied by the
+// data. The same payload fits in any grid with enough cells, so the columns are
+// a request and the rows follow from them.
+foreach ([1, 3, 6] as $columns) {
+    $symbol = $scanme->generate('SHIP TO: 123 Main St.', 'pdf417', new Pdf417Options(columns: $columns));
+    printf(
+        "pdf417 in %2d columns:  %d x %d modules, %d rows, %d pad codewords\n",
+        $columns,
+        $symbol->getWidth(),
+        $symbol->getModuleHeight(),
+        $symbol->getMetadata()['rows'],
+        $symbol->getMetadata()['padCodewords']
+    );
+}
+
+// Every level doubles the previous one's check codewords, so the cost shows up
+// as rows. Level 8 spends 512 codewords on recovery and does not fit in a
+// symbol narrower than six columns at all.
+foreach ([0, 4, 8] as $level) {
+    $symbol = $scanme->generate(
+        'SHIP TO: 123 Main St.',
+        'pdf417',
+        new Pdf417Options(errorCorrectionLevel: $level, columns: 6)
+    );
+    printf("pdf417 at level %d:  %d rows\n", $level, $symbol->getMetadata()['rows']);
+}
+echo "\n";
 
 echo "=== Render options change only the picture ===\n\n";
 
