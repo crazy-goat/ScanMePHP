@@ -261,6 +261,7 @@ $scanme->render('1234567890123', 'itf14', 'svg');
 $scanme->render('01234567890128', 'databar-omni', 'svg');
 $scanme->render('01234567890128', 'databar-limited', 'svg');
 $scanme->render('(01)09501101020917(10)LOT0001', 'databar-expanded', 'svg');
+$scanme->render('(01)09501101020917(10)LOT0001', 'databar-expanded-stacked', 'svg');
 $scanme->render('52', 'ean2', 'svg');
 $scanme->render('51299', 'ean5', 'svg');
 ```
@@ -703,6 +704,42 @@ finder is chosen by the symbol's length rather than by the checksum, so that a
 scanner reading one pair knows which pair it read; and the checksum weights are
 powers of three modulo 211 taken in an order that is a different scramble for
 every length.
+
+#### DataBar Expanded Stacked
+
+At twenty-two characters an Expanded symbol is 543 modules wide. A shelf-edge
+label is not. `databar-expanded-stacked` is the same data folded into rows.
+
+```php
+use CrazyGoat\ScanMePHP\Generator\DataBarExpandedStacked\DataBarExpandedStackedOptions;
+
+$scanme->render('(01)09501101020917(10)LOT0001', 'databar-expanded-stacked', 'svg');
+$scanme->render(
+    '(01)09501101020917(10)LOT0001',
+    'databar-expanded-stacked',
+    'svg',
+    new DataBarExpandedStackedOptions(columns: 4),
+);
+```
+
+`columns` is the width in symbol character *pairs* and defaults to 2, which is
+what GS1 gives for the shelf-edge symbol. It has to be an even number from 2 to
+10, and that restriction is ours rather than the standard's: two pairs per row
+is what the reference encoder draws and what our fixture checks module for
+module, four to ten read back through an independent decoder, and an odd number
+of pairs does not — under any of the twelve layouts we could construct for it.
+Rather than emit a symbol nothing has read, those widths are refused.
+
+The payload is identical to `databar-expanded` and reads back the same. What
+differs is the shape and, occasionally, one character: a row may not be left
+holding a single character, so some payloads take one more character of padding
+here than they would in a line — which also moves the checksum, since it is
+computed over the count.
+
+Between two rows sit three module rows of separator, and a `Symbol` says so:
+its row heights alternate 34, 1, 1, 1, 34 rather than being one number, so a
+renderer scales the bars and the separators differently without having to know
+what a DataBar is.
 
 Like Data Matrix, Aztec is pure PHP only. The C++ core and the extension exist
 because QR is what gets generated in bulk, and native acceleration is
