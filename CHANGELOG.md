@@ -231,6 +231,45 @@ number is worse than a compile error.
   encode through the general AI 01 method instead — a correct symbol saying the
   same element strings, one or two characters wider than the narrowest a
   standard-complete encoder draws. Pure PHP.
+- **GS1 DataBar Expanded Stacked** (`databar-expanded-stacked`, aliases
+  `gs1-databar-expanded-stacked`, `rss-expanded-stacked`, `rss-exp-stack`): the
+  same element strings folded into rows, for labels with height rather than
+  width. One option, `columns`, the width in symbol character pairs.
+
+  The encodation is the linear one plus a single rule that reaches everywhere:
+  a row may not be left holding one character, so some payloads take an extra
+  character of padding — which moves the character count, the variable length
+  bits and therefore the checksum, and so has to be decided before the bit
+  stream is written rather than while folding.
+
+  Three things about the layout were measured against an oracle because each
+  draws a plausible symbol when guessed wrongly. Rows are cut at character
+  boundaries and not at pair boundaries, so a row can end on a finder pattern
+  with no character after it. Every second row is drawn mirrored, right to left,
+  so a scanner sweeping back across the label reads the rows in order. And a row
+  of exactly two characters is the exception that is drawn forwards anyway, one
+  module to the right — a three-character row in the same position is mirrored
+  like any other, which is what says the exception belongs to the
+  two-character row and not to the last row.
+
+  The separator between two rows is three module rows: the complement of the row
+  above, an alternating line, and the complement of the row below. Inside a
+  finder pattern's columns the complement would print the finder again upside
+  down, so there it alternates instead — carrying a running state in from the
+  module before the finder, which is why two finders in one row can come out in
+  opposite phases.
+
+  The row heights are what makes this a stacked symbol rather than a taller
+  bitmap: a `Symbol` reports 34, 1, 1, 1, 34 rather than one number, and the
+  renderers already scale per row.
+
+  `columns` takes an even number of character pairs from 2 to 10. The
+  restriction is ours, not the standard's, and it is what we can stand behind:
+  two pairs per row is what the reference encoder draws and what the fixture
+  checks module for module, four to ten read back through an independent
+  decoder, and an odd number of pairs does not — under any of the twelve layouts
+  we could construct for it. Rather than emit a symbol nothing has read, those
+  widths are refused. Pure PHP.
 - **Hexagonal modules in the SVG and PNG renderers**, and the first time the
   shape negotiation that has been in `RendererCapabilities` all along actually
   declines something. MaxiCode's rows interlock — a row sits 0.866 of a module
