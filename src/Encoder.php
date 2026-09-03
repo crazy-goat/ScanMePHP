@@ -90,8 +90,6 @@ class Encoder implements EncoderInterface
             throw InvalidDataException::emptyData();
         }
 
-        $mode = Mode::Byte;
-
         // Determine version
         $version = $this->determineVersion($data, $errorCorrectionLevel, $requestedVersion);
 
@@ -102,29 +100,57 @@ class Encoder implements EncoderInterface
             return $this->fastEncoder->encodeVersion($data, $errorCorrectionLevel, $version);
         }
 
-        // Encode data
-        $encodedData = $this->dataEncoder->encode($data, $mode, $version);
-
-        // Calculate total capacity
-        $totalCapacity = $this->getTotalDataCodewords($version, $errorCorrectionLevel);
-
-        // Add terminator and padding
-        $encodedData = $this->dataEncoder->addTerminatorAndPadding($encodedData, $totalCapacity);
-
-        // Generate ECC per block and interleave all codewords
-        $allCodewords = $this->reedSolomon->encodeWithInterleaving(
-            $encodedData,
-            $version,
-            $errorCorrectionLevel->value
-        );
-
-        $matrix = $this->matrixBuilder->buildUnmasked($version, $allCodewords, []);
+        $matrix = $this->buildUnmasked($data, $errorCorrectionLevel, $version);
 
         $maskPattern = $this->maskSelector->selectBestMask($matrix, $errorCorrectionLevel);
 
         $this->matrixBuilder->applyMaskAndFormatInfo($matrix, $errorCorrectionLevel, $maskPattern);
 
         return $matrix;
+    }
+
+    /**
+     * The same symbol at a mask of the caller's choosing.
+     *
+     * Which of the eight masks to use is a preference rather than a
+     * requirement — see encodeGs1AtMask() for the measurements — so it is
+     * something a caller is entitled to pin, and QrOptions exposes it.
+     *
+     * The version is taken as given rather than worked out here, because a
+     * caller pinning the mask is already past the point of letting the encoder
+     * decide; QrGenerator resolves it and passes both.
+     */
+    public function encodeAtMask(
+        string $data,
+        ErrorCorrectionLevel $errorCorrectionLevel,
+        int $version,
+        int $maskPattern
+    ): Matrix {
+        if ($data === '') {
+            throw InvalidDataException::emptyData();
+        }
+
+        $matrix = $this->buildUnmasked($data, $errorCorrectionLevel, $version);
+        $this->matrixBuilder->applyMaskAndFormatInfo($matrix, $errorCorrectionLevel, $maskPattern);
+
+        return $matrix;
+    }
+
+    private function buildUnmasked(
+        string $data,
+        ErrorCorrectionLevel $errorCorrectionLevel,
+        int $version
+    ): Matrix {
+        $encodedData = $this->dataEncoder->addTerminatorAndPadding(
+            $this->dataEncoder->encode($data, Mode::Byte, $version),
+            $this->getTotalDataCodewords($version, $errorCorrectionLevel)
+        );
+
+        return $this->matrixBuilder->buildUnmasked(
+            $version,
+            $this->reedSolomon->encodeWithInterleaving($encodedData, $version, $errorCorrectionLevel->value),
+            []
+        );
     }
 
     /**

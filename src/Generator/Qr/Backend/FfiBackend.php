@@ -53,6 +53,11 @@ final class FfiBackend implements QrBackendInterface
         return 0;
     }
 
+    public function supportsForcedMask(): bool
+    {
+        return false;
+    }
+
     public function encode(string $data, ?GeneratorOptionsInterface $options = null): Symbol
     {
         if (!$this->isAvailable()) {
