@@ -36,7 +36,9 @@ final class Encoder
      *
      * ASCII GS is what a scanner transmits for an FNC1 that separates GS1
      * element strings, so the payload handed here is byte for byte what comes
-     * back out of a reader. It is also outside the printable range Code 128
+     * back out of a reader — the same byte Gs1\ElementString::SEPARATOR
+     * produces, spelled again here because this is Code 128's input convention
+     * rather than a GS1 rule. It is outside the printable range Code 128
      * accepts as data, so it cannot collide with anything a caller meant
      * literally.
      */

@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP\Generator\Gs1;
 
-use CrazyGoat\ScanMePHP\Generator\Code128\Encoder;
-
 /**
  * A GS1 payload: application identifiers paired with their data.
  *
@@ -28,6 +26,16 @@ use CrazyGoat\ScanMePHP\Generator\Code128\Encoder;
  */
 final class ElementString
 {
+    /**
+     * The byte that separates two element strings.
+     *
+     * ASCII GS is what a scanner transmits for an FNC1 that ended an element
+     * string of variable length, so a payload built here is byte for byte what
+     * a reader hands back. Each symbology turns it into its own FNC1 on the
+     * way in: a symbol character in Code 128, a codeword in Data Matrix.
+     */
+    public const SEPARATOR = "\x1d";
+
     /** @param non-empty-list<array{string, string}> $elements Identifier and its data */
     private function __construct(public readonly array $elements)
     {
@@ -127,7 +135,7 @@ final class ElementString
             // Nothing follows the final element, so nothing has to be
             // separated from it; a trailing FNC1 would be a wasted character.
             if ($index !== $last && ApplicationIdentifier::needsSeparator($ai)) {
-                $payload .= Encoder::FNC1;
+                $payload .= self::SEPARATOR;
             }
         }
 

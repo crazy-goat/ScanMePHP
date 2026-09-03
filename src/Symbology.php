@@ -35,6 +35,7 @@ enum Symbology: string
     case Itf = 'itf';
     case Itf14 = 'itf14';
     case DataMatrix = 'data-matrix';
+    case Gs1DataMatrix = 'gs1-data-matrix';
 
     /** The name the registry resolves, for either accepted form. */
     public static function nameOf(string|self $symbology): string

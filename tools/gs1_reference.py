@@ -5,7 +5,8 @@ Writes two files, because GS1-128 is two things stacked and each can be wrong
 without the other noticing:
 
   tests/fixtures/gs1_ai_reference.csv    the application identifier table
-  tests/fixtures/gs1_128_reference.csv   element strings, module for module
+  tests/fixtures/gs1_128_reference.csv   GS1-128, module for module
+  tests/fixtures/gs1_dm_reference.csv    GS1 Data Matrix, module for module
 
 The table is the part worth deriving rather than transcribing. It says which
 four-digit-or-shorter strings are application identifiers at all, how long each
@@ -45,6 +46,7 @@ except ImportError:  # pragma: no cover - developer tooling
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 AI_OUT = ROOT / "tests/fixtures/gs1_ai_reference.csv"
 SYMBOL_OUT = ROOT / "tests/fixtures/gs1_128_reference.csv"
+DM_OUT = ROOT / "tests/fixtures/gs1_dm_reference.csv"
 
 # Longer than any AI accepts, so the encoder must reject on length and name the
 # AI it resolved while doing so. That name is the only way to tell a real AI
@@ -54,8 +56,8 @@ TOO_LONG = "1" * 200
 FNC1 = "\x1d"
 
 
-def create(text: str):
-    return zxingcpp.create_barcode(text, zxingcpp.BarcodeFormat.Code128, gs1=True)
+def create(text: str, fmt=zxingcpp.BarcodeFormat.Code128):
+    return zxingcpp.create_barcode(text, fmt, gs1=True)
 
 
 def resolved(ai: str) -> str | None:
@@ -142,6 +144,46 @@ SYMBOLS = [
 ]
 
 
+DM_SYMBOLS = [
+    # All-digit element strings, where the FNC1 codeword lands between digit
+    # pairs and a pairing mistake shifts every codeword after it.
+    "(01)09501101020917",
+    "(01)09501101020917(3103)000189",
+    "(00)123456789012345678",
+    "(11)991231(17)261231",
+    "(21)123456(11)991231",
+    "(10)1234567(11)991231",
+    "(01)09501101020917(17)261231(10)123456",
+    "(90)1(91)2",
+    # And some with letters, which stay in ASCII encodation at these lengths.
+    "(10)A",
+    "(10)LOT0001",
+    "(01)09501101020917(10)LOT0001",
+]
+
+# Deliberately absent: anything with a letter run long enough to pay for a C40
+# latch, such as "(01)09501101020917(21)ABCDEFGHIJ(10)LOT0001". This writer
+# switches encodation there and we do not implement C40, so the symbols stop
+# being comparable. Gs1Test names that boundary and the decoder round trip
+# carries those payloads instead.
+
+
+def dm_modules(barcode) -> tuple[str, str]:
+    """The symbol size and its modules, read row by row."""
+    image = zxingcpp.write_barcode_to_image(barcode, scale=1, add_hrt=False, add_quiet_zones=False)
+    view = memoryview(image)
+    height, width = view.shape[0], view.shape[1]
+    raw = bytearray(view)
+
+    modules = "".join(
+        "1" if raw[row * width + col] < 128 else "0"
+        for row in range(height)
+        for col in range(width)
+    )
+
+    return f"{height}x{width}", modules
+
+
 def modules(barcode) -> str:
     image = zxingcpp.write_barcode_to_image(barcode, scale=1, add_hrt=False, add_quiet_zones=False)
     view = memoryview(image)
@@ -178,6 +220,31 @@ def main() -> int:
         writer.writerow(["elements", "payload_hex", "modules"])
         writer.writerows(symbols)
     print(f"{len(symbols)} reference symbols -> {SYMBOL_OUT}")
+
+    assert len(DM_SYMBOLS) == len(set(DM_SYMBOLS)), "duplicate case: the fixture keys on the element string"
+
+    # The size is recorded and the test forces it, because the two encoders
+    # disagree about which symbol to reach for — this writer takes the smallest
+    # by area and will pick a rectangle, ours prefers a square unless asked.
+    # That is a choice rather than a fact about the encoding, and pinning it
+    # would test the preference instead of the codewords. What the comparison
+    # is for is everything downstream of the size: the FNC1 codewords, digit
+    # pairing around them, Reed-Solomon, placement and the finder frame.
+    #
+    # These payloads all stay in ASCII encodation on both sides. Longer
+    # letter runs would not: this writer switches to C40, which we do not
+    # implement, and the symbols stop being comparable. See AsciiEncodation.
+    matrices = []
+    for elements in DM_SYMBOLS:
+        barcode = create(elements, zxingcpp.BarcodeFormat.DataMatrix)
+        size, bits = dm_modules(barcode)
+        matrices.append((elements, size, barcode.bytes.hex(), bits))
+
+    with DM_OUT.open("w", newline="") as handle:
+        writer = csv.writer(handle, lineterminator="\n")
+        writer.writerow(["elements", "size", "payload_hex", "modules"])
+        writer.writerows(matrices)
+    print(f"{len(matrices)} reference matrices -> {DM_OUT}")
 
     return 0
 
