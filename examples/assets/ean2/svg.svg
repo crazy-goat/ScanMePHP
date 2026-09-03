@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 330 660" width="330" height="660">
+  <rect width="330" height="660" fill="#FFFFFF"/>
+  <path fill="#000000" d="M80 0h10v640h-10zM100 0h20v640h-20zM130 0h20v640h-20zM180 0h10v640h-10zM200 0h10v640h-10zM230 0h10v640h-10zM260 0h20v640h-20z"/>
+  <text x="170" y="655" text-anchor="middle" font-family="Arial, sans-serif" font-size="15.0" fill="#000000">52</text>
+</svg>
