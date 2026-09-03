@@ -16,11 +16,9 @@ use PHPUnit\Framework\TestCase;
  * about the library rather than a fact about it, and the first person to find
  * out is someone evaluating the package.
  *
- * This test is deliberately shallow — it checks the exit status and that
- * something was printed, not the output itself. Pinning the output would make
- * every cosmetic edit a test failure and teach maintainers to update the
- * expectation without reading it. The examples' job is to run against the real
- * API; the suites that check what the API produces are elsewhere.
+ * The examples are now one generator — gallery.php — which the test below runs
+ * and then verifies against the registry it claims to describe, so the count
+ * and the coverage of the gallery are facts, not promises.
  */
 final class ExamplesTest extends TestCase
 {
@@ -43,10 +41,10 @@ final class ExamplesTest extends TestCase
         // A glob that silently matches nothing would make every assertion
         // below vacuous, and this suite would report green on an empty
         // directory.
-        self::assertGreaterThanOrEqual(
-            5,
-            iterator_count(self::exampleProvider()),
-            'examples/ has lost its contents'
+        self::assertNotSame(
+            [],
+            iterator_to_array(self::exampleProvider(), false),
+            'examples/ has lost its contents',
         );
     }
 
@@ -63,7 +61,7 @@ final class ExamplesTest extends TestCase
         self::assertStringContainsString(
             'Done.',
             $output,
-            sprintf("%s did not reach the end:\n%s", basename($file), $output)
+            sprintf("%s did not reach the end:\n%s", basename($file), $output),
         );
     }
 
@@ -80,6 +78,50 @@ final class ExamplesTest extends TestCase
 
         foreach (self::exampleProvider() as $name => $_) {
             self::assertStringContainsString($name, $readme, "examples/README.md does not mention {$name}");
+        }
+    }
+
+    /**
+     * The gallery claims to show every symbology through every renderer.
+     *
+     * A gallery that quietly lost a symbology — a payload map that was not
+     * extended, a page nobody regenerated — would go on looking current.
+     * So this test runs the generator itself and checks the pages it wrote
+     * against the registry, which is the only authority on what "every" means.
+     */
+    public function testTheGalleryCoversTheWholeRegistry(): void
+    {
+        $command = sprintf(
+            '%s %s 2>&1',
+            escapeshellarg(PHP_BINARY),
+            escapeshellarg(self::DIRECTORY . '/gallery.php'),
+        );
+
+        exec($command, $lines, $status);
+        self::assertSame(0, $status, "gallery.php failed:\n" . implode("\n", $lines));
+
+        $index = file_get_contents(self::DIRECTORY . '/index.md');
+        self::assertIsString($index, 'gallery.php wrote no index.md');
+
+        $registry = \CrazyGoat\ScanMePHP\Scanme::create()->getRegistry();
+
+        foreach ($registry->describeGenerators() as $name => $_) {
+            self::assertStringContainsString(
+                '(codes/' . $name . '.md)',
+                $index,
+                "index.md does not link to the {$name} page",
+            );
+
+            $page = file_get_contents(sprintf('%s/codes/%s.md', self::DIRECTORY, $name));
+            self::assertIsString($page, "gallery.php wrote no page for {$name}");
+
+            foreach ($registry->rendererFormats() as $format) {
+                self::assertStringContainsString(
+                    $format,
+                    $page,
+                    "the {$name} page does not mention the {$format} renderer",
+                );
+            }
         }
     }
 }

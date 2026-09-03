@@ -1,0 +1,247 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Builds the symbology gallery: one page per symbology, every renderer on it.
+ *
+ *     php examples/gallery.php
+ *
+ * Writes three things under examples/, none of them committed — a gallery is
+ * a claim about what the library draws right now, so it is regenerated the
+ * same way the tests are run:
+ *
+ *     examples/index.md          the list, one row per symbology
+ *     examples/codes/<name>.md   one page: payload, capabilities, each render
+ *     examples/assets/<name>/    the image files those pages point at
+ *
+ * The list of symbologies and renderers is not hardcoded — it comes from the
+ * registry — so a symbology added to Defaults shows up here without this file
+ * changing. A renderer that cannot draw a symbol faithfully is not skipped
+ * silently: the page says so, in the words Compatibility reported.
+ */
+
+require_once __DIR__ . '/../vendor/autoload.php';
+
+use CrazyGoat\ScanMePHP\Exception\IncompatibleRendererException;
+use CrazyGoat\ScanMePHP\Format;
+use CrazyGoat\ScanMePHP\Scanme;
+
+const OUTPUT_DIR = __DIR__;
+const CODES_DIR = OUTPUT_DIR . '/codes';
+const ASSETS_DIR = OUTPUT_DIR . '/assets';
+
+/**
+ * A representative payload per symbology. Retail symbologies are numeric with
+ * a check digit; QR, Code 128 and Data Matrix take text; GS1 symbologies take
+ * element strings. The gallery renders these as-is: check digits a caller
+ * would compute are supplied complete.
+ */
+const PAYLOADS = [
+    'qrcode' => 'https://scanmephp.dev',
+    'micro-qr' => 'LOT4471',
+    'gs1-qr' => '(01)09501101020917(10)LOT0001',
+    'code128' => 'SCANME-2026',
+    'gs1-128' => '(01)09501101020917(10)LOT0001',
+    'code39' => 'PART-4471',
+    'code39ext' => 'Part 4471/a',
+    'code93' => 'Part 4471/a',
+    'codabar' => '4917234',
+    'ean13' => '5901234123457',
+    'ean8' => '96385074',
+    'upc-a' => '036000291452',
+    'upc-e' => '04252614',
+    'ean2' => '52',
+    'ean5' => '51299',
+    'itf' => '1234567890',
+    'itf14' => '1234567890123',
+    'data-matrix' => 'ScanMePHP',
+    'gs1-data-matrix' => '(01)09501101020917(10)LOT0001',
+    'aztec' => 'BOARDING-4471',
+    'pdf417' => 'SHIP TO: 123 Main St.',
+    'maxicode' => 'SHIP TO 123 MAIN ST',
+    'databar-omni' => '01234567890128',
+    'databar-limited' => '01234567890128',
+    'databar-expanded' => '(01)09501101020917(10)LOT0001',
+    'databar-expanded-stacked' => '(01)09501101020917(10)LOT0001',
+    'rm4scc' => 'LE28HS',
+    'kix' => '2500GG30250',
+    'intelligent-mail' => '01234567094987654321-01234',
+    'australia-post' => '96130590AB CD',
+];
+
+/** File extension each renderer's output belongs in. */
+const EXTENSIONS = [
+    Format::Svg->value => 'svg',
+    Format::Png->value => 'png',
+    Format::HtmlDiv->value => 'html',
+    Format::HtmlTable->value => 'html',
+    Format::AsciiBlocks->value => 'txt',
+    Format::AsciiHalfBlocks->value => 'txt',
+    Format::AsciiDots->value => 'txt',
+];
+
+/** How each renderer is titled on a gallery page. */
+const LABELS = [
+    Format::Svg->value => 'SVG',
+    Format::Png->value => 'PNG',
+    Format::HtmlDiv->value => 'HTML — div',
+    Format::HtmlTable->value => 'HTML — table',
+    Format::AsciiBlocks->value => 'ASCII — blocks',
+    Format::AsciiHalfBlocks->value => 'ASCII — half blocks',
+    Format::AsciiDots->value => 'ASCII — dots',
+];
+
+$scanme = Scanme::create();
+$registry = $scanme->getRegistry();
+
+$missingPayload = array_diff(
+    array_keys($registry->describeGenerators()),
+    array_keys(PAYLOADS),
+);
+if ($missingPayload !== []) {
+    fwrite(STDERR, 'No gallery payload for: ' . implode(', ', $missingPayload) . "\n");
+    exit(1);
+}
+
+foreach ([CODES_DIR, ASSETS_DIR] as $dir) {
+    if (is_dir($dir)) {
+        $files = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST,
+        );
+        foreach ($files as $file) {
+            $file->isDir() ? rmdir($file->getPathname()) : unlink($file->getPathname());
+        }
+    } else {
+        mkdir($dir, 0777, true);
+    }
+}
+
+$indexRows = [];
+
+foreach ($registry->describeGenerators() as $name => $capabilities) {
+    $payload = PAYLOADS[$name];
+    printf("%-26s %s\n", $name, $payload);
+
+    $symbol = $scanme->generate($payload, $name);
+    $assetDir = ASSETS_DIR . '/' . $name;
+    mkdir($assetDir, 0777, true);
+
+    $sections = [];
+
+    foreach ($registry->renderers() as $renderer) {
+        $format = $renderer->getFormat();
+        $label = LABELS[$format] ?? $format;
+        $extension = EXTENSIONS[$format] ?? 'txt';
+
+        try {
+            $output = $scanme->renderSymbol($symbol, $format);
+        } catch (IncompatibleRendererException $refused) {
+            $sections[] = sprintf(
+                "## %s\n\n> Not drawn: %s\n",
+                $label,
+                $refused->getMessage(),
+            );
+            printf("  %-20s refused (%s)\n", $format, 'incompatible');
+
+            continue;
+        }
+
+        file_put_contents(sprintf('%s/%s.%s', $assetDir, $format, $extension), $output);
+
+        $sections[] = match (true) {
+            str_starts_with($format, 'ascii') => sprintf(
+                "## %s\n\n```text\n%s\n```\n\nAlso as a file: [`%s.%s`](../assets/%s/%s.%s)\n",
+                $label,
+                rtrim($output),
+                $format,
+                $extension,
+                $name,
+                $format,
+                $extension,
+            ),
+            str_starts_with($format, 'html') => sprintf(
+                "## %s\n\nNot embedded — a markdown page strips the styling an HTML\nsymbol lives on. Open the standalone file:\n[`%s.%s`](../assets/%s/%s.%s)\n",
+                $label,
+                $format,
+                $extension,
+                $name,
+                $format,
+                $extension,
+            ),
+            default => sprintf(
+                "## %s\n\n![%s rendered as %s](../assets/%s/%s.%s)\n",
+                $label,
+                $capabilities->title,
+                $label,
+                $name,
+                $format,
+                $extension,
+            ),
+        };
+
+        printf("  %-20s %d bytes\n", $format, strlen($output));
+    }
+
+    $facts = [
+        'name' => sprintf('`%s`%s', $name, $capabilities->aliases === []
+            ? '' : ' — also `' . implode('`, `', $capabilities->aliases) . '`'),
+        'accepts' => $capabilities->dataDescription,
+        'payload' => sprintf('`%s`', $payload),
+        'modules' => sprintf('%s × %s', $symbol->getWidth(), $symbol->getHeight()),
+    ];
+
+    if ($capabilities->hasErrorCorrection()) {
+        $facts['error correction'] = implode(', ', $capabilities->errorCorrectionLevels);
+    }
+
+    $lines = [
+        sprintf('# %s', $capabilities->title),
+        '',
+        '[Back to the index](../index.md)',
+        '',
+    ];
+    foreach ($facts as $label => $value) {
+        $lines[] = sprintf('- **%s:** %s', ucfirst($label), $value);
+    }
+    $lines[] = '';
+    $lines[] = '## Every renderer';
+    $lines[] = '';
+    $lines[] = implode("\n", $sections);
+
+    file_put_contents(
+        CODES_DIR . '/' . $name . '.md',
+        implode("\n", $lines),
+    );
+
+    $indexRows[] = sprintf(
+        '| [%s](codes/%s.md) | `%s` | `%s` | %s |',
+        $capabilities->title,
+        $name,
+        $name,
+        $payload,
+        $capabilities->dataDescription,
+    );
+}
+
+$index = implode("\n", [
+    '# Supported codes',
+    '',
+    'Every symbology this library ships, each rendered by every renderer.',
+    'The list comes from the registry, so it is whatever this checkout',
+    'supports — regenerate it with `php examples/gallery.php`.',
+    '',
+    '| Code | Name | Payload shown | Accepts |',
+    '| --- | --- | --- | --- |',
+    ...$indexRows,
+    '',
+    'A renderer that cannot draw a symbology faithfully says so on that',
+    "symbology's page rather than producing a symbol that does not scan.",
+    '',
+]);
+
+file_put_contents(OUTPUT_DIR . '/index.md', $index);
+
+echo "\nWrote index.md, " . count($indexRows) . " pages in codes/, assets in assets/.\n";
+echo "Done.\n";
