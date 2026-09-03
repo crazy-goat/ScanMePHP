@@ -45,7 +45,12 @@ number is worse than a compile error.
   The backends that cannot be told a mask are covered by the new
   `QrBackendAgreementTest`, which requires the bitset fast path, the FFI bridge
   and the extension to produce byte-identical modules to the verified encoder —
-  so the oracle reaches the C++ core rather than stopping at pure PHP.
+  so the oracle reaches the C++ core rather than stopping at pure PHP. The C++
+  suite is tested from C++ and cannot call that encoder, so it compares against
+  `tests/fixtures/qr_agreement.csv`, which is the encoder's own output frozen
+  and is deliberately not a reference fixture; `QrAgreementFixtureTest` asserts
+  it still is that output, so it cannot rot into last month's symbols and go on
+  reporting a pass.
 - **The QR mask pattern as an option** — `QrOptions(mask: 0..7)`, null and
   automatic by default, honoured by `qrcode` and `gs1-qr` alike. Which of the
   eight to use is a preference rather than a requirement: all eight carry
