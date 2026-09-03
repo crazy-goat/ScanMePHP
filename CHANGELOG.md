@@ -452,6 +452,57 @@ number is worse than a compile error.
   payloads in nine hundred, all of one shape — the fixture records zint's own
   split, read back out of its modules, and the suite asserts the claim that
   survives: ours is never the longer encoding.
+- **rMQR** (`rmqr`, aliases `rectangular-micro-qr`, `r-mqr`): QR for a space
+  that is long rather than square. A QR symbol is square because it has three
+  finders in three corners, and that shape is wrong for most of the things
+  barcodes go on: the side of a cable, the barrel of a syringe, the edge of a
+  board. rMQR keeps QR's alphabet, its Reed–Solomon and its zigzag and
+  rearranges the geometry into thirty-two rectangles, from 7×43 up to 17×139
+  and up to 361 digits or 150 bytes. Pure PHP; the C++ core and the extension
+  stay QR-only.
+
+  The geometry is the part that is genuinely new. One finder in the top-left
+  corner and a five-module sub-finder in the bottom-right, timing patterns
+  running the whole way along **all four edges** rather than QR's two internal
+  lines, an alignment column every twenty-odd modules of width, and three
+  modules in each of the remaining two corners that the alternating edges would
+  otherwise get wrong — which are the only thing distinguishing the two ends of
+  a seven-module-tall rectangle.
+
+  Two things at the call site. **There are two error correction levels, M and
+  H**, and no others: a symbology meant for awkward surfaces has no use for L,
+  and Q would sit between the two without buying a size, so pinning either is
+  refused at the option bag. **There is no mask option**, because rMQR defines
+  one mask pattern and no way to say which was used — the bits QR spends on a
+  mask number are spent here saying which of the thirty-two shapes the symbol
+  is, in eighteen bits of BCH written twice and masked with *different*
+  constants in the two copies. A pinned shape is kept rather than grown: a
+  caller who names `Version::R7x99` names it because that is the space the
+  label has.
+
+  Half the sixty-four cells **interleave two to six Reed–Solomon blocks**, as
+  QR does and Micro QR never does, and the count is not derivable from the
+  codeword totals — R15x99-H splits forty-eight data codewords into four blocks
+  where R13x139-M splits a hundred and six into three. Interleaving is
+  invisible in a symbol that leaves any block short, so the fixture draws every
+  interleaved cell at its longest payload, which is the only length where every
+  block is full.
+
+  Verified with **one opinion and not two**, and the difference is stated
+  rather than glossed: module for module against zint at all sixty-four cells
+  in all three modes (`composer reference:rmqr`), but no round trip, because
+  zxing-cpp 3.1.1 lists `RMQRCode` among its formats and decodes neither our
+  symbols nor zint's own. `DecoderRoundTripTest` exempts the symbology and
+  gates the exemption on that staying true, so the day a reader appears the
+  suite says so. In place of the missing reader, `RmqrTest` asserts the tables
+  against themselves: the codeword total is the free-module count, every block
+  count divides its check codewords, and the format code's minimum Hamming
+  distance is the eight BCH(18,6) is supposed to buy.
+
+  The mode-splitting search Micro QR introduced is now `Encoding\Segmentation`,
+  shared by both, with each symbology contributing only what a segment header
+  costs it. rMQR and zint agree on every split in the fixture, so unlike the
+  Micro QR fixture this one compares every module unconditionally.
 - **Hexagonal modules in the SVG and PNG renderers**, and the first time the
   shape negotiation that has been in `RendererCapabilities` all along actually
   declines something. MaxiCode's rows interlock — a row sits 0.866 of a module

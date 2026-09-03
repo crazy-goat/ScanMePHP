@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 296 296" width="296" height="296">
+  <rect width="296" height="296" fill="#000000"/>
+  <rect x="40" y="40" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="48" y="40" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="56" y="40" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="64" y="40" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="72" y="40" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="40" y="48" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="72" y="48" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="40" y="56" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="72" y="56" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="40" y="64" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="72" y="64" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="40" y="72" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="48" y="72" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="56" y="72" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="64" y="72" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="72" y="72" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="216" y="40" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="224" y="40" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="232" y="40" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="240" y="40" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="248" y="40" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="216" y="48" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="248" y="48" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="216" y="56" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="248" y="56" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="216" y="64" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="248" y="64" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="216" y="72" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="224" y="72" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="232" y="72" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="240" y="72" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="248" y="72" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="40" y="216" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="48" y="216" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="56" y="216" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="64" y="216" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="72" y="216" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="40" y="224" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="72" y="224" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="40" y="232" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="72" y="232" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="40" y="240" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="72" y="240" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="40" y="248" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="48" y="248" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="56" y="248" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="64" y="248" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <rect x="72" y="248" width="8" height="8" fill="#FFFFFF" rx="1.2" ry="1.2"/>
+  <path fill="#FFFFFF" d="M88 32h16v8h-16zM112 32h56v8h-56zM176 32h8v8h-8zM192 32h16v8h-16zM88 40h32v8h-32zM128 40h24v8h-24zM160 40h32v8h-32zM200 40h8v8h-8zM88 48h24v8h-24zM120 48h8v8h-8zM136 48h32v8h-32zM184 48h24v8h-24zM88 56h16v8h-16zM112 56h8v8h-8zM160 56h16v8h-16zM192 56h16v8h-16zM88 64h16v8h-16zM128 64h16v8h-16zM176 64h32v8h-32zM88 72h8v8h-8zM104 72h8v8h-8zM120 72h16v8h-16zM168 72h16v8h-16zM200 72h8v8h-8zM88 80h8v8h-8zM104 80h8v8h-8zM120 80h8v8h-8zM136 80h8v8h-8zM152 80h8v8h-8zM168 80h8v8h-8zM184 80h8v8h-8zM200 80h8v8h-8zM32 88h80v8h-80zM136 88h16v8h-16zM160 88h8v8h-8zM192 88h72v8h-72zM40 96h16v8h-16zM64 96h8v8h-8zM88 96h8v8h-8zM112 96h8v8h-8zM136 96h8v8h-8zM168 96h8v8h-8zM184 96h8v8h-8zM208 96h8v8h-8zM224 96h40v8h-40zM40 104h8v8h-8zM56 104h32v8h-32zM112 104h8v8h-8zM128 104h8v8h-8zM168 104h24v8h-24zM200 104h8v8h-8zM216 104h16v8h-16zM240 104h16v8h-16zM40 112h32v8h-32zM104 112h8v8h-8zM152 112h32v8h-32zM192 112h8v8h-8zM208 112h16v8h-16zM256 112h8v8h-8zM80 120h16v8h-16zM104 120h8v8h-8zM152 120h8v8h-8zM168 120h8v8h-8zM184 120h8v8h-8zM200 120h24v8h-24zM232 120h8v8h-8zM256 120h8v8h-8zM56 128h8v8h-8zM72 128h8v8h-8zM96 128h8v8h-8zM112 128h32v8h-32zM176 128h16v8h-16zM216 128h16v8h-16zM240 128h8v8h-8zM32 136h8v8h-8zM48 136h8v8h-8zM64 136h8v8h-8zM80 136h8v8h-8zM96 136h8v8h-8zM112 136h16v8h-16zM144 136h24v8h-24zM176 136h8v8h-8zM208 136h56v8h-56zM32 144h8v8h-8zM72 144h8v8h-8zM96 144h8v8h-8zM112 144h8v8h-8zM152 144h40v8h-40zM200 144h8v8h-8zM40 152h16v8h-16zM64 152h8v8h-8zM80 152h8v8h-8zM96 152h16v8h-16zM136 152h16v8h-16zM160 152h8v8h-8zM184 152h8v8h-8zM216 152h16v8h-16zM240 152h8v8h-8zM256 152h8v8h-8zM48 160h8v8h-8zM64 160h8v8h-8zM88 160h24v8h-24zM120 160h16v8h-16zM144 160h24v8h-24zM176 160h16v8h-16zM200 160h16v8h-16zM224 160h24v8h-24zM256 160h8v8h-8zM32 168h8v8h-8zM48 168h8v8h-8zM64 168h48v8h-48zM152 168h8v8h-8zM176 168h16v8h-16zM224 168h8v8h-8zM240 168h16v8h-16zM40 176h16v8h-16zM72 176h8v8h-8zM88 176h16v8h-16zM120 176h8v8h-8zM136 176h8v8h-8zM152 176h16v8h-16zM176 176h24v8h-24zM208 176h8v8h-8zM232 176h16v8h-16zM32 184h24v8h-24zM64 184h8v8h-8zM80 184h16v8h-16zM104 184h16v8h-16zM136 184h8v8h-8zM152 184h8v8h-8zM184 184h8v8h-8zM208 184h8v8h-8zM232 184h16v8h-16zM40 192h8v8h-8zM56 192h16v8h-16zM88 192h16v8h-16zM136 192h24v8h-24zM168 192h16v8h-16zM232 192h8v8h-8zM248 192h16v8h-16zM32 200h64v8h-64zM104 200h8v8h-8zM128 200h16v8h-16zM152 200h8v8h-8zM176 200h8v8h-8zM200 200h24v8h-24zM232 200h8v8h-8zM88 208h16v8h-16zM112 208h48v8h-48zM168 208h8v8h-8zM184 208h8v8h-8zM200 208h8v8h-8zM216 208h8v8h-8zM232 208h16v8h-16zM256 208h8v8h-8zM88 216h8v8h-8zM112 216h8v8h-8zM136 216h8v8h-8zM152 216h24v8h-24zM184 216h8v8h-8zM200 216h24v8h-24zM248 216h8v8h-8zM88 224h16v8h-16zM112 224h56v8h-56zM176 224h16v8h-16zM232 224h16v8h-16zM88 232h8v8h-8zM104 232h48v8h-48zM160 232h8v8h-8zM200 232h8v8h-8zM256 232h8v8h-8zM88 240h16v8h-16zM112 240h16v8h-16zM152 240h16v8h-16zM176 240h8v8h-8zM200 240h24v8h-24zM248 240h8v8h-8zM88 248h16v8h-16zM152 248h8v8h-8zM176 248h8v8h-8zM208 248h16v8h-16zM232 248h16v8h-16zM256 248h8v8h-8zM88 256h8v8h-8zM104 256h16v8h-16zM128 256h8v8h-8zM144 256h8v8h-8zM160 256h8v8h-8zM184 256h8v8h-8zM240 256h8v8h-8zM256 256h8v8h-8z"/>
+</svg>

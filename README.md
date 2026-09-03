@@ -269,6 +269,7 @@ $scanme->render('2500GG30250', 'kix', 'svg');
 $scanme->render('01234567094987654321-01234', 'intelligent-mail', 'svg');
 $scanme->render('96130590', 'australia-post', 'svg');
 $scanme->render('LOT4471', 'micro-qr', 'svg');
+$scanme->render('LOT4471', 'rmqr', 'svg');
 ```
 
 `ean2` and `ean5` are the add-on symbols printed beside a main barcode — the
@@ -441,6 +442,54 @@ on a five-character payload reaches for M4 rather than handing back a weaker M2.
 
 The four mask patterns are QR's numbers 1, 4, 6 and 7 renumbered 0 to 3, so a
 mask number carried over from a QR symbol names a different pattern here.
+
+### rMQR
+
+`rmqr` is QR for a space that is long rather than square. A QR symbol is square
+because it has three finders in three corners, and that shape is wrong for most
+of the things barcodes actually go on: the side of a cable, the barrel of a
+syringe, the edge of a board, the spine of a rack unit. rMQR keeps QR's
+alphabet, its Reed–Solomon and its zigzag and rearranges the geometry into
+thirty-two rectangles, from seven modules by forty-three up to seventeen by a
+hundred and thirty-nine.
+
+```php
+use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
+use CrazyGoat\ScanMePHP\Generator\Rmqr\RmqrOptions;
+use CrazyGoat\ScanMePHP\Generator\Rmqr\Version;
+
+$scanme->render('LOT4471', 'rmqr', 'svg');
+$scanme->render('PN12345-REV/C', 'rmqr', 'svg', new RmqrOptions(version: Version::R7x99));
+$scanme->render('SN-000123', 'rmqr', 'svg', new RmqrOptions(ErrorCorrectionLevel::High));
+```
+
+The shapes are six heights by six widths minus the four that do not exist:
+width 27 is defined only at heights 11 and 13. Capacities below are M / H:
+
+| | 27 | 43 | 59 | 77 | 99 | 139 |
+|---|---|---|---|---|---|---|
+| **7** | — | 5 / 2 | 11 / 6 | 19 / 9 | 27 / 13 | 42 / 22 |
+| **9** | — | 11 / 6 | 20 / 10 | 30 / 16 | 40 / 20 | 61 / 31 |
+| **11** | 6 / 4 | 18 / 10 | 30 / 14 | 41 / 21 | 55 / 27 | 82 / 40 |
+| **13** | 11 / 6 | 26 / 12 | 36 / 18 | 51 / 27 | 71 / 33 | 104 / 52 |
+| **15** | — | 31 / 13 | 46 / 24 | 65 / 29 | 86 / 46 | 125 / 67 |
+| **17** | — | 37 / 19 | 54 / 26 | 76 / 36 | 98 / 54 | 150 / 74 |
+
+*(bytes; digits run about two and a half times higher — R17x139 holds 361 of
+them)*
+
+Two things differ from every other QR-family symbology here. **There are two
+error correction levels, M and H, and no others** — a symbology meant for
+awkward surfaces has no use for L, and Q would sit between the two without
+buying a size. **There is no mask option**, because rMQR defines one mask
+pattern and no way to say which was used; the bits QR spends on a mask number
+are spent here saying which of the thirty-two shapes the symbol is.
+
+Left alone, the shape is the smallest by area that fits and the level is the
+stronger of the two that still fits in it. A pinned shape is kept rather than
+grown — a caller who names `Version::R7x99` names it because that is the space
+the label has, and a bigger symbol does not fit the space either — so a payload
+too long for it is refused.
 
 ### Aztec
 

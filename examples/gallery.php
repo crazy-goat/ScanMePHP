@@ -40,6 +40,7 @@ const ASSETS_DIR = OUTPUT_DIR . '/assets';
 const PAYLOADS = [
     'qrcode' => 'https://scanmephp.dev',
     'micro-qr' => 'LOT4471',
+    'rmqr' => 'PN12345-REV/C',
     'gs1-qr' => '(01)09501101020917(10)LOT0001',
     'code128' => 'SCANME-2026',
     'gs1-128' => '(01)09501101020917(10)LOT0001',

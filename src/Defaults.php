@@ -32,6 +32,7 @@ use CrazyGoat\ScanMePHP\Generator\MicroQr\MicroQrGenerator;
 use CrazyGoat\ScanMePHP\Generator\Pdf417\Pdf417Generator;
 use CrazyGoat\ScanMePHP\Generator\Qr\QrGenerator;
 use CrazyGoat\ScanMePHP\Generator\Rm4scc\Rm4sccGenerator;
+use CrazyGoat\ScanMePHP\Generator\Rmqr\RmqrGenerator;
 use CrazyGoat\ScanMePHP\Generator\UpcA\UpcAGenerator;
 use CrazyGoat\ScanMePHP\Generator\UpcE\UpcEGenerator;
 use CrazyGoat\ScanMePHP\Renderer\AsciiRenderer;
@@ -55,6 +56,7 @@ final class Defaults
         return (new Registry())
             ->addGenerator(new QrGenerator())
             ->addGenerator(new MicroQrGenerator())
+            ->addGenerator(new RmqrGenerator())
             ->addGenerator(new Gs1QrGenerator())
             ->addGenerator(new Code128Generator())
             ->addGenerator(new Gs1128Generator())
