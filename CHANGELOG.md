@@ -156,6 +156,34 @@ number is worse than a compile error.
   patterns are the checksum, split nine ways — and the checksum weights are the
   powers of three modulo 79 rather than the thirty-two literals reference
   implementations ship. Pure PHP, like every symbology added after QR.
+- **GS1 DataBar Limited** (`databar-limited`, aliases `gs1-databar-limited`,
+  `rss-limited`, `rss-ltd`): the same GTIN in seventy-four modules instead of
+  ninety-six, for labels the wider symbol does not fit. Two characters rather
+  than four, laid out plainly left to right with a single finder between them,
+  and no options — the height is fixed and there is no second variant of it.
+  It buys the width with two refusals worth knowing about: it carries indicator
+  digits 0 and 1 only, since the value has to fit in 2013571 squared, and it
+  gives up the omnidirectional scan.
+
+  It shares Omnidirectional's arithmetic and, as it turned out, almost none of
+  its numbers — characters of seven bars and seven spaces rather than four and
+  four, the narrow-element rule on the bars rather than the spaces, the value
+  counting up through its bars rather than its spaces, seven character groups
+  whose boundaries line up with nothing. Each of those was measured against an
+  oracle, because each is a plausible symbol when guessed wrongly. The finder
+  is the checksum here too, but with one pattern per residue and nothing
+  skipped: eighty-nine patterns, which the standard picks out of the 441 the
+  halves allow by no rule this could find, so that selection is the one thing
+  stored as a table — and stored as pairs of half-indices, since every pattern
+  is two halves the same enumeration already generates.
+
+  Generalising the enumeration for it turned up a real property of the family
+  worth recording: the walk's ceiling correction is only exact while two
+  elements cannot both overflow at once, and the standard's own group tables
+  carry the count of reachable combinations precisely because in two of
+  Omnidirectional's groups they can. Replacing that walk with an exact count
+  produces different bars for 432 of the 1597 inside characters — all of which
+  scan, as other numbers. Pure PHP.
 - **Hexagonal modules in the SVG and PNG renderers**, and the first time the
   shape negotiation that has been in `RendererCapabilities` all along actually
   declines something. MaxiCode's rows interlock — a row sits 0.866 of a module

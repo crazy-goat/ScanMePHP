@@ -41,6 +41,7 @@ enum Symbology: string
     case Pdf417 = 'pdf417';
     case MaxiCode = 'maxicode';
     case DataBarOmni = 'databar-omni';
+    case DataBarLimited = 'databar-limited';
 
     /** The name the registry resolves, for either accepted form. */
     public static function nameOf(string|self $symbology): string

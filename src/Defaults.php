@@ -10,6 +10,7 @@ use CrazyGoat\ScanMePHP\Generator\Code128\Code128Generator;
 use CrazyGoat\ScanMePHP\Generator\Code39\Code39Generator;
 use CrazyGoat\ScanMePHP\Generator\Code39\Mode as Code39Mode;
 use CrazyGoat\ScanMePHP\Generator\Code93\Code93Generator;
+use CrazyGoat\ScanMePHP\Generator\DataBarLimited\DataBarLimitedGenerator;
 use CrazyGoat\ScanMePHP\Generator\DataBarOmni\DataBarOmniGenerator;
 use CrazyGoat\ScanMePHP\Generator\DataMatrix\DataMatrixGenerator;
 use CrazyGoat\ScanMePHP\Generator\Ean13\Ean13Generator;
@@ -69,6 +70,7 @@ final class Defaults
             ->addGenerator(new Pdf417Generator())
             ->addGenerator(new MaxiCodeGenerator())
             ->addGenerator(new DataBarOmniGenerator())
+            ->addGenerator(new DataBarLimitedGenerator())
             ->addRenderer(new SvgRenderer())
             ->addRenderer(new PngRenderer())
             ->addRenderer(new HtmlRenderer(HtmlMode::Div))
