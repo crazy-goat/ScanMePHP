@@ -28,6 +28,8 @@ use CrazyGoat\ScanMePHP\Generator\Itf\Patterns as ItfPatterns;
 use CrazyGoat\ScanMePHP\Generator\Itf14\Backend\PhpBackend as Itf14Backend;
 use CrazyGoat\ScanMePHP\Generator\Itf14\Itf14Options;
 use CrazyGoat\ScanMePHP\Generator\MaxiCode\MaxiCodeOptions;
+use CrazyGoat\ScanMePHP\Generator\MicroQr\MicroQrOptions;
+use CrazyGoat\ScanMePHP\Generator\MicroQr\Version as MicroQrVersion;
 use CrazyGoat\ScanMePHP\Generator\Pdf417\Pdf417Options;
 use CrazyGoat\ScanMePHP\Generator\Qr\QrOptions;
 use CrazyGoat\ScanMePHP\Renderer\Options\PngOptions;
@@ -96,6 +98,9 @@ class DecoderRoundTripTest extends TestCase
         // value in the alphabet. Same tell: the text comes back parenthesised
         // only if the decoder saw it and parsed against its own AI table.
         Symbology::Gs1Qr->value => 'QR Code',
+        // Reported as a format of its own rather than as a QR Code, which is
+        // right: the two share a finder shape and nothing else a reader does.
+        Symbology::MicroQr->value => 'Micro QR Code',
     ];
 
     /**
@@ -318,6 +323,86 @@ class DecoderRoundTripTest extends TestCase
     public function testAGs1QrScansBackAsItsElementStrings(string $elements): void
     {
         $this->assertScansBack($elements, Symbology::Gs1Qr->value, self::FORMAT_NAMES['gs1-qr']);
+    }
+
+    /**
+     * Micro QR at every version, level and mode.
+     *
+     * Micro QR is the one symbology here where almost nothing is a constant:
+     * the mode indicator, the character count and the terminator are all a
+     * different width in each of the four versions, so a payload that scans at
+     * M4 says nothing about M2. Hence a case per cell rather than a handful of
+     * representative strings.
+     *
+     * @return iterable<string, array{string, MicroQrOptions}>
+     */
+    public static function microQrProvider(): iterable
+    {
+        // M1: numeric only, no error correction level, and its capacity is one
+        // digit short of the two-codeword boundary.
+        yield 'M1 at one digit' => ['7', new MicroQrOptions(version: MicroQrVersion::M1)];
+        yield 'M1 full' => ['12345', new MicroQrOptions(version: MicroQrVersion::M1)];
+
+        $levels = [
+            'L' => ErrorCorrectionLevel::Low,
+            'M' => ErrorCorrectionLevel::Medium,
+            'Q' => ErrorCorrectionLevel::Quartile,
+        ];
+
+        // The longest payload each remaining cell holds, which is where a
+        // capacity that is one too generous stops being drawable and a
+        // terminator that is one too long stops being a terminator.
+        $full = [
+            'M2' => ['L' => ['12345678', 'AB C'], 'M' => ['123456', 'ABC']],
+            'M3' => [
+                'L' => ['12345678901234567890123', 'ABCDEFGHIJKLMN', 'abcdefghi'],
+                'M' => ['123456789012345678', 'ABCDEFGHIJK', 'abcdefg'],
+            ],
+            'M4' => [
+                'L' => ['12345678901234567890123456789012345', 'ABCDEFGHIJKLMNOPQRSTU', 'abcdefghijklmno'],
+                'M' => ['123456789012345678901234567890', 'ABCDEFGHIJKLMNOPQR', 'abcdefghijklm'],
+                'Q' => ['123456789012345678901', 'ABCDEFGHIJKLM', 'abcdefghi'],
+            ],
+        ];
+
+        foreach ($full as $version => $byLevel) {
+            foreach ($byLevel as $letter => $payloads) {
+                foreach ($payloads as $data) {
+                    yield sprintf('%s-%s at %d characters', $version, $letter, \strlen($data)) => [
+                        $data,
+                        new MicroQrOptions(
+                            errorCorrection: $levels[$letter],
+                            version: MicroQrVersion::from((int) substr($version, 1)),
+                        ),
+                    ];
+                }
+            }
+        }
+
+        // Payloads that come out as more than one segment, which is where the
+        // mode indicators and character counts are actually being read in the
+        // middle of a stream rather than only at its front.
+        foreach (['LOT4471', 'SN-000123', 'R47K 1%', 'a.co/x8Kd', '4/06/94804273B-33', '6LTx'] as $data) {
+            yield sprintf('a mixed split: %s', $data) => [$data, new MicroQrOptions()];
+        }
+
+        // Every mask, on a payload big enough for the masking to reach a good
+        // part of the symbol. An option that can produce an unreadable symbol
+        // is a way to hand a caller a barcode that fails at the gate.
+        foreach (range(0, MicroQrOptions::MAX_MASK) as $mask) {
+            yield sprintf('mask %d', $mask) => ['HELLO WORLD 42', new MicroQrOptions(mask: $mask)];
+        }
+    }
+
+    #[DataProvider('microQrProvider')]
+    public function testAMicroQrScansBack(string $data, MicroQrOptions $options): void
+    {
+        $this->assertScansBack(
+            $data,
+            Symbology::MicroQr->value,
+            self::FORMAT_NAMES['micro-qr'],
+            generatorOptions: $options,
+        );
     }
 
     /** @return iterable<string, array{string}> */

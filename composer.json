@@ -95,7 +95,8 @@
         "reference:kix": ".decoders/bin/python tools/kix_reference.py",
         "reference:intelligent-mail": ".decoders/bin/python tools/intelligent_mail_reference.py",
         "reference:intelligent-mail-placement": ".decoders/bin/python tools/intelligent_mail_placement.py",
-        "reference:australia-post": ".decoders/bin/python tools/australia_post_reference.py"
+        "reference:australia-post": ".decoders/bin/python tools/australia_post_reference.py",
+        "reference:micro-qr": ".decoders/bin/python tools/micro_qr_reference.py"
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
@@ -117,6 +118,7 @@
         "reference:kix": "Regenerate the KIX reference symbols from zint",
         "reference:intelligent-mail": "Regenerate the Intelligent Mail reference symbols from zint",
         "reference:intelligent-mail-placement": "Re-measure which bit of which character each of Intelligent Mail's 65 bars draws",
-        "reference:australia-post": "Regenerate the Australia Post reference symbols from zint"
+        "reference:australia-post": "Regenerate the Australia Post reference symbols from zint",
+        "reference:micro-qr": "Regenerate the Micro QR reference symbols from zint"
     }
 }

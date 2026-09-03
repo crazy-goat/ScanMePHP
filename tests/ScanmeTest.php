@@ -205,7 +205,7 @@ class ScanmeTest extends TestCase
         sort($registered);
 
         $this->assertSame(
-            ['australia-post', 'aztec', 'codabar', 'code128', 'code39', 'code39ext', 'code93', 'data-matrix', 'databar-expanded', 'databar-expanded-stacked', 'databar-limited', 'databar-omni', 'ean13', 'ean2', 'ean5', 'ean8', 'gs1-128', 'gs1-data-matrix', 'gs1-qr', 'intelligent-mail', 'itf', 'itf14', 'kix', 'maxicode', 'pdf417', 'qrcode', 'rm4scc', 'upc-a', 'upc-e'],
+            ['australia-post', 'aztec', 'codabar', 'code128', 'code39', 'code39ext', 'code93', 'data-matrix', 'databar-expanded', 'databar-expanded-stacked', 'databar-limited', 'databar-omni', 'ean13', 'ean2', 'ean5', 'ean8', 'gs1-128', 'gs1-data-matrix', 'gs1-qr', 'intelligent-mail', 'itf', 'itf14', 'kix', 'maxicode', 'micro-qr', 'pdf417', 'qrcode', 'rm4scc', 'upc-a', 'upc-e'],
             $registered
         );
     }

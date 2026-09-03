@@ -268,6 +268,7 @@ $scanme->render('LE28HS', 'rm4scc', 'svg');
 $scanme->render('2500GG30250', 'kix', 'svg');
 $scanme->render('01234567094987654321-01234', 'intelligent-mail', 'svg');
 $scanme->render('96130590', 'australia-post', 'svg');
+$scanme->render('LOT4471', 'micro-qr', 'svg');
 ```
 
 `ean2` and `ean5` are the add-on symbols printed beside a main barcode — the
@@ -388,6 +389,58 @@ the same way pinning a version does — the C++ core takes only
 `encode(data, len, ecl)` and the bitset encoder scores its masks inside an
 inlined hot path, so the request drops to the portable encoder, and a registry
 without one reports the pin by name rather than ignoring it.
+
+### Micro QR
+
+`micro-qr` is QR for the cases where a QR symbol will not fit. The smallest QR
+symbol is twenty-one modules across before its four-module quiet zone, so
+twenty-nine all told, and holds seventeen bytes. The smallest Micro QR is
+eleven with a two-module quiet zone, so fifteen — a quarter of the area. That
+trade is the whole point, and it is why the symbology turns up on electronic
+components, medical vials and PCB silk screens.
+
+```php
+use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
+use CrazyGoat\ScanMePHP\Generator\MicroQr\MicroQrOptions;
+use CrazyGoat\ScanMePHP\Generator\MicroQr\Version;
+
+$scanme->render('LOT4471', 'micro-qr', 'svg');
+$scanme->render('12345', 'micro-qr', 'svg', new MicroQrOptions(version: Version::M1));
+$scanme->render('SN-000123', 'micro-qr', 'svg', new MicroQrOptions(ErrorCorrectionLevel::Medium));
+```
+
+There are four sizes, and they are not interchangeable with QR's forty
+versions — `version: 2` means twenty-five modules across for a QR symbol and
+thirteen for this one, which is why they are spelled M1 to M4 as the standard
+spells them:
+
+| Version | Size | Levels | Digits | Alphanumeric | Bytes |
+|---|---|---|---|---|---|
+| M1 | 11×11 | *none* | 5 | — | — |
+| M2 | 13×13 | L, M | 10 / 8 | 6 / 5 | — |
+| M3 | 15×15 | L, M | 23 / 18 | 14 / 11 | 9 / 7 |
+| M4 | 17×17 | L, M, Q | 35 / 30 / 21 | 21 / 18 / 13 | 15 / 13 / 9 |
+
+Three things in that table are worth saying out loud, because each of them
+looks like a bug in this library otherwise:
+
+**M1 has no error correction level.** Its two check codewords detect a misread
+and cannot repair one, so there is nothing to choose between and pinning a
+level alongside `Version::M1` is refused rather than quietly ignored. **There
+is no level H anywhere**, and Q exists only at M4. **The small versions cannot
+carry bytes at all** — M1 is digits and nothing else, M2 adds alphanumeric —
+so `canEncode('abc', ...)` can answer false for a three-character payload: it
+is not too long for M2, it is not expressible in it, and the refusal says which
+of the two it is.
+
+Left alone, the error correction level is the strongest the smallest symbol
+that fits can give the payload. The capacity is spent either way, so the choice
+is only whether the spare room goes to recovery data or to padding. Naming a
+level is still honoured exactly: `MicroQrOptions(ErrorCorrectionLevel::Quartile)`
+on a five-character payload reaches for M4 rather than handing back a weaker M2.
+
+The four mask patterns are QR's numbers 1, 4, 6 and 7 renumbered 0 to 3, so a
+mask number carried over from a QR symbol names a different pattern here.
 
 ### Aztec
 
