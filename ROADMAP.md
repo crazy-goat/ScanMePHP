@@ -313,6 +313,17 @@ is to ship no option and assert that it does not exist.
   proportionally precisely because a four-state code's meaning is the ratio
   between ascender, tracker and descender. The renderers are ready; there is no
   generator.
+
+  The reference path is now built, ahead of the first of them:
+  `tools/four_state.py` draws through zint and reads the four states back out
+  of the SVG geometry, because zint reports a rectangle and not a state. That
+  reading is the tooling's only real claim, so it is measured rather than
+  asserted — zint's own DAFT symbology takes a state string verbatim, which
+  makes it a fixture for the reader (`composer reference:four-state-check`).
+  The four payloads their standards publish come back at the lengths those
+  standards give: 30 bars for RM4SCC, 44 for an eleven-character KIX, 65 for
+  Intelligent Mail, 37 for an eight-digit Australia Post. Each symbology still
+  brings its own fixture and its own substituted round trip.
 - **Micro QR and rMQR** — separate symbologies with their own version tables,
   not a mode of `qrcode`.
 - **Minor linear codes** — MSI, Pharmacode, Code 11, Telepen. Cheap to add and

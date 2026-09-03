@@ -186,6 +186,18 @@ becomes a habit.
   validates. Then it is not shipped, and a test asserts the option does not
   exist.
 
+The second reference encoder, and what it is not. zxing-cpp neither writes nor
+reads the four-state postal codes, so those are drawn against zint through
+`pyzint` — `tools/four_state.py`, whose `--self-check` re-measures how zint
+draws a bar, since a four-state symbol's states are recovered from the SVG
+geometry rather than reported. Two limits belong next to every fixture it
+produces: **zxing-cpp's writer is zint**, so this is the same engine through
+another door rather than a second opinion; and no free decoder reads these at
+all, which makes the round trip a substitution rather than a skip. Which
+stand-in each one gets — the USPS validation file for Intelligent Mail, the
+worked examples in the other three standards — is in `ROADMAP.md`, and it is
+part of the symbology's own unit of work, not of this tooling.
+
 A **reference** fixture and an **agreement** fixture are different things and
 must not be confused. A reference fixture comes from an encoder we did not
 write and is what says our output is right. An agreement fixture holds our own
