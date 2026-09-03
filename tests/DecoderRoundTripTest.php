@@ -18,6 +18,7 @@ use CrazyGoat\ScanMePHP\Generator\Itf\ItfOptions;
 use CrazyGoat\ScanMePHP\Generator\Itf\Patterns as ItfPatterns;
 use CrazyGoat\ScanMePHP\Generator\Itf14\Backend\PhpBackend as Itf14Backend;
 use CrazyGoat\ScanMePHP\Generator\Itf14\Itf14Options;
+use CrazyGoat\ScanMePHP\Generator\Pdf417\Pdf417Options;
 use CrazyGoat\ScanMePHP\Generator\Qr\QrOptions;
 use CrazyGoat\ScanMePHP\Renderer\Options\PngOptions;
 use CrazyGoat\ScanMePHP\Scanme;
@@ -67,6 +68,7 @@ class DecoderRoundTripTest extends TestCase
         Symbology::Gs1128->value => 'Code 128',
         Symbology::DataMatrix->value => 'Data Matrix',
         Symbology::Aztec->value => 'Aztec',
+        Symbology::Pdf417->value => 'PDF417',
         // As with GS1-128: the same bars, and what marks it as GS1 is an FNC1
         // the decoder reports by parenthesising what it hands back.
         Symbology::Gs1DataMatrix->value => 'Data Matrix',
@@ -352,6 +354,104 @@ class DecoderRoundTripTest extends TestCase
         foreach ([15, 27, 31, 37, 57, 67, 113] as $size) {
             yield sprintf('pinned to %d modules', $size) => [new AztecOptions(size: $size)];
         }
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function pdf417Provider(): iterable
+    {
+        yield 'capitals only' => ['HELLO WORLD'];
+        yield 'a latch into lower case' => ['hello world'];
+        yield 'mixed case, so latches both ways' => ['MiXeD CaSe TeXt'];
+        yield 'digits short enough to stay in text' => ['AB 10001'];
+        yield 'digits long enough for numeric compaction' => [str_repeat('9', 30)];
+        // The numeric group is forty-four digits, so these straddle the seam
+        // where a forty-fifth digit opens a second group.
+        yield 'a full numeric group' => [str_repeat('1', 44)];
+        yield 'one digit past a group' => [str_repeat('1', 45)];
+        yield 'two groups' => [str_repeat('1', 88)];
+        yield 'the punctuation submode' => ['!"#$%&\'()*+,-./:;<=>?@[]^_`{|}~'];
+        yield 'the characters that live in two submodes' => ['N.Y., NY 10001 $1,234.56 A/B*C'];
+        yield 'the three control characters text compaction holds' => ["A\tB\rC\nD"];
+        yield 'a realistic label' => ['SHIP TO: 123 Main St., Apt 4, Springfield IL 62704'];
+        yield 'long enough to need many rows' => [str_repeat('Mixed Case 123. ', 40)];
+    }
+
+    #[DataProvider('pdf417Provider')]
+    public function testAPdf417ScansBack(string $data): void
+    {
+        $this->assertScansBack($data, Symbology::Pdf417->value, self::FORMAT_NAMES['pdf417']);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function pdf417BinaryProvider(): iterable
+    {
+        yield 'high bytes' => ["\x80\xff\x00\x7f"];
+        yield 'a single foreign byte, which costs a shift' => ["AB\xc8CD"];
+        // Byte compaction converts groups of six and writes any tail one byte
+        // per codeword, so the interesting lengths are around a group.
+        yield 'five bytes, all tail' => [str_repeat("\xc8", 5)];
+        yield 'exactly one group' => [str_repeat("\xc8", 6)];
+        yield 'a group and a tail' => [str_repeat("\xc8", 7)];
+        yield 'two whole groups' => [str_repeat("\xc8", 12)];
+        yield 'a long binary run' => [str_repeat("\x00\xff", 150)];
+        // A driving licence's AAMVA header carries a record separator, which
+        // no text submode holds, so a real one is a binary payload however
+        // much of it reads as text.
+        yield 'a licence header' => ["@\n\x1e\rANSI 636000100102DL00410278ZV03190008DL"];
+    }
+
+    #[DataProvider('pdf417BinaryProvider')]
+    public function testAPdf417WithBinaryDataScansBack(string $data): void
+    {
+        $this->assertBytesScanBack($data, Symbology::Pdf417->value, self::FORMAT_NAMES['pdf417']);
+    }
+
+    /**
+     * Every shape and level the options accept still scans.
+     *
+     * The shape is the caller's to choose, which means a caller can ask for a
+     * symbol one column wide and ninety rows tall. That has to be readable,
+     * for the same reason every QR mask and every Aztec size is scanned here:
+     * an option that can produce an unreadable symbol is a way to hand someone
+     * a barcode that fails at the gate.
+     *
+     * @return iterable<string, array{string, Pdf417Options}>
+     */
+    public static function pdf417OptionProvider(): iterable
+    {
+        foreach (range(0, 8) as $level) {
+            // Level 8 spends 512 codewords on error correction, which needs
+            // room: six columns is the narrowest shape that holds it.
+            yield sprintf('error correction level %d', $level) => [
+                'SCANME',
+                new Pdf417Options(errorCorrectionLevel: $level, columns: 6),
+            ];
+        }
+
+        foreach ([1, 2, 5, 10, 20, 30] as $columns) {
+            yield sprintf('%d data columns', $columns) => [
+                'SCANME 12345',
+                new Pdf417Options(columns: $columns),
+            ];
+        }
+
+        yield 'a row floor well above what the data needs' => [
+            'SCANME',
+            new Pdf417Options(columns: 3, rows: 40),
+        ];
+        yield 'rows one module tall' => ['SCANME', new Pdf417Options(rowHeight: 1)];
+        yield 'rows ten modules tall' => ['SCANME', new Pdf417Options(rowHeight: 10)];
+    }
+
+    #[DataProvider('pdf417OptionProvider')]
+    public function testAPdf417ScansBackWithEveryOption(string $data, Pdf417Options $options): void
+    {
+        $this->assertScansBack(
+            $data,
+            Symbology::Pdf417->value,
+            self::FORMAT_NAMES['pdf417'],
+            generatorOptions: $options
+        );
     }
 
     #[DataProvider('aztecOptionProvider')]

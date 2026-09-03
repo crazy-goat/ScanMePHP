@@ -203,7 +203,7 @@ class ScanmeTest extends TestCase
         sort($registered);
 
         $this->assertSame(
-            ['aztec', 'codabar', 'code128', 'code39', 'code39ext', 'code93', 'data-matrix', 'ean13', 'ean2', 'ean5', 'ean8', 'gs1-128', 'gs1-data-matrix', 'gs1-qr', 'itf', 'itf14', 'qrcode', 'upc-a', 'upc-e'],
+            ['aztec', 'codabar', 'code128', 'code39', 'code39ext', 'code93', 'data-matrix', 'ean13', 'ean2', 'ean5', 'ean8', 'gs1-128', 'gs1-data-matrix', 'gs1-qr', 'itf', 'itf14', 'pdf417', 'qrcode', 'upc-a', 'upc-e'],
             $registered
         );
     }
