@@ -1,12 +1,13 @@
 # Examples — the symbology gallery
 
-This directory is one generator rather than a shelf of scripts:
+This directory is a gallery rather than a shelf of scripts, and it is built
+by one generator:
 
 ```bash
 php examples/gallery.php
 ```
 
-It writes the gallery from whatever the registry in this checkout supports:
+It writes, from whatever the registry in this checkout supports:
 
 - `index.md` — every supported QR / barcode, one row each
 - `codes/<symbology>.md` — that symbology's page: payload, capabilities,
@@ -15,8 +16,10 @@ It writes the gallery from whatever the registry in this checkout supports:
   skipped
 - `assets/<symbology>/` — the image files the pages point at
 
-None of those are committed: a gallery is a claim about what the library
-draws *right now*, so it is regenerated the same way the tests are run —
-`tests/ExamplesTest.php` executes the generator on every CI build and fails
-if it does not complete, and a second test asserts the pages it wrote really
-cover every registered symbology and renderer.
+The generated pages are committed, so a reader browsing the repository sees
+the gallery without running anything. That convenience is also a hazard: a
+committed gallery nobody regenerates goes stale exactly the way
+documentation does, quietly showing last month's library. So
+`tests/ExamplesTest.php` runs the generator on every CI build and fails if
+the committed files differ from what it just wrote — a symbology added to
+`Defaults` turns the build red until its page is regenerated and committed.

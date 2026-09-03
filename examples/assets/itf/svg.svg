@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 1190 520" width="1190" height="520">
+  <rect width="1190" height="520" fill="#FFFFFF"/>
+  <path fill="#000000" d="M100 0h10v500h-10zM120 0h10v500h-10zM140 0h30v500h-30zM180 0h10v500h-10zM220 0h10v500h-10zM240 0h10v500h-10zM260 0h30v500h-30zM320 0h30v500h-30zM360 0h30v500h-30zM400 0h10v500h-10zM440 0h10v500h-10zM460 0h10v500h-10zM500 0h30v500h-30zM540 0h10v500h-10zM580 0h30v500h-30zM640 0h10v500h-10zM660 0h10v500h-10zM680 0h10v500h-10zM720 0h10v500h-10zM740 0h10v500h-10zM760 0h30v500h-30zM820 0h30v500h-30zM860 0h10v500h-10zM880 0h30v500h-30zM920 0h10v500h-10zM960 0h30v500h-30zM1020 0h10v500h-10zM1040 0h30v500h-30zM1080 0h10v500h-10z"/>
+  <text x="590" y="515" text-anchor="middle" font-family="Arial, sans-serif" font-size="15.0" fill="#000000">1234567890</text>
+</svg>

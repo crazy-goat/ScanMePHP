@@ -124,4 +124,35 @@ final class ExamplesTest extends TestCase
             }
         }
     }
+
+    /**
+     * The gallery is committed, so it can go stale the way committed
+     * documentation does: showing the library of some earlier commit while
+     * the suite stays green. So the generator runs again here — after the
+     * committed files are in place — and anything it changed or added is a
+     * failure naming the files to regenerate with
+     * `php examples/gallery.php`.
+     */
+    public function testTheCommittedGalleryIsCurrent(): void
+    {
+        $command = sprintf(
+            '%s %s 2>&1',
+            escapeshellarg(PHP_BINARY),
+            escapeshellarg(self::DIRECTORY . '/gallery.php'),
+        );
+
+        exec($command, $lines, $status);
+        self::assertSame(0, $status, "gallery.php failed:\n" . implode("\n", $lines));
+
+        exec('git status --porcelain -- examples/index.md examples/codes examples/assets', $changes, $gitStatus);
+        self::assertSame(0, $gitStatus, 'git status could not be run');
+
+        self::assertSame(
+            [],
+            array_filter($changes, static fn (string $line): bool => $line !== ''),
+            "The committed gallery is stale. Regenerate it and commit the result:\n"
+            . "  php examples/gallery.php\nDiffering or untracked files:\n"
+            . implode("\n", $changes),
+        );
+    }
 }

@@ -771,9 +771,10 @@ number is worse than a compile error.
   with every supported QR/barcode and a page per symbology showing that code
   through every renderer — SVG and PNG as images, ASCII inline, HTML as
   standalone files, and a renderer that cannot draw a symbol faithfully
-  saying so on the page instead of being skipped. The gallery is generated,
-  never committed: `ExamplesTest` runs the generator on every build and
-  verifies its pages against the registry.
+  saying so on the page instead of being skipped. The gallery pages are
+  committed for browsing, and `ExamplesTest` regenerates them on every build
+  and fails on any diff, so a committed page cannot quietly outlive the
+  library it describes.
 - **`Matrix` → `Symbol`.** Symbols are rectangular, carry a quiet zone, may
   have rows of differing heights (EAN guard bars descend below the others),
   and carry the human-readable text a linear symbology requires be printed.
