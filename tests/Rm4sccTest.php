@@ -7,6 +7,7 @@ namespace CrazyGoat\ScanMePHP\Tests;
 use CrazyGoat\ScanMePHP\Defaults;
 use CrazyGoat\ScanMePHP\Dimension;
 use CrazyGoat\ScanMePHP\Exception\UnsupportedDataException;
+use CrazyGoat\ScanMePHP\Generator\FourState\Alphabet;
 use CrazyGoat\ScanMePHP\Generator\FourState\Patterns;
 use CrazyGoat\ScanMePHP\Generator\FourState\State;
 use CrazyGoat\ScanMePHP\Generator\Rm4scc\Characters;
@@ -93,8 +94,8 @@ class Rm4sccTest extends TestCase
     {
         $seen = [];
 
-        foreach (str_split(Characters::ALPHABET) as $character) {
-            $bars = Characters::bars($character);
+        foreach (str_split(Alphabet::CHARACTERS) as $character) {
+            $bars = Alphabet::bars($character);
             $this->assertCount(4, $bars, "character {$character} is not four bars");
 
             $ascenders = \count(array_filter($bars, static fn (State $b): bool => $b->hasAscender()));
