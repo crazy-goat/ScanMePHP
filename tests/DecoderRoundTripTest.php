@@ -103,10 +103,10 @@ class DecoderRoundTripTest extends TestCase
      * is a fragment printed beside one — and zxing-cpp has no reader for a
      * lone EAN-2 or EAN-5, only an option to pick one up next to a main
      * symbol, so those two are gated by testAnAddOnScansBackBesideAMainSymbol()
-     * instead. RM4SCC it cannot read at all: no free decoder carries a
-     * four-state postal code, so that one is gated by
-     * testRm4sccRendersTheBarsItsReferenceEncoderDrew(), which reads the bars
-     * back out of the rendered pixels and compares them with zint's.
+     * instead. The four-state postal codes it cannot read at all: no free
+     * decoder carries one, so those are gated by
+     * testAFourStateSymbolRendersTheBarsItsReferenceEncoderDrew(), which reads
+     * the bars back out of the rendered pixels and compares them with zint's.
      *
      * Listing them here is what keeps a substitution deliberate: a symbology
      * may be absent from FORMAT_NAMES only by appearing in this list, never by
@@ -117,6 +117,7 @@ class DecoderRoundTripTest extends TestCase
         Symbology::Ean2->value,
         Symbology::Ean5->value,
         Symbology::Rm4scc->value,
+        Symbology::Kix->value,
     ];
 
     public function testTheDecoderItselfIsWiredUp(): void
@@ -1579,7 +1580,7 @@ class DecoderRoundTripTest extends TestCase
     }
 
     /**
-     * RM4SCC's substitute for a round trip: the pixels, read as bars.
+     * The four-state substitute for a round trip: the pixels, read as bars.
      *
      * There is no decoder to hand this PNG to — no free one reads a four-state
      * postal code — so the gate is built the other way round. The rendered
@@ -1595,34 +1596,55 @@ class DecoderRoundTripTest extends TestCase
      * available offers one, which is why this is declared in
      * NO_STANDALONE_READER rather than counted as a round trip.
      *
+     * @param string $symbology which four-state code
      * @param string $data the payload
      * @param string $expected the bars zint drew for it
      */
-    #[DataProvider('rm4sccProvider')]
-    public function testRm4sccRendersTheBarsItsReferenceEncoderDrew(string $data, string $expected): void
-    {
-        $png = $this->renderForScanning($data, Symbology::Rm4scc->value);
+    #[DataProvider('fourStateProvider')]
+    public function testAFourStateSymbolRendersTheBarsItsReferenceEncoderDrew(
+        string $symbology,
+        string $data,
+        string $expected
+    ): void {
+        $png = $this->renderForScanning($data, $symbology);
 
-        self::assertSame($expected, $this->barsInThePng($png), "bars rendered for {$data}");
+        self::assertSame($expected, $this->barsInThePng($png), "bars rendered for {$symbology} {$data}");
     }
 
-    /** Payloads out of the reference fixture, with the bars it holds for them. */
-    public static function rm4sccProvider(): \Generator
+    /**
+     * Payloads out of each four-state fixture, with the bars it holds for them.
+     *
+     * One provider for the family rather than one test per symbology: the next
+     * four-state code to arrive should have to add a row here, not decide for
+     * itself whether it wanted this gate.
+     */
+    public static function fourStateProvider(): \Generator
     {
-        $wanted = ['0', 'Z', 'LE28HS', 'BX11LT1A', 'SW1A1AA9Z', '0123', 'WXYZ'];
+        $wanted = [
+            Symbology::Rm4scc->value => [
+                'rm4scc_reference.csv',
+                ['0', 'Z', 'LE28HS', 'BX11LT1A', 'SW1A1AA9Z', '0123', 'WXYZ'],
+            ],
+            Symbology::Kix->value => [
+                'kix_reference.csv',
+                ['0', 'Z', '2500GG30250', '1013AV23XA', '6545CA3B', '999999999999999999'],
+            ],
+        ];
 
-        $handle = fopen(__DIR__ . '/fixtures/rm4scc_reference.csv', 'r');
-        self::assertNotFalse($handle, 'the RM4SCC reference fixture is missing');
+        foreach ($wanted as $symbology => [$fixture, $payloads]) {
+            $handle = fopen(__DIR__ . '/fixtures/' . $fixture, 'r');
+            self::assertNotFalse($handle, "the {$symbology} reference fixture is missing");
 
-        fgetcsv($handle, 0, ',', '"', '');
-        while (($row = fgetcsv($handle, 0, ',', '"', '')) !== false) {
-            [$data, $states] = $row;
-            if (\in_array($data, $wanted, true)) {
-                yield $data => [$data, $states];
+            fgetcsv($handle, 0, ',', '"', '');
+            while (($row = fgetcsv($handle, 0, ',', '"', '')) !== false) {
+                [$data, $states] = $row;
+                if (\in_array($data, $payloads, true)) {
+                    yield "{$symbology} {$data}" => [$symbology, $data, $states];
+                }
             }
-        }
 
-        fclose($handle);
+            fclose($handle);
+        }
     }
 
     /**
@@ -1700,22 +1722,30 @@ class DecoderRoundTripTest extends TestCase
     }
 
     /**
-     * The RM4SCC exemption, held to its own terms.
+     * The four-state exemption, held to its own terms.
      *
-     * The day a free decoder reads a four-state postal code, this fails and
-     * says which list to shrink.
+     * The day a free decoder reads one of these, this fails and says which
+     * list to shrink.
      */
-    public function testRm4sccIsStillUnreadableByTheDecoder(): void
+    #[DataProvider('fourStateExemptionProvider')]
+    public function testAFourStateSymbologyIsStillUnreadableByTheDecoder(string $symbology, string $data): void
     {
         $this->requireDecoder();
 
-        $png = $this->renderForScanning('LE28HS', Symbology::Rm4scc->value);
+        $png = $this->renderForScanning($data, $symbology);
 
         self::assertSame(
             [],
             Decoder::decode($png, null, 'read'),
-            'zxing-cpp now reads RM4SCC; NO_STANDALONE_READER can shrink and it needs a real round trip'
+            "zxing-cpp now reads {$symbology}; NO_STANDALONE_READER can shrink and it needs a real round trip"
         );
+    }
+
+    /** @return \Generator<string, array{string, string}> */
+    public static function fourStateExemptionProvider(): \Generator
+    {
+        yield Symbology::Rm4scc->value => [Symbology::Rm4scc->value, 'LE28HS'];
+        yield Symbology::Kix->value => [Symbology::Kix->value, '2500GG30250'];
     }
 
     /**

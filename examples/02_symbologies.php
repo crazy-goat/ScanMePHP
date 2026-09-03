@@ -77,6 +77,7 @@ $payloads = [
     'databar-expanded' => '(01)09501101020917(10)LOT0001',
     'databar-expanded-stacked' => '(01)09501101020917(10)LOT0001',
     'rm4scc' => 'LE28HS',
+    'kix' => '2500GG30250',
 ];
 
 foreach ($payloads as $symbology => $data) {
