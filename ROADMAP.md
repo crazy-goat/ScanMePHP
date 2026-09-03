@@ -318,11 +318,114 @@ is to ship no option and assert that it does not exist.
 - **Minor linear codes** — MSI, Pharmacode, Code 11, Telepen. Cheap to add and
   correspondingly rare; the cost is API surface, not encoder complexity.
 
+## Tier 5 — standard coverage on what already ships
+
+Everything below is a piece of a standard that a generator in the Shipped table
+does not implement. None of it is a wrong symbol: each entry either costs
+modules a standard-complete encoder would not spend, or refuses a payload the
+symbology could have carried. They are collected here rather than filed against
+their own entries because they share a shape — the encoder was finished against
+what the round trip could prove, and these are what the round trip never asked
+about.
+
+Ordered by what it costs to leave alone, which is not the order they were
+written in.
+
+- **#201 — the suite segfaults with the extension loaded.** The only entry here
+  that is a defect rather than a gap, and the only one that hides other
+  failures. `ci.yml` runs the suite a second time under
+  `php -d extension=…/scanmeqr.so`, and that pass corrupts memory and crashes on
+  roughly half of all runs — on `main` as much as on any branch, so it predates
+  every symbology in Tier 4. It is `continue-on-error: true` today, which means
+  a real regression introduced by an extension change would look exactly like
+  the crash that is already there.
+
+  Nothing about it is diagnosed. The suspicion is the lifetime of a symbol's
+  buffer across the ext boundary, since the pure-PHP and FFI passes are clean
+  and only the loaded-extension pass crashes, but that is a place to start
+  looking rather than a finding. Whatever else this tier does, this one comes
+  first: until it is fixed the extension has no honest CI signal.
+
+- **QR chooses no mode.** `Encoder.php` calls the data encoder with
+  `Mode::Byte` and nothing else — twice, once for plain QR and once for GS1 QR.
+  `Encoding\DataEncoder` already implements numeric, alphanumeric and Kanji
+  compaction; `Mode::Numeric`, `Mode::Alphanumeric` and `Mode::Kanji` appear
+  nowhere in the library outside the class that implements them.
+
+  This is the widest of the gaps in ordinary use, because it is the default
+  symbology and the numbers are large: a numeric payload takes eight bits a
+  digit where the standard spends three and a third, and a payload of capitals
+  and digits takes eight where it should take five and a half. A URL in
+  uppercase or a run of digits therefore reaches a version two or three higher
+  than it needs, and past the version where the character count field widens it
+  can be more.
+
+  The work is not the compaction — that exists — it is segmentation: choosing
+  where to switch modes, which is the same optimal-partition problem PDF417's
+  entry solved exactly and cheaply. The one thing not to assume is that the
+  cost model transfers; QR's mode header and character count field are
+  version-dependent in a way PDF417's groups are not.
+
+- **Data Matrix is ASCII only.** `AsciiEncodation` is complete and its own
+  docblock is honest about being the only scheme. C40, Text, X12, EDIFACT and
+  Base256 are all absent. ASCII packs two digits into a codeword and one letter
+  into a codeword, so digits are already optimal and text is not: C40 and Text
+  put three characters into two codewords, which is a third off any payload
+  that is mostly letters. Base256's absence costs more per byte — binary data
+  goes through ASCII's upshift, a codeword and a half per byte — and it is also
+  the scheme that would let a Data Matrix carry arbitrary bytes at all without
+  the caller pre-encoding them.
+
+- **PDF417 emits no ECI header and no macro block.** Both are stated in
+  `Encoding\Pdf417\HighLevelEncoder`'s docblock. The ECI half is the smaller
+  one and already half-known: the PDF417 entry in Tier 3 found that zxing
+  prepends an ECI header to binary input, which is *why* half the bootstrap
+  symbols were refused, so the encoder that would have to be matched has
+  already been observed doing it.
+
+  The macro block is the larger job and the one with a capability behind it.
+  It is how a message longer than one symbol is split across several — a
+  segment index, a file ID, and optionally a file name, a segment count and a
+  checksum, so a reader reassembles them. Without it the answer to a payload
+  over 925 codewords is that it does not fit, rather than that it takes two
+  symbols.
+
+- **Aztec has no FLG(n).** Recorded in `Encoding\Aztec\HighLevelEncoder`'s
+  docblock as not implemented, with the reason that nothing in the library asked
+  for it. FLG(n) is Punct code 0, and it is the single mechanism by which an
+  Aztec symbol says anything about its own bytes: FLG(0) is FNC1, so a GS1
+  Aztec is impossible without it, and FLG(1) through FLG(6) carry an ECI
+  designator, so a non-ASCII payload can only be read by a decoder that guesses
+  the encoding correctly.
+
+  Note the shape of that: this is the one entry where the missing piece would
+  add a symbology rather than shrink a symbol. `gs1-aztec` is not on any tier
+  list, and it is FLG(0) plus the FNC1 placement rule the GS1 layer already
+  has.
+
+- **MaxiCode mode 5 is unimplemented.** Kept from the Tier 3 entry rather than
+  restated, because the reason it is open has not changed and is not effort:
+  its secondary message splits 68 data codewords against 56 check ones with an
+  interleaving that is not the plain mode's, nothing available here writes one,
+  and a sweep of thirty candidate splits produced nothing the reader accepts.
+  Mode 5 is mode 4 with enhanced error correction, so what is missing is
+  robustness on a non-carrier payload, not a payload that cannot be said at
+  all. It stays open until an encoder that writes one turns up; guessing at the
+  interleaving would ship a mode with no way to know it is right.
+
+- **DataBar Expanded's fourteen compaction methods.** For variable-measure
+  trade items — AI 01 paired with a weight, a price or a date. Those payloads
+  encode correctly today through the general AI 01 method, one or two symbol
+  characters wider than the narrowest a standard-complete encoder draws. Last
+  on this list on purpose: it is the narrowest set of inputs of anything here,
+  and each of the fourteen carries its own field layout and value ranges to get
+  wrong, so the ratio of risk to modules saved is the worst in the tier.
+
 ## Tier 6 — renderer coverage
 
-The first tier here that is not about symbology coverage, which is why it is
-numbered past the ones that are: 5 is left free for a symbology tier so the
-sequence keeps meaning one thing.
+The last tier, and the only one about neither symbologies nor the standards
+behind them. Tier 5 is what the shipped generators do not yet say; this is what
+the renderers cannot yet draw.
 
 - **Hexagons in the HTML renderers.** MaxiCode is refused by `html-div` and
   `html-table` today, and the reason is scope rather than capability — CSS
