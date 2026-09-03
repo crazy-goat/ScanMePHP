@@ -73,8 +73,8 @@ class DataBarReferenceTest extends TestCase
         // Nine each. A finder is not decoration here — its index is the
         // checksum — so a fixture that misses one has never checked what that
         // pattern's modules are.
-        $this->assertCount(\count(Patterns::FINDERS), $left, 'a left finder pattern is never drawn');
-        $this->assertCount(\count(Patterns::FINDERS), $right, 'a right finder pattern is never drawn');
+        $this->assertCount(\count(Patterns::OMNI_FINDERS), $left, 'a left finder pattern is never drawn');
+        $this->assertCount(\count(Patterns::OMNI_FINDERS), $right, 'a right finder pattern is never drawn');
     }
 
     public function testTheFixtureWalksEveryCharacterGroupBoundary(): void

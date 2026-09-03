@@ -13,6 +13,7 @@ use CrazyGoat\ScanMePHP\Generator\Codabar\Delimiter;
 use CrazyGoat\ScanMePHP\Generator\Code39\Charset;
 use CrazyGoat\ScanMePHP\Generator\Code39\Code39Options;
 use CrazyGoat\ScanMePHP\Generator\Code93\Charset as Code93Charset;
+use CrazyGoat\ScanMePHP\Generator\DataBarLimited\Backend\PhpBackend as LimitedBackend;
 use CrazyGoat\ScanMePHP\Generator\DataBarOmni\Backend\PhpBackend;
 use CrazyGoat\ScanMePHP\Generator\DataBarOmni\DataBarOmniOptions;
 use CrazyGoat\ScanMePHP\Generator\DataMatrix\DataMatrixOptions;
@@ -80,6 +81,7 @@ class DecoderRoundTripTest extends TestCase
         // as it is for GS1-128; it is the decoder saying which symbology it
         // thinks it read.
         Symbology::DataBarOmni->value => 'DataBar Omni',
+        Symbology::DataBarLimited->value => 'DataBar Limited',
         // As with GS1-128: the same bars, and what marks it as GS1 is an FNC1
         // the decoder reports by parenthesising what it hands back.
         Symbology::Gs1DataMatrix->value => 'Data Matrix',
@@ -544,6 +546,48 @@ class DecoderRoundTripTest extends TestCase
             self::FORMAT_NAMES['databar-omni'],
             '(01)01234567890128',
             new DataBarOmniOptions(truncated: true),
+        );
+    }
+
+    /**
+     * GTINs that walk the seams of Limited's arithmetic, which are not
+     * Omnidirectional's.
+     *
+     * Limited splits around 2013571 rather than 4537077 and its character
+     * groups start in seven other places, so none of the payloads above would
+     * land on an edge here. The left character has a further seam worth
+     * hitting: it only ever reaches the first three groups, because the
+     * indicator digit stops the value at 1999999999999.
+     *
+     * @return iterable<string, array{string}>
+     */
+    public static function dataBarLimitedProvider(): iterable
+    {
+        yield 'the smallest GTIN' => ['0000000000000'];
+        yield 'the largest GTIN Limited can carry' => ['1999999999999'];
+        yield 'one below the split' => ['0000002013570'];
+        yield 'the split itself' => ['0000002013571'];
+        yield 'one above the split' => ['0000002013572'];
+        yield 'the last value of the first group' => ['0000000183063'];
+        yield 'the first value of the second group' => ['0000000183064'];
+        yield 'the last value of the sixth group' => ['0000001996938'];
+        yield 'the left character entering its second group' => ['0368612361544'];
+        yield 'the left character entering its third group' => ['1651257088544'];
+        yield 'a fourteen-digit GTIN with its check digit' => ['01234567890128'];
+        yield 'the application identifier spelled out' => ['(01)01234567890128'];
+        yield 'an indicator digit of one' => ['1234567890123'];
+    }
+
+    #[DataProvider('dataBarLimitedProvider')]
+    public function testADataBarLimitedScansBack(string $data): void
+    {
+        $digits = LimitedBackend::normalise($data);
+
+        $this->assertScansBack(
+            $data,
+            Symbology::DataBarLimited->value,
+            self::FORMAT_NAMES['databar-limited'],
+            '(01)' . $digits,
         );
     }
 

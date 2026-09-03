@@ -203,17 +203,17 @@ class DataBarTest extends TestCase
 
         foreach (array_keys($seen) as $checksum) {
             $this->assertLessThan(81, $checksum, 'a checksum addresses no finder pair');
-            $this->assertArrayHasKey(intdiv($checksum, 9), Patterns::FINDERS);
-            $this->assertArrayHasKey($checksum % 9, Patterns::FINDERS);
+            $this->assertArrayHasKey(intdiv($checksum, 9), Patterns::OMNI_FINDERS);
+            $this->assertArrayHasKey($checksum % 9, Patterns::OMNI_FINDERS);
         }
     }
 
     /** Nine finder patterns, five elements each, fifteen modules each. */
     public function testTheFinderTableIsTheShapeAScannerLooksFor(): void
     {
-        $this->assertCount(9, Patterns::FINDERS);
+        $this->assertCount(9, Patterns::OMNI_FINDERS);
 
-        foreach (Patterns::FINDERS as $index => $finder) {
+        foreach (Patterns::OMNI_FINDERS as $index => $finder) {
             $this->assertCount(5, $finder, "finder {$index} is not five elements");
             $this->assertSame(15, array_sum($finder), "finder {$index} is not fifteen modules");
             // The two single modules at the end are what a scanner sweeping at
