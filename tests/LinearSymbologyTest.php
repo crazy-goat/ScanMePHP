@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 use CrazyGoat\ScanMePHP\Exception\UnsupportedDataException;
 use CrazyGoat\ScanMePHP\Format;
-use CrazyGoat\ScanMePHP\Generator\Code128\Backend\PhpBackend as Code128Backend;
 use CrazyGoat\ScanMePHP\Generator\Code128\Code128Generator;
+use CrazyGoat\ScanMePHP\Generator\Code128\Encoder as Code128Encoder;
 use CrazyGoat\ScanMePHP\Generator\Ean13\Ean13Generator;
 use CrazyGoat\ScanMePHP\Renderer\Options\PngOptions;
 use CrazyGoat\ScanMePHP\Scanme;
@@ -57,11 +57,11 @@ class LinearSymbologyTest extends TestCase
     {
         // "A": not digits, so Start B (104); 'A' is value ord-32 = 33;
         // check = (104 + 1×33) mod 103 = 137 mod 103 = 34.
-        $this->assertSame([104, 33, 34], (new Code128Backend())->symbolValues('A'));
+        $this->assertSame([104, 33, 34], (new Code128Encoder())->symbolValues('A'));
 
         // "00": all digits, even length, so Start C (105); the pair is value 0;
         // check = (105 + 1×0) mod 103 = 2.
-        $this->assertSame([105, 0, 2], (new Code128Backend())->symbolValues('00'));
+        $this->assertSame([105, 0, 2], (new Code128Encoder())->symbolValues('00'));
     }
 
     /** @return iterable<string, array{string, int}> */
@@ -85,7 +85,7 @@ class LinearSymbologyTest extends TestCase
         $symbol = $this->code128->generate($data);
 
         $this->assertSame($characters * 11 + 13, $symbol->getWidth(), $data);
-        $this->assertCount($characters, (new Code128Backend())->symbolValues($data));
+        $this->assertCount($characters, (new Code128Encoder())->symbolValues($data));
     }
 
     /**
@@ -137,24 +137,88 @@ class LinearSymbologyTest extends TestCase
         $this->assertGreaterThanOrEqual(100, \count($patterns));
     }
 
-    public function testCode128UsesSetCOnlyWhenItPaysForItself(): void
+    public function testCode128UsesSetCWheneverItIsNotWorse(): void
     {
-        $backend = new Code128Backend();
+        $encoder = new Code128Encoder();
         $codeC = 99;
         $startC = 105;
 
         // Six digits mid-payload: one switch buys three pairs instead of six
-        // characters, so it wins.
-        $this->assertContains($codeC, $backend->symbolValues('X123456X'));
+        // characters, so it wins outright.
+        $this->assertContains($codeC, $encoder->symbolValues('X123456X'));
 
-        // Four digits mid-payload: the switch and the switch back cost as much
-        // as they save, so staying in B is not worse.
-        $this->assertNotContains($codeC, $backend->symbolValues('X1234X'));
+        // Four digits mid-payload: the switch and the switch back cost exactly
+        // what they save, so both encodings are the same width and something
+        // has to choose. This encoder chooses C, which is also what the
+        // independent encoder behind the reference fixture chooses — that
+        // agreement is what lets the fixture be compared module for module
+        // rather than only by width.
+        $this->assertContains($codeC, $encoder->symbolValues('X1234X'));
 
-        // Four digits ending the payload need no switch back, so C wins.
-        $this->assertContains($codeC, $backend->symbolValues('X1234'));
+        // Two digits mid-payload: a switch each way to save one character is a
+        // net loss, so set B keeps them.
+        $this->assertNotContains($codeC, $encoder->symbolValues('X12X'));
 
-        $this->assertSame($startC, $backend->symbolValues('1234')[0], 'a digits-only payload starts in C');
+        $this->assertSame($startC, $encoder->symbolValues('1234')[0], 'a digits-only payload starts in C');
+    }
+
+    /**
+     * The encoding is the shortest one that exists, not merely a good one.
+     *
+     * Set switching is where a Code 128 encoder silently underperforms: a
+     * symbol encoded a character wider than necessary still scans as the right
+     * data, so nothing downstream complains. This brute-forces every legal
+     * encoding of short payloads and insists the encoder found a shortest one,
+     * which is a claim about the algorithm rather than about any one payload.
+     */
+    public function testCode128FindsTheShortestEncoding(): void
+    {
+        $encoder = new Code128Encoder();
+
+        foreach (['A', '1', '12', '123', '1234', 'X1234X', 'A1B2C3', '1234567', 'X12345678', '007007007'] as $data) {
+            // Either start code is free, so the search begins in both sets.
+            $shortest = min(
+                $this->shortestCode128Encoding($data, 0, false),
+                $this->shortestCode128Encoding($data, 0, true),
+            );
+
+            $this->assertCount(
+                $shortest + 2, // plus the start code and the check character
+                $encoder->symbolValues($data),
+                "not the shortest encoding of '{$data}'"
+            );
+        }
+    }
+
+    /**
+     * Fewest payload symbol characters for $data, by exhaustive search.
+     *
+     * Deliberately the naive exponential version: it is the definition of the
+     * answer rather than a second copy of the encoder's reasoning, which is the
+     * only way it can catch the encoder being clever and wrong.
+     */
+    private function shortestCode128Encoding(string $data, int $position = 0, bool $inSetC = false): int
+    {
+        if ($position === \strlen($data)) {
+            return 0;
+        }
+
+        $options = [];
+        $pair = $position + 1 < \strlen($data) && ctype_digit(substr($data, $position, 2));
+
+        if ($inSetC) {
+            if ($pair) {
+                $options[] = 1 + $this->shortestCode128Encoding($data, $position + 2, true);
+            }
+            $options[] = 2 + $this->shortestCode128Encoding($data, $position + 1, false);
+        } else {
+            if ($pair) {
+                $options[] = 2 + $this->shortestCode128Encoding($data, $position + 2, true);
+            }
+            $options[] = 1 + $this->shortestCode128Encoding($data, $position + 1, false);
+        }
+
+        return min($options);
     }
 
     /** @return iterable<string, array{string}> */

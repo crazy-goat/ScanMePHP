@@ -27,6 +27,11 @@ number is worse than a compile error.
   periodical's issue number, a book's list price. They carry no check digit,
   so the digit count is exact — a third digit on an EAN-2 is a different
   add-on, not a checksum, and is refused rather than trimmed.
+- **A reference fixture for Code 128** (`tests/fixtures/code128_reference.csv`,
+  141 symbols from zxing-cpp). Code 128 shipped before the rule that every
+  symbology gets one, so it was the last linear code verified only against its
+  own table. Comparing module for module against an independent encoder also
+  pins the character-set switching, which a round trip cannot see.
 - **Add-on placement**, via `Ean\Composite::of()`: an EAN-13, UPC-A or UPC-E
   with its add-on beside it, as one `Symbol` every renderer draws. Not a
   concatenation — there is a seven-module gap, the add-on's bars are drawn
@@ -141,6 +146,13 @@ number is worse than a compile error.
 - `bench/benchmark_render.php` and `bench/benchmark_e2e.php` rewritten on the
   new API; the render benchmark now walks the registry rather than a
   hand-maintained class list, and takes a symbology argument.
+- **Code 128 now encodes optimally.** The switch between character sets B and C
+  was a threshold heuristic — six digits, or four ending the payload — which is
+  the kind of rule that is wrong quietly: a symbol encoded a character wider
+  than it needs to be still scans as the right data. It is now a linear
+  dynamic program over the two sets, so the encoding is the shortest one that
+  exists, and odd-length digit runs in particular are narrower than before.
+  Ties go to set C, which is what the independent encoder chooses.
 - README, BENCHMARK.md and AGENTS.md rewritten for the current API.
 
 ### Removed
