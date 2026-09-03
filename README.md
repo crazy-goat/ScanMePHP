@@ -370,6 +370,9 @@ foreach ($scanme->getRegistry()->describeGenerators() as $name => $capabilities)
 }
 ```
 
+What is not there yet, and what has been deliberately deferred, is in
+[ROADMAP.md](ROADMAP.md).
+
 ## Output formats
 
 | Format | Content type | Options class |

@@ -143,6 +143,10 @@ php-ext/              # PHP extension wrapping clib
 tools/                # decode.py and the reference-fixture generators
 ```
 
+Which symbologies are in scope, and which are deliberately deferred, is in
+`ROADMAP.md`. Adding one that is not listed there is a scope decision, not a
+chore — raise it rather than assuming.
+
 ### Verification Discipline
 
 An encoder checked only against tables transcribed from the standard it
