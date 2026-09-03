@@ -563,12 +563,20 @@ mode, which nothing else here does: its five code sets between them carry all
 because the sets overlap — a space is in all five and a comma in three — and the
 search is exact with no lookahead limit.
 
-**Only the SVG and PNG renderers can draw it.** This is the one symbology whose
-module shape is not a square, so it is the one case where the renderer
-negotiation built into the library actually declines something: the ASCII and
-HTML renderers paint character and table cells, there is no honest way to
-approximate a hexagonal lattice with those, and they say so by name rather than
-emit a picture that looks like a symbol and does not scan.
+**Only the SVG and PNG renderers can draw it**, and it is the one symbology
+that makes the renderer negotiation built into the library actually decline
+something. Two independent things have to be true to draw a MaxiCode: hexagons
+on offset rows, and a bullseye — three concentric rings that are *not modules*,
+so the grid is blank where the finder goes and the renderer has to supply it.
+The symbol declares both, and a renderer that can do neither says so by name
+rather than emitting a picture that looks like a symbol and does not scan.
+
+The two refusals are not the same kind of thing. A terminal genuinely cannot
+draw this: character cells are a fixed raster with no way to offset a row by
+half a cell. HTML could — `clip-path` draws a hexagon and `border-radius` a ring
+— and refuses only because the HTML renderer is built around one element per
+module in a grid, so a lattice would be a second rendering path rather than a
+variation. That is scope, and it is on the roadmap.
 
 ```php
 $scanme->supports('maxicode', 'svg');           // true

@@ -8,6 +8,7 @@ use CrazyGoat\ScanMePHP\Encoding\MaxiCode\Specs;
 use CrazyGoat\ScanMePHP\ModuleShape;
 use CrazyGoat\ScanMePHP\QuietZone;
 use CrazyGoat\ScanMePHP\Region;
+use CrazyGoat\ScanMePHP\RegionRole;
 use CrazyGoat\ScanMePHP\Symbol;
 use CrazyGoat\ScanMePHP\Symbology;
 
@@ -69,6 +70,7 @@ final class MaxiCodeSymbols
                 y: Specs::BULLSEYE_ROW - intdiv(self::BULLSEYE_ROWS, 2),
                 width: self::BULLSEYE_COLUMNS,
                 height: self::BULLSEYE_ROWS,
+                role: RegionRole::RendererDrawn,
             )],
             metadata: [
                 'symbology' => Symbology::MaxiCode->value,
