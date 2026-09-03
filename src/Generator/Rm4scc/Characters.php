@@ -4,18 +4,16 @@ declare(strict_types=1);
 
 namespace CrazyGoat\ScanMePHP\Generator\Rm4scc;
 
-use CrazyGoat\ScanMePHP\Generator\FourState\Patterns;
+use CrazyGoat\ScanMePHP\Generator\FourState\Alphabet;
 use CrazyGoat\ScanMePHP\Generator\FourState\State;
 
 /**
- * RM4SCC's thirty-six characters, and the one that checks them.
+ * What RM4SCC adds to the family's alphabet.
  *
- * There is no table here, which is the whole point. A character is a pair of
- * two-of-four nibbles — one saying which of its four bars reach up, one saying
- * which reach down — and its position in the alphabet is the pair read as a
- * base-six number: `index = ascenders * 6 + descenders`, digits first, then
- * letters. Every published RM4SCC table is that arithmetic written out, and
- * writing it out is how a table acquires a typo.
+ * The thirty-six characters themselves are {@see Alphabet}'s — KIX draws the
+ * same bars for the same character, so the derivation lives once. What is here
+ * is the part no other four-state code shares: a start bar, a stop bar, and a
+ * check character.
  *
  * The check character is the same arithmetic done twice more. Each nibble is
  * worth its position plus one, so 1 to 6 rather than 0 to 5; the check
@@ -27,9 +25,6 @@ use CrazyGoat\ScanMePHP\Generator\FourState\State;
  */
 final class Characters
 {
-    /** Six times six characters, in the order the nibble pairs enumerate them. */
-    public const ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-
     /**
      * The longest payload the reference encoder will draw.
      *
@@ -46,28 +41,6 @@ final class Characters
     /** Full bar: the only state that cannot be mistaken for a truncated one. */
     public const STOP = State::Full;
 
-    /**
-     * The four bars of one character.
-     *
-     * @return list<State>
-     * @throws \InvalidArgumentException when the character is not in the alphabet
-     */
-    public static function bars(string $character): array
-    {
-        $index = strpos(self::ALPHABET, $character);
-        if ($index === false) {
-            throw new \InvalidArgumentException(sprintf(
-                'RM4SCC carries digits and capital letters only, got "%s"',
-                $character
-            ));
-        }
-
-        return Patterns::bars(
-            Patterns::TWO_OF_FOUR[intdiv($index, 6)],
-            Patterns::TWO_OF_FOUR[$index % 6],
-        );
-    }
-
     /** The check character for an already-normalised payload. */
     public static function checkCharacter(string $data): string
     {
@@ -75,13 +48,12 @@ final class Characters
         $descenders = 0;
 
         foreach (str_split($data) as $character) {
-            $index = strpos(self::ALPHABET, $character);
-            \assert($index !== false, 'the payload was normalised before it got here');
+            $index = Alphabet::indexOf($character);
 
             $ascenders += intdiv($index, 6) + 1;
             $descenders += $index % 6 + 1;
         }
 
-        return self::ALPHABET[6 * (($ascenders - 1) % 6) + ($descenders - 1) % 6];
+        return Alphabet::CHARACTERS[6 * (($ascenders - 1) % 6) + ($descenders - 1) % 6];
     }
 }

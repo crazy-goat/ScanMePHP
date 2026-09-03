@@ -91,7 +91,8 @@
         "reference:databar-expanded": ".decoders/bin/python tools/databar_expanded_reference.py",
         "reference:databar-expanded-stacked": ".decoders/bin/python tools/databar_expanded_stacked_reference.py",
         "reference:four-state-check": ".decoders/bin/python tools/four_state.py --self-check",
-        "reference:rm4scc": ".decoders/bin/python tools/rm4scc_reference.py"
+        "reference:rm4scc": ".decoders/bin/python tools/rm4scc_reference.py",
+        "reference:kix": ".decoders/bin/python tools/kix_reference.py"
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
@@ -109,6 +110,7 @@
         "reference:databar-expanded": "Regenerate the GS1 DataBar Expanded reference symbols from zxing-cpp",
         "reference:databar-expanded-stacked": "Regenerate the GS1 DataBar Expanded Stacked reference symbols from zxing-cpp",
         "reference:four-state-check": "Re-measure how zint draws a four-state bar, which is how those fixtures are read",
-        "reference:rm4scc": "Regenerate the RM4SCC reference symbols from zint"
+        "reference:rm4scc": "Regenerate the RM4SCC reference symbols from zint",
+        "reference:kix": "Regenerate the KIX reference symbols from zint"
     }
 }

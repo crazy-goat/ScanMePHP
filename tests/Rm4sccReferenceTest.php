@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CrazyGoat\ScanMePHP\Tests;
 
 use CrazyGoat\ScanMePHP\Defaults;
+use CrazyGoat\ScanMePHP\Generator\FourState\Alphabet;
 use CrazyGoat\ScanMePHP\Generator\FourState\Patterns;
 use CrazyGoat\ScanMePHP\Generator\Rm4scc\Characters;
 use CrazyGoat\ScanMePHP\Symbology;
@@ -81,7 +82,7 @@ class Rm4sccReferenceTest extends TestCase
         $drawn = array_map(strval(...), array_keys($characters));
         sort($drawn);
 
-        $alphabet = str_split(Characters::ALPHABET);
+        $alphabet = str_split(Alphabet::CHARACTERS);
         sort($alphabet);
 
         $this->assertSame($alphabet, $drawn, 'a character is never drawn');
