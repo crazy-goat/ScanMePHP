@@ -75,7 +75,8 @@
         "reference:code39": ".decoders/bin/python tools/code39_reference.py",
         "reference:code93": ".decoders/bin/python tools/code93_reference.py",
         "reference:itf": ".decoders/bin/python tools/itf_reference.py",
-        "reference:codabar": ".decoders/bin/python tools/codabar_reference.py"
+        "reference:codabar": ".decoders/bin/python tools/codabar_reference.py",
+        "reference:code128": ".decoders/bin/python tools/code128_reference.py"
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
