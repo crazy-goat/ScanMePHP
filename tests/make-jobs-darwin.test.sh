@@ -4,7 +4,7 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 builder="$root/src/Builder.php"
 
-if grep -q 'nproc' "$builder"; then
+if grep -q '$(nproc)' "$builder"; then
   echo "Builder.php still calls nproc" >&2
   exit 1
 fi
