@@ -61,9 +61,9 @@ class Builder
             throw BuildException::cmakeFailed($cmakeExitCode);
         }
 
-        // Run make (single invocation; exit code only)
+        // macOS has no nproc. sysctl is the Darwin count; getconf covers the rest.
         $makeCmd = sprintf(
-            'cd %s && make -j$(nproc)',
+            'cd %s && make -j"$(sysctl -n hw.ncpu 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)"',
             escapeshellarg($buildPath)
         );
 
