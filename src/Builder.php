@@ -14,19 +14,43 @@ class Builder
 
     public function isBuildAvailable(): bool
     {
-        // Check for CMake
-        $cmake = shell_exec('which cmake 2>/dev/null');
-        if (empty($cmake)) {
+        if (!$this->commandOnPath('cmake')) {
             return false;
         }
 
-        // Check for C++ compiler
-        $cxx = shell_exec('which g++ 2>/dev/null') ?? shell_exec('which clang++ 2>/dev/null');
-        if (empty($cxx)) {
+        // Prefer g++; fall back to clang++ when g++ is absent.
+        if (!$this->commandOnPath('g++') && !$this->commandOnPath('clang++')) {
             return false;
         }
+
         // Check for clib directory
         return is_dir($this->getClibPath());
+    }
+
+    /**
+     * True when $binary resolves on PATH.
+     *
+     * Windows has no `which`; `where` is the PATH probe (issue #188).
+     */
+    private function commandOnPath(string $binary): bool
+    {
+        $output = shell_exec($this->pathLookupCommand($binary));
+
+        return !empty($output);
+    }
+
+    /**
+     * Shell command that prints the first PATH hit for $binary, or nothing.
+     */
+    private function pathLookupCommand(string $binary): string
+    {
+        $name = escapeshellarg($binary);
+
+        if (PHP_OS_FAMILY === 'Windows') {
+            return 'where ' . $name . ' 2>NUL';
+        }
+
+        return 'which ' . $name . ' 2>/dev/null';
     }
 
     public function getClibPath(): string
