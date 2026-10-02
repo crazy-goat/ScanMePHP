@@ -196,8 +196,9 @@ class PluginTest extends TestCase
         ]);
 
         $output = implode("\n", $output);
-        $this->assertStringContainsString('refused', $output);
-        $this->assertStringContainsString('extra.scanmephp.checksums', $output);
+        // Name the binary: the FFI branch has no pin either way and would print
+        // "refused" on its own, so the generic words prove nothing here.
+        $this->assertStringContainsString('No SHA-256 checksum configured for binary ' . $binaryName, $output);
         $this->assertStringNotContainsString('downloaded successfully', $output);
     }
 
