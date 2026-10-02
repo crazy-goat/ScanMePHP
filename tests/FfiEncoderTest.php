@@ -152,4 +152,26 @@ class FfiEncoderTest extends TestCase
         $this->assertNotEmpty($version);
         $this->assertMatchesRegularExpression('/^\d+\.\d+\.\d+$/', $version);
     }
+
+    public function testEncodersShareOneLibraryHandle(): void
+    {
+        // Each encoder used to load its own copy of the library and unload it on
+        // destruction, which crashed the suite (#201). The handle is shared now.
+        $ffi = new \ReflectionProperty(FfiEncoder::class, 'ffi');
+        $first = new FfiEncoder(self::$libraryPath);
+        $second = new FfiEncoder(self::$libraryPath);
+
+        $this->assertSame($ffi->getValue($first), $ffi->getValue($second));
+    }
+
+    public function testEncodingStillWorksAfterAnEncoderIsFreed(): void
+    {
+        $encoder = new FfiEncoder(self::$libraryPath);
+        $expected = $encoder->encode('HELLO', ErrorCorrectionLevel::Medium)->getData();
+        unset($encoder);
+
+        $actual = (new FfiEncoder(self::$libraryPath))->encode('HELLO', ErrorCorrectionLevel::Medium);
+
+        $this->assertSame($expected, $actual->getData());
+    }
 }
