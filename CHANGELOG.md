@@ -41,8 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The binary download sets explicit cURL limits: HTTPS only (also for redirects), at most 3
   redirects, a 10 s connect timeout and `CURLOPT_SSL_VERIFYHOST` 2 (#64).
 - `FfiEncoder` no longer crashes PHP with a segfault or an "Out of memory" error from a garbage
-  matrix size. Every encoder used to load the native library on its own and unload it when it
-  was freed; all encoders for one library path now share a single FFI instance (#201). This also skips re-parsing the header on every `NativeEncoder` call
+  matrix size. Every encoder used to build its own FFI instance and free it with the encoder;
+  PHP's FFI then kept reading struct fields through a stale cache entry (the real cause, found in
+  #254, is not the native library or its unloading). All encoders for one library path now share
+  a single FFI instance (#201). This also skips re-parsing the header on every `NativeEncoder` call
   without the extension. CI's extension-loaded test pass is blocking again.
 
 ## [0.5.2] - 2026-08-26
