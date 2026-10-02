@@ -6,14 +6,15 @@
 
 static int failures = 0;
 
-#define ASSERT(cond, msg) do { \
-    if (!(cond)) { \
-        fprintf(stderr, "FAIL: %s (line %d): %s\n", __func__, __LINE__, msg); \
-        ++failures; \
-    } else { \
-        printf("  OK: %s\n", msg); \
-    } \
-} while(0)
+#define ASSERT(cond, msg)                                                                          \
+    do {                                                                                           \
+        if (!(cond)) {                                                                             \
+            fprintf(stderr, "FAIL: %s (line %d): %s\n", __func__, __LINE__, msg);                  \
+            ++failures;                                                                            \
+        } else {                                                                                   \
+            printf("  OK: %s\n", msg);                                                             \
+        }                                                                                          \
+    } while (0)
 
 void test_version_string() {
     printf("[test_version_string]\n");
@@ -92,7 +93,10 @@ void test_modules_values() {
     int total = out.size * out.size;
     bool all_01 = true;
     for (int i = 0; i < total; ++i) {
-        if (out.modules[i] != 0 && out.modules[i] != 1) { all_01 = false; break; }
+        if (out.modules[i] != 0 && out.modules[i] != 1) {
+            all_01 = false;
+            break;
+        }
     }
     ASSERT(all_01, "all modules are 0 or 1");
     scanme_qr_result_free(&out);
@@ -134,7 +138,6 @@ int main() {
     test_modules_values();
     test_free_null_safe();
     test_deterministic();
-    printf("\n=== %s (%d failures) ===\n",
-           failures == 0 ? "ALL PASSED" : "FAILURES", failures);
+    printf("\n=== %s (%d failures) ===\n", failures == 0 ? "ALL PASSED" : "FAILURES", failures);
     return failures > 0 ? 1 : 0;
 }
