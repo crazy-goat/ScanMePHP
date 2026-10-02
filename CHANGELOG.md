@@ -36,6 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `bin/kb-lint.php` and `bin/README.md`.
 - The committed `vendor/` placeholder and the stray `php-ext/configure~` autoconf backup.
 
+### Fixed
+
+- `FfiEncoder` no longer crashes PHP with a segfault or an "Out of memory" error from a garbage
+  matrix size. Every encoder used to load the native library on its own and unload it when it
+  was freed; all encoders for one library path now share a single FFI instance for the life of
+  the process (#201). This also skips re-parsing the header on every `NativeEncoder` call
+  without the extension. CI's extension-loaded test pass is blocking again.
+
 ## [0.5.2] - 2026-08-26
 
 v0.5.1 has no binaries behind it: every extension build failed, so `Create

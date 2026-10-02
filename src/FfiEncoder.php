@@ -10,6 +10,15 @@ use FFI;
 
 class FfiEncoder implements EncoderInterface
 {
+    /**
+     * One FFI instance per library path for the whole process. Building one per
+     * encoder dlopened the library and dlclosed it again whenever an encoder was
+     * freed, and that unload/reload cycle crashed the process (#201).
+     *
+     * @var array<string, FFI>
+     */
+    private static array $instances = [];
+
     private readonly FFI $ffi;
 
     public function __construct(string $libraryPath)
@@ -24,8 +33,10 @@ class FfiEncoder implements EncoderInterface
             );
         }
 
-        $header = (string) file_get_contents(__DIR__ . '/ffi/scanme_qr.h');
-        $this->ffi = FFI::cdef($header, $libraryPath);
+        $this->ffi = self::$instances[$libraryPath] ??= FFI::cdef(
+            (string) file_get_contents(__DIR__ . '/ffi/scanme_qr.h'),
+            $libraryPath
+        );
     }
 
     public function encode(
