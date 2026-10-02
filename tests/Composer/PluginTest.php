@@ -188,20 +188,12 @@ class PluginTest extends TestCase
             $this->markTestSkipped('scanmeqr extension loaded; the plugin skips binary installation entirely');
         }
 
-        $urls = [];
-        $extDownloader = new FailingStubBinaryDownloader($this->installPath . '/ext-binaries');
-        $plugin = new StubDownloaderPlugin(
-            function (string $binaryPath, string $version, ChecksumManager $checksumManager) use (&$urls, $extDownloader): BinaryDownloader {
-                $urls[] = (new BinaryDownloader('crazy-goat/scanmephp', $version, $binaryPath))->getDownloadUrl('binary');
-
-                return $extDownloader;
-            }
-        );
+        $plugin = new UrlRecordingPlugin();
 
         $this->runPackageInstall(['name' => 'test/project'], $plugin);
 
-        $this->assertNotSame([], $urls, 'the plugin must create at least one downloader');
-        foreach ($urls as $url) {
+        $this->assertNotSame([], $plugin->urls, 'the plugin must create at least one downloader');
+        foreach ($plugin->urls as $url) {
             $this->assertSame('https://github.com/crazy-goat/scanmephp/releases/download/v0.4.6/binary', $url);
         }
     }
@@ -439,5 +431,22 @@ final class StubDownloaderPlugin extends Plugin
     protected function createDownloader(string $binaryPath, string $version, ChecksumManager $checksumManager): BinaryDownloader
     {
         return ($this->factory)($binaryPath, $version, $checksumManager);
+    }
+}
+
+/**
+ * Plugin that keeps the production createDownloader() and records the URL its
+ * downloader would use, then hands back an offline stub.
+ */
+final class UrlRecordingPlugin extends Plugin
+{
+    /** @var list<string> */
+    public array $urls = [];
+
+    protected function createDownloader(string $binaryPath, string $version, ChecksumManager $checksumManager): \CrazyGoat\ScanMePHP\Tests\Composer\FailingStubBinaryDownloader
+    {
+        $this->urls[] = parent::createDownloader($binaryPath, $version, $checksumManager)->getDownloadUrl('binary');
+
+        return new FailingStubBinaryDownloader($binaryPath);
     }
 }
