@@ -147,7 +147,7 @@ jobs:
           echo "https://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories
           # Alpine uses different naming: php81-dev instead of php8.1-dev
           ALPINE_PHP_VERSION=$(echo "${{ matrix.php-version }}" | tr -d '.')
-          apk add --no-cache php${ALPINE_PHP_VERSION}-dev
+          apk add --no-cache "php${ALPINE_PHP_VERSION}-dev"
 
       - name: Build PHP extension
         working-directory: php-ext
@@ -155,8 +155,8 @@ jobs:
           if [ "${{ matrix.variant }}" = "musl" ]; then
             # Alpine uses different naming: phpize81 instead of phpize8.1
             ALPINE_PHP_VERSION=$(echo "${{ matrix.php-version }}" | tr -d '.')
-            phpize${ALPINE_PHP_VERSION}
-            ./configure --with-php-config=/usr/bin/php-config${ALPINE_PHP_VERSION} --with-scanmeqr-clib="$GITHUB_WORKSPACE/clib"
+            "phpize${ALPINE_PHP_VERSION}"
+            ./configure --with-php-config="/usr/bin/php-config${ALPINE_PHP_VERSION}" --with-scanmeqr-clib="$GITHUB_WORKSPACE/clib"
           else
             phpize${{ matrix.php-version }}
             ./configure --with-php-config=/usr/bin/php-config${{ matrix.php-version }} --with-scanmeqr-clib="$GITHUB_WORKSPACE/clib"
