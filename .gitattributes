@@ -1,7 +1,3 @@
-# Exclude development/workflow artifacts from distributed archives.
-/.workflow/proof_of_work/ export-ignore
-/.workflow/helpers/ export-ignore
-/.workflow/ export-ignore
 /bin/ export-ignore
 /bench/ export-ignore
 /clib/build/ export-ignore
