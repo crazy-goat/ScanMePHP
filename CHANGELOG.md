@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The binary download sets explicit cURL limits: HTTPS only (also for redirects), at most 3
+  redirects, a 10 s connect timeout and `CURLOPT_SSL_VERIFYHOST` 2 (#64).
 - `FfiEncoder` no longer crashes PHP with a segfault or an "Out of memory" error from a garbage
   matrix size. Every encoder used to load the native library on its own and unload it when it
   was freed; all encoders for one library path now share a single FFI instance (#201). This also skips re-parsing the header on every `NativeEncoder` call

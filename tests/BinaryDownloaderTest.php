@@ -109,4 +109,27 @@ class BinaryDownloaderTest extends TestCase
 
         $downloader->download('libscanme_qr-linux-glibc-x86_64.so');
     }
+
+    public function testCurlOptionsRestrictRedirectsAndProtocols(): void
+    {
+        $downloader = new class ('crazy-goat/scanmephp', '0.4.4', $this->tempDir) extends BinaryDownloader {
+            /**
+             * @return array<int, bool|int>
+             */
+            public static function options(): array
+            {
+                return static::curlOptions();
+            }
+        };
+
+        $options = $downloader::options();
+
+        $this->assertTrue($options[CURLOPT_FOLLOWLOCATION]);
+        $this->assertSame(3, $options[CURLOPT_MAXREDIRS]);
+        $this->assertSame(CURLPROTO_HTTPS, $options[CURLOPT_PROTOCOLS]);
+        $this->assertSame(CURLPROTO_HTTPS, $options[CURLOPT_REDIR_PROTOCOLS]);
+        $this->assertSame(10, $options[CURLOPT_CONNECTTIMEOUT]);
+        $this->assertTrue($options[CURLOPT_SSL_VERIFYPEER]);
+        $this->assertSame(2, $options[CURLOPT_SSL_VERIFYHOST]);
+    }
 }

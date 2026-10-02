@@ -39,6 +39,23 @@ class BinaryDownloader
         return $this->baseUrl . '/' . $binaryName;
     }
 
+    /**
+     * @return array<int, bool|int>
+     */
+    protected static function curlOptions(): array
+    {
+        return [
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 3,
+            CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
+            CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_TIMEOUT => 300,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+        ];
+    }
+
     public function download(string $binaryName, ?string $expectedChecksum = null): string
     {
         // Fail-closed: downloading without a checksum is never allowed.
@@ -67,10 +84,7 @@ class BinaryDownloader
         }
 
         try {
-            curl_setopt($ch, CURLOPT_FILE, $fp);
-            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 300);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+            curl_setopt_array($ch, [CURLOPT_FILE => $fp] + static::curlOptions());
 
             $result = curl_exec($ch);
 
