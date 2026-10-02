@@ -61,7 +61,7 @@ jobs:
           cp libscanme_qr.so "libscanme_qr-linux-${{ matrix.variant }}-x86_64.so"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ffi-linux-${{ matrix.variant }}-x86_64
           path: clib/build/libscanme_qr-linux-${{ matrix.variant }}-x86_64.so
@@ -93,7 +93,7 @@ jobs:
           cp libscanme_qr.dylib "libscanme_qr-macos-${{ matrix.arch }}.dylib"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ffi-macos-${{ matrix.arch }}
           path: clib/build/libscanme_qr-macos-${{ matrix.arch }}.dylib
@@ -169,7 +169,7 @@ jobs:
           cp scanmeqr.so "php-ext-linux-${{ matrix.variant }}-x86_64-php${{ matrix.php-version }}.so"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ext-linux-${{ matrix.variant }}-x86_64-php${{ matrix.php-version }}
           path: php-ext/modules/php-ext-linux-${{ matrix.variant }}-x86_64-php${{ matrix.php-version }}.so
@@ -202,7 +202,7 @@ jobs:
           cp scanmeqr.so "php-ext-macos-${{ matrix.arch }}-php${{ matrix.php-version }}.so"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ext-macos-${{ matrix.arch }}-php${{ matrix.php-version }}
           path: php-ext/modules/php-ext-macos-${{ matrix.arch }}-php${{ matrix.php-version }}.so
