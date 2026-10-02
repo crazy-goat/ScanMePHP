@@ -12,6 +12,7 @@ use Composer\Installer\PackageEvent;
 use Composer\Installer\PackageEvents;
 use Composer\IO\IOInterface;
 use Composer\Package\PackageInterface;
+use Composer\Package\RootPackageInterface;
 use Composer\Repository\RepositoryInterface;
 use CrazyGoat\ScanMePHP\BinaryDownloader;
 use CrazyGoat\ScanMePHP\ChecksumManager;
@@ -181,6 +182,30 @@ class PluginTest extends TestCase
         $this->assertSame(1, $ffiDownloader->downloadCalls, 'the FFI verified download path must be invoked exactly once');
     }
 
+    public function testDownloadUrlUsesLibraryVersionNotRootPackageVersion(): void
+    {
+        if (extension_loaded('scanmeqr')) {
+            $this->markTestSkipped('scanmeqr extension loaded; the plugin skips binary installation entirely');
+        }
+
+        $urls = [];
+        $extDownloader = new FailingStubBinaryDownloader($this->installPath . '/ext-binaries');
+        $plugin = new StubDownloaderPlugin(
+            function (string $binaryPath, string $version, ChecksumManager $checksumManager) use (&$urls, $extDownloader): BinaryDownloader {
+                $urls[] = (new BinaryDownloader('crazy-goat/scanmephp', $version, $binaryPath))->getDownloadUrl('binary');
+
+                return $extDownloader;
+            }
+        );
+
+        $this->runPackageInstall(['name' => 'test/project'], $plugin);
+
+        $this->assertNotSame([], $urls, 'the plugin must create at least one downloader');
+        foreach ($urls as $url) {
+            $this->assertSame('https://github.com/crazy-goat/scanmephp/releases/download/v0.4.6/binary', $url);
+        }
+    }
+
     public function testPackageInstallWithDirectoryAtFfiTargetPathFailsCleanly(): void
     {
         if (extension_loaded('scanmeqr') || !extension_loaded('ffi')) {
@@ -277,6 +302,13 @@ class PluginTest extends TestCase
         $composer = $this->createMock(Composer::class);
         $composer->method('getConfig')->willReturn($config);
         $composer->method('getInstallationManager')->willReturn($installManager);
+
+        // The consuming application has its own, unrelated version (#69).
+        $rootPackage = $this->createMock(RootPackageInterface::class);
+        $rootPackage->method('getName')->willReturn('test/project');
+        $rootPackage->method('getPrettyVersion')->willReturn('v9.9.9');
+        $rootPackage->method('getVersion')->willReturn('9.9.9.0');
+        $composer->method('getPackage')->willReturn($rootPackage);
 
         $package = $this->createMock(PackageInterface::class);
         $package->method('getName')->willReturn('crazy-goat/scanmephp');
