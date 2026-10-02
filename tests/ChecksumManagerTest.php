@@ -22,7 +22,7 @@ class ChecksumManagerTest extends TestCase
                     'scanmephp' => [
                         'checksums' => [
                             'v0.4.4' => [
-                                'libscanme_qr-linux-glibc-x86_64.so' => 'abc123def456',
+                                'libscanme_qr-linux-glibc-x86_64.so' => hash('sha256', 'abc123def456'),
                             ],
                         ],
                     ],
@@ -37,7 +37,7 @@ class ChecksumManagerTest extends TestCase
             $manager = new ChecksumManager($tempDir);
             $checksum = $manager->getChecksum('v0.4.4', 'libscanme_qr-linux-glibc-x86_64.so');
 
-            $this->assertEquals('abc123def456', $checksum);
+            $this->assertEquals(hash('sha256', 'abc123def456'), $checksum);
         } finally {
             if (is_dir($tempDir)) {
                 unlink($tempDir . '/composer.json');
@@ -83,7 +83,7 @@ class ChecksumManagerTest extends TestCase
                     'scanmephp' => [
                         'checksums' => [
                             'v0.4.4' => [
-                                'libscanme_qr-linux-glibc-x86_64.so' => 'abc123def456',
+                                'libscanme_qr-linux-glibc-x86_64.so' => hash('sha256', 'abc123def456'),
                             ],
                         ],
                     ],
@@ -98,7 +98,7 @@ class ChecksumManagerTest extends TestCase
             $manager = new ChecksumManager($tempDir);
             $checksum = $manager->getChecksum('0.4.4', 'libscanme_qr-linux-glibc-x86_64.so');
 
-            $this->assertEquals('abc123def456', $checksum);
+            $this->assertEquals(hash('sha256', 'abc123def456'), $checksum);
         } finally {
             if (is_dir($tempDir)) {
                 unlink($tempDir . '/composer.json');
@@ -120,7 +120,7 @@ class ChecksumManagerTest extends TestCase
                     'scanmephp' => [
                         'checksums' => [
                             '0.4.4' => [
-                                'libscanme_qr-linux-glibc-x86_64.so' => 'abc123def456',
+                                'libscanme_qr-linux-glibc-x86_64.so' => hash('sha256', 'abc123def456'),
                             ],
                         ],
                     ],
@@ -188,22 +188,114 @@ class ChecksumManagerTest extends TestCase
         }
     }
 
-    public function testExistingBinaryIsValidWhenNoChecksumConfigured(): void
+    public function testExistingBinaryIsInvalidWhenNoChecksumConfigured(): void
     {
         $tempDir = $this->createChecksumFixture(null);
 
         try {
-            // No pinned checksum: legacy behavior is preserved (existing file accepted)
+            // No pinned checksum: the file on disk cannot be verified at all, so
+            // it must not be accepted (fail-closed) — the caller re-downloads it.
             $binaryPath = $tempDir . '/libscanme_qr-linux-glibc-x86_64.so';
             file_put_contents($binaryPath, 'unverified-binary-content');
 
             $manager = new ChecksumManager($tempDir);
 
-            $this->assertTrue(
+            $this->assertFalse(
                 $manager->existingBinaryIsValid('v0.4.4', 'libscanme_qr-linux-glibc-x86_64.so', $binaryPath)
             );
         } finally {
             $this->cleanupFixture($tempDir, ['libscanme_qr-linux-glibc-x86_64.so']);
+        }
+    }
+
+    public function testEmptyChecksumValueIsNotAPin(): void
+    {
+        $tempDir = $this->createChecksumFixture([
+            'v0.4.4' => ['libscanme_qr-linux-glibc-x86_64.so' => ''],
+        ]);
+
+        try {
+            $manager = new ChecksumManager($tempDir);
+
+            $this->assertFalse($manager->hasChecksum('v0.4.4', 'libscanme_qr-linux-glibc-x86_64.so'));
+            $this->assertNull($manager->getChecksum('v0.4.4', 'libscanme_qr-linux-glibc-x86_64.so'));
+        } finally {
+            $this->cleanupFixture($tempDir);
+        }
+    }
+
+    public function testNonStringChecksumValueIsNotAPin(): void
+    {
+        // A hand-edited composer.json can hold anything; a number must not come
+        // back as a checksum (it would raise a TypeError under strict_types).
+        $tempDir = $this->createChecksumFixture([
+            'v0.4.4' => ['libscanme_qr-linux-glibc-x86_64.so' => 12345],
+        ]);
+
+        try {
+            $manager = new ChecksumManager($tempDir);
+
+            $this->assertFalse($manager->hasChecksum('v0.4.4', 'libscanme_qr-linux-glibc-x86_64.so'));
+        } finally {
+            $this->cleanupFixture($tempDir);
+        }
+    }
+
+    public function testNonStringChecksumSectionIsNotAPin(): void
+    {
+        // A scalar where the version map belongs used to be assigned straight to
+        // the ?array property: a TypeError, i.e. an \Error, which escapes the
+        // plugin's catch (\Exception) and aborts the whole composer install.
+        // Written by hand, because the fixture helper takes a version map.
+        $tempDir = sys_get_temp_dir() . '/scanme_checksum_test_' . uniqid();
+        mkdir($tempDir, 0777, true);
+        file_put_contents($tempDir . '/composer.json', json_encode([
+            'name' => 'test/project',
+            'extra' => ['scanmephp' => ['checksums' => 'oops']],
+        ]));
+
+        try {
+            $manager = new ChecksumManager($tempDir);
+
+            $this->assertFalse($manager->hasChecksum('v0.4.4', 'libscanme_qr-linux-glibc-x86_64.so'));
+            $this->assertNull($manager->getChecksum('v0.4.4', 'libscanme_qr-linux-glibc-x86_64.so'));
+        } finally {
+            $this->cleanupFixture($tempDir);
+        }
+    }
+
+    public function testWholeSha256SumLineIsNotAPin(): void
+    {
+        // The README tells users to copy the digest out of checksums.txt; a whole
+        // `sha256sum` line pasted by mistake can never match, so it must be
+        // refused before the multi-megabyte download, not after it.
+        $binaryName = 'libscanme_qr-linux-glibc-x86_64.so';
+        $digest = hash('sha256', 'binary-content');
+        $tempDir = $this->createChecksumFixture([
+            'v0.4.4' => [$binaryName => $digest . '  ' . $binaryName],
+        ]);
+
+        try {
+            $manager = new ChecksumManager($tempDir);
+
+            $this->assertFalse($manager->hasChecksum('v0.4.4', $binaryName));
+            $this->assertNull($manager->getChecksum('v0.4.4', $binaryName));
+        } finally {
+            $this->cleanupFixture($tempDir);
+        }
+    }
+
+    public function testUppercaseAndShortDigestsAreNotPins(): void
+    {
+        $binaryName = 'libscanme_qr-linux-glibc-x86_64.so';
+        $tempDir = $this->createChecksumFixture([
+            'v0.4.4' => [$binaryName => strtoupper(hash('sha256', 'binary-content'))],
+        ]);
+
+        try {
+            $this->assertFalse((new ChecksumManager($tempDir))->hasChecksum('v0.4.4', $binaryName));
+        } finally {
+            $this->cleanupFixture($tempDir);
         }
     }
 
@@ -227,7 +319,7 @@ class ChecksumManagerTest extends TestCase
     }
 
     /**
-     * @param array<string, array<string, string>>|null $checksums
+     * @param array<string, mixed> $checksums
      */
     private function createChecksumFixture(?array $checksums): string
     {

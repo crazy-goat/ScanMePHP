@@ -85,7 +85,7 @@ class PluginTest extends TestCase
         $this->assertSame([$binaryName], array_map(basename(...), glob($binaryDir . '/*') ?: []));
     }
 
-    public function testPackageInstallKeepsExistingBinaryWhenNoChecksumConfigured(): void
+    public function testPackageInstallReplacesUnverifiedBinaryWhenNoChecksumIsPinned(): void
     {
         if (extension_loaded('scanmeqr')) {
             $this->markTestSkipped('scanmeqr extension loaded; the plugin skips binary installation entirely');
@@ -97,13 +97,185 @@ class PluginTest extends TestCase
         $binaryPath = $binaryDir . '/' . $binaryName;
         file_put_contents($binaryPath, 'unverified-binary-content');
 
-        $output = $this->runPackageInstall(['name' => 'test/project']);
+        $extDownloader = new FailingStubBinaryDownloader($binaryDir);
+        $plugin = new StubDownloaderPlugin($this->downloadFactory($extDownloader));
+
+        $output = $this->runPackageInstall(['name' => 'test/project'], $plugin);
 
         $output = implode("\n", $output);
-        $this->assertStringContainsString('already exists', $output);
-        $this->assertStringNotContainsString('refused', $output);
-        $this->assertStringNotContainsString('Re-downloading', $output);
-        $this->assertSame('unverified-binary-content', file_get_contents($binaryPath));
+        $this->assertStringContainsString('cannot be verified', $output);
+        $this->assertStringNotContainsString('already exists', $output);
+        $this->assertFileDoesNotExist($binaryPath, 'an unverifiable binary must not stay where the loader can pick it up');
+        $this->assertSame(1, $extDownloader->downloadCalls, 'the verified download path must be attempted once');
+    }
+
+    public function testPackageInstallSurvivesANonStringPin(): void
+    {
+        if (extension_loaded('scanmeqr')) {
+            $this->markTestSkipped('scanmeqr extension loaded; the plugin skips binary installation entirely');
+        }
+
+        $binaryName = $this->extensionBinaryName();
+        $binaryDir = $this->installPath . '/ext-binaries';
+        mkdir($binaryDir, 0777, true);
+        $binaryPath = $binaryDir . '/' . $binaryName;
+        file_put_contents($binaryPath, 'unverified-binary-content');
+
+        $extDownloader = new FailingStubBinaryDownloader($binaryDir);
+        $plugin = new StubDownloaderPlugin($this->downloadFactory($extDownloader));
+
+        // A hand-edited composer.json can hold a number where a digest belongs.
+        // On main that value comes back out of getChecksum(): ?string as an int,
+        // which is a TypeError — and an Error, so it escapes the installer's
+        // catch(\Exception) and kills the whole composer install.
+        $output = $this->runPackageInstall([
+            'name' => 'test/project',
+            'extra' => [
+                'scanmephp' => [
+                    'checksums' => ['0.4.6' => [$binaryName => 12345]],
+                ],
+            ],
+        ], $plugin);
+
+        $output = implode("\n", $output);
+        $this->assertStringContainsString('cannot be verified', $output);
+        $this->assertFileDoesNotExist($binaryPath);
+        $this->assertSame(1, $extDownloader->downloadCalls);
+    }
+
+    public function testPackageInstallSurvivesANonStringChecksumSection(): void
+    {
+        if (extension_loaded('scanmeqr')) {
+            $this->markTestSkipped('scanmeqr extension loaded; the plugin skips binary installation entirely');
+        }
+
+        $binaryName = $this->extensionBinaryName();
+        $binaryDir = $this->installPath . '/ext-binaries';
+        mkdir($binaryDir, 0777, true);
+        $binaryPath = $binaryDir . '/' . $binaryName;
+        file_put_contents($binaryPath, 'unverified-binary-content');
+
+        $extDownloader = new FailingStubBinaryDownloader($binaryDir);
+        $plugin = new StubDownloaderPlugin($this->downloadFactory($extDownloader));
+
+        // A scalar where the version map belongs. On main this reached the
+        // ?array property assignment and raised a TypeError, which is an Error
+        // and therefore escapes the plugin's catch (\Exception).
+        $output = $this->runPackageInstall([
+            'name' => 'test/project',
+            'extra' => ['scanmephp' => ['checksums' => 'oops']],
+        ], $plugin);
+
+        $output = implode("\n", $output);
+        $this->assertStringContainsString('cannot be verified', $output);
+        $this->assertFileDoesNotExist($binaryPath);
+        $this->assertSame(1, $extDownloader->downloadCalls);
+    }
+
+    public function testPackageInstallRefusesAWholeSha256SumLineBeforeDownloading(): void
+    {
+        if (extension_loaded('scanmeqr')) {
+            $this->markTestSkipped('scanmeqr extension loaded; the plugin skips binary installation entirely');
+        }
+
+        $binaryName = $this->extensionBinaryName();
+        $digest = hash('sha256', 'verified-binary-content');
+
+        // The mistake the README warns about: the whole checksums.txt line as
+        // the value. No stub downloader here on purpose — the real one refuses
+        // a download without a usable digest before it opens a connection, so
+        // "refused" in the output is the pre-download refusal and nothing was
+        // fetched.
+        $output = $this->runPackageInstall([
+            'name' => 'test/project',
+            'extra' => [
+                'scanmephp' => [
+                    'checksums' => ['0.4.6' => [$binaryName => $digest . '  ' . $binaryName]],
+                ],
+            ],
+        ]);
+
+        $output = implode("\n", $output);
+        // Name the binary: the FFI branch has no pin either way and would print
+        // "refused" on its own, so the generic words prove nothing here.
+        $this->assertStringContainsString('No SHA-256 checksum configured for binary ' . $binaryName, $output);
+        $this->assertStringNotContainsString('downloaded successfully', $output);
+    }
+
+    public function testUnremovableBinaryIsReportedInsteadOfDownloaded(): void
+    {
+        if (extension_loaded('scanmeqr')) {
+            $this->markTestSkipped('scanmeqr extension loaded; the plugin skips binary installation entirely');
+        }
+
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            $this->markTestSkipped('root ignores directory permissions, so unlink() cannot be made to fail');
+        }
+
+        $binaryName = $this->extensionBinaryName();
+        $binaryDir = $this->installPath . '/ext-binaries';
+        mkdir($binaryDir, 0777, true);
+        $binaryPath = $binaryDir . '/' . $binaryName;
+        file_put_contents($binaryPath, 'unverified-binary-content');
+        // Read-only directory: unlink() of the entry fails, which must not be
+        // swallowed — the loaders would still find the file there.
+        chmod($binaryDir, 0500);
+
+        try {
+            $extDownloader = new FailingStubBinaryDownloader($binaryDir);
+            $plugin = new StubDownloaderPlugin($this->downloadFactory($extDownloader));
+
+            $output = implode("\n", $this->runPackageInstall(['name' => 'test/project'], $plugin));
+
+            $this->assertStringContainsString('Could not remove the unverifiable binary', $output);
+            $this->assertStringNotContainsString('Re-downloading the verified binary', $output);
+            $this->assertStringNotContainsString('Downloading extension binary', $output);
+            $this->assertSame(0, $extDownloader->downloadCalls, 'a binary that is still there must not be replaced silently');
+            $this->assertSame('unverified-binary-content', file_get_contents($binaryPath));
+        } finally {
+            chmod($binaryDir, 0700);
+            unlink($binaryPath);
+        }
+    }
+
+    public function testUnremovableFfiLibraryIsReportedInsteadOfDownloaded(): void
+    {
+        if (extension_loaded('scanmeqr') || !extension_loaded('ffi')) {
+            $this->markTestSkipped('requires the FFI extension (FAQ-003) and no preloaded scanmeqr extension');
+        }
+
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            $this->markTestSkipped('root ignores directory permissions, so unlink() cannot be made to fail');
+        }
+
+        $os = PlatformDetector::getOperatingSystem();
+        $arch = PlatformDetector::getArchitecture();
+        $variant = $os === 'linux' ? PlatformDetector::getLinuxVariant() : null;
+        $binaryName = PlatformDetector::getBinaryName($os, $variant, $arch);
+        $binaryDir = $this->installPath . '/ffi-binaries';
+        mkdir($binaryDir, 0777, true);
+        $binaryPath = $binaryDir . '/' . $binaryName;
+        file_put_contents($binaryPath, 'unverified-ffi-binary-content');
+        chmod($binaryDir, 0500);
+
+        try {
+            $extDownloader = new FailingStubBinaryDownloader($this->installPath . '/ext-binaries');
+            $ffiDownloader = new FailingStubBinaryDownloader($binaryDir);
+            $plugin = new StubDownloaderPlugin($this->downloadFactory($extDownloader, $ffiDownloader));
+
+            $output = implode("\n", $this->runPackageInstall(['name' => 'test/project'], $plugin));
+
+            // Same guarantee as the extension branch: no download into a path
+            // that could not be cleared, and the file is still there.
+            $this->assertStringContainsString('Could not remove the unverifiable binary', $output);
+            $this->assertStringNotContainsString('Re-downloading the verified library', $output);
+            $this->assertStringNotContainsString('Downloading FFI library', $output);
+            $this->assertSame(0, $ffiDownloader->downloadCalls);
+            $this->assertSame('unverified-ffi-binary-content', file_get_contents($binaryPath));
+        } finally {
+            chmod($binaryDir, 0700);
+            unlink($binaryPath);
+        }
     }
 
     public function testPackageInstallReplacesBinaryWhenExistingChecksumMismatches(): void
@@ -136,7 +308,8 @@ class PluginTest extends TestCase
         ], $plugin);
 
         $output = implode("\n", $output);
-        $this->assertStringContainsString('failed SHA-256 verification. Re-downloading', $output);
+        $this->assertStringContainsString('failed SHA-256 verification.', $output);
+        $this->assertStringContainsString('Re-downloading the verified', $output);
         $this->assertStringNotContainsString('already exists', $output);
         $this->assertFileDoesNotExist($binaryPath, 'the mismatched binary must be unlinked before the re-download');
         $this->assertStringContainsString('Extension download failed', $output);
@@ -176,7 +349,8 @@ class PluginTest extends TestCase
         ], $plugin);
 
         $output = implode("\n", $output);
-        $this->assertStringContainsString('failed SHA-256 verification. Re-downloading', $output);
+        $this->assertStringContainsString('failed SHA-256 verification.', $output);
+        $this->assertStringContainsString('Re-downloading the verified', $output);
         $this->assertFileDoesNotExist($binaryPath, 'the mismatched FFI library must be unlinked before the re-download');
         $this->assertStringContainsString('FFI library download failed', $output);
         $this->assertSame(1, $ffiDownloader->downloadCalls, 'the FFI verified download path must be invoked exactly once');
@@ -273,6 +447,8 @@ class PluginTest extends TestCase
     }
 
     /**
+     * @param array<string, mixed> $composerJson
+     *
      * @return list<string>
      */
     private function runPackageInstall(array $composerJson, ?Plugin $plugin = null): array

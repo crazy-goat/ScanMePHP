@@ -226,6 +226,17 @@ jobs:
       - name: List artifacts
         run: ls -la artifacts/
 
+      # sha256sum writes the standard "<digest>  <name>" format, so a consumer can
+      # check the binaries they downloaded with
+      # `sha256sum -c --ignore-missing checksums.txt` (shasum -a 256 on macOS).
+      # It is the published source for the digests a project pins in its
+      # composer.json: the installer never trusts a digest fetched from here.
+      - name: Compute SHA-256 checksums
+        run: |
+          set -euo pipefail
+          (cd artifacts && sha256sum * > checksums.txt)
+          cat artifacts/checksums.txt
+
       - name: Extract release notes from CHANGELOG.md
         # Reads CHANGELOG.md from the tagged commit: merge the `## [X.Y.Z]` section before tagging.
         run: |
