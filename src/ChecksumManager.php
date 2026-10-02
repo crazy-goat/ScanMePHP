@@ -6,77 +6,47 @@ namespace CrazyGoat\ScanMePHP;
 
 class ChecksumManager
 {
-    /**
-     * Checksum maps in lookup order. The first source with an entry for the
-     * requested version and binary wins:
-     *
-     * - the root project may pin checksums itself (extra.scanmephp.checksums),
-     * - the installed package ships the checksums of its own release.
-     *
-     * @var list<array<string, array<string, string>>>
-     */
-    private array $sources = [];
+    private ?array $checksums = null;
 
-    /**
-     * @param string      $projectRoot directory of the root project (its composer.json may pin checksums)
-     * @param string|null $packageRoot directory of the installed package (its composer.json ships the
-     *                                 checksums of the release); omit it when there is no package
-     */
-    public function __construct(string $projectRoot, ?string $packageRoot = null)
+    public function __construct(private readonly string $projectRoot)
     {
-        $this->addSource($projectRoot);
-
-        if ($packageRoot !== null) {
-            $this->addSource($packageRoot);
-        }
+        $this->loadChecksums();
     }
 
-    private function addSource(string $root): void
+    private function loadChecksums(): void
     {
-        $composerJsonPath = $root . '/composer.json';
+        $composerJsonPath = $this->projectRoot . '/composer.json';
 
-        if (!is_file($composerJsonPath)) {
+        if (!file_exists($composerJsonPath)) {
             return;
         }
 
-        $contents = file_get_contents($composerJsonPath);
+        $composer = json_decode(file_get_contents($composerJsonPath), true);
 
-        if ($contents === false) {
+        if (json_last_error() !== JSON_ERROR_NONE) {
             return;
         }
 
-        $composer = json_decode($contents, true);
-
-        if (json_last_error() !== JSON_ERROR_NONE || !is_array($composer)) {
-            return;
-        }
-
-        $checksums = $composer['extra']['scanmephp']['checksums'] ?? null;
-
-        if (!is_array($checksums)) {
-            return;
-        }
-
-        $this->sources[] = $checksums;
+        $this->checksums = $composer['extra']['scanmephp']['checksums'] ?? null;
     }
 
     public function getChecksum(string $version, string $binaryName): ?string
     {
+        if ($this->checksums === null) {
+            return null;
+        }
+
         // Accept both '0.4.4' and 'v0.4.4' as composer.json version keys.
         $unprefixed = str_starts_with($version, 'v') ? substr($version, 1) : $version;
 
-        foreach ($this->sources as $checksums) {
-            $checksum = $checksums[$version][$binaryName]
-                ?? $checksums['v' . $unprefixed][$binaryName]
-                ?? $checksums[$unprefixed][$binaryName]
-                ?? null;
+        $checksum = $this->checksums[$version][$binaryName]
+            ?? $this->checksums['v' . $unprefixed][$binaryName]
+            ?? $this->checksums[$unprefixed][$binaryName]
+            ?? null;
 
-            if (is_string($checksum) && $checksum !== '') {
-                return $checksum;
-            }
-        }
-
-        return null;
+        // An empty or non-string value is not a usable digest: a malformed
+        // composer.json must not turn into a checksum that never matches.
+        return is_string($checksum) && $checksum !== '' ? $checksum : null;
     }
 
     public function hasChecksum(string $version, string $binaryName): bool
@@ -88,9 +58,10 @@ class ChecksumManager
     {
         $checksum = $this->getChecksum($version, $binaryName);
 
-        // Fail-closed: without a pinned checksum an on-disk binary cannot be
-        // verified, so it is not accepted. The caller re-downloads it through
-        // the verified download path, which refuses without a checksum too.
+        // Fail-closed: without a pinned checksum the file on disk cannot be
+        // verified at all, so it is not accepted. The caller re-downloads it
+        // through the verified download path, which refuses without a checksum
+        // too instead of trusting an unknown binary.
         if ($checksum === null) {
             return false;
         }

@@ -35,51 +35,7 @@
         }
     },
     "extra": {
-        "class": "CrazyGoat\\ScanMePHP\\Composer\\Plugin",
-        "scanmephp": {
-            "checksums": {
-                "0.5.0": {
-                    "libscanme_qr-linux-glibc-x86_64.so": "05e5b0b22df2be43ee39bc3fd1732d6c5c8d9b8ac6dd0520e524bc13ccd72030",
-                    "libscanme_qr-linux-musl-x86_64.so": "c6c1c2337cd4f980d34d75729185d9b372426b62ff0d21b40006c024024c7879",
-                    "libscanme_qr-macos-arm64.dylib": "a4727b4ec4273cfdde1e983d0afffc742458ff5ac8015d11dcd5bbf5682157ad",
-                    "libscanme_qr-macos-x86_64.dylib": "0bd9cf89b55d3afea2177e6a55e923d25f0c11ed5fadc622b3d0d1f9507458c0",
-                    "php-ext-linux-glibc-x86_64-php8.1.so": "e65e17bbed60b0fcbf1509534586c234c699d18101e6be3ac5afd6473a233ea2",
-                    "php-ext-linux-glibc-x86_64-php8.2.so": "79392b4145755d2242dd8ef5c3dab8108d4fa7574765b05667325fd595d05609",
-                    "php-ext-linux-glibc-x86_64-php8.3.so": "8a8d21f47909126c06b8148b7aaef703882bef33b9c63b977197b1c58a7feee2",
-                    "php-ext-linux-glibc-x86_64-php8.4.so": "5147d4e74ca49c8f6313eb536330c5c2a2962e789e8709fbe51d00308cf11ea3",
-                    "php-ext-linux-musl-x86_64-php8.1.so": "5aaab1d8cec0249e97df6d03b08bde138ff588a7dac181cae1f26d29a7c2cbb1",
-                    "php-ext-linux-musl-x86_64-php8.2.so": "0bfb13f08955dea97ccd030e4d5ab605565c373900e69bd8c0caf34c7817f56d",
-                    "php-ext-linux-musl-x86_64-php8.3.so": "77e6e6d748c0018379fde7fb90472faff9921c1f5c2b2ea3f9a30e3441616349",
-                    "php-ext-linux-musl-x86_64-php8.4.so": "dd1113721679098ab94cfb8caaff98d4e18b242dbe205427727d459d0596b019",
-                    "php-ext-macos-arm64-php8.1.so": "1705f7c7f29a67ece365e73a1363640f971f8c47ae55bc8c39604a68e93682fe",
-                    "php-ext-macos-arm64-php8.2.so": "241ef01352799906fd3b1088ba17d31f20d3c2ceb105a6c6559db98a1e05d4bd",
-                    "php-ext-macos-arm64-php8.3.so": "c53d9c564d56656acb5fb477d0018c5beb44139f8506cd26f8e3bd575573c1ba",
-                    "php-ext-macos-arm64-php8.4.so": "2cf383f3e71ddddc3761728c0614e9e13b71f7246f51d80bb0da09c90412ad2c",
-                    "php-ext-macos-x86_64-php8.1.so": "89972ca17a3459835faefac457531c24763ea04cb37e4311b6b500c1c7603987",
-                    "php-ext-macos-x86_64-php8.2.so": "fabcd2badab714d621aefb085fdc8cef941d0d30dd51221e8d64054a64cb4351",
-                    "php-ext-macos-x86_64-php8.3.so": "1e84c00a4d684e6551e4d73ccf4c7c307ba3684efec80665560476a5edb7219a",
-                    "php-ext-macos-x86_64-php8.4.so": "3ce80a902be9acccab7bd05cea60f651a93d06692f9304b2e1a8d81d70c0742e"
-                },
-                "0.5.2": {
-                    "libscanme_qr-linux-glibc-x86_64.so": "05e5b0b22df2be43ee39bc3fd1732d6c5c8d9b8ac6dd0520e524bc13ccd72030",
-                    "libscanme_qr-linux-musl-x86_64.so": "c6c1c2337cd4f980d34d75729185d9b372426b62ff0d21b40006c024024c7879",
-                    "libscanme_qr-macos-arm64.dylib": "a4727b4ec4273cfdde1e983d0afffc742458ff5ac8015d11dcd5bbf5682157ad",
-                    "libscanme_qr-macos-x86_64.dylib": "0bd9cf89b55d3afea2177e6a55e923d25f0c11ed5fadc622b3d0d1f9507458c0",
-                    "php-ext-linux-glibc-x86_64-php8.2.so": "d0c354ad01f62e954791b577e56cf1c04814551d5f2f74b8e004dec5aec5942f",
-                    "php-ext-linux-glibc-x86_64-php8.3.so": "7dd53b8b2a12de91f7fddfb6d6cc09d17891834d2d314875682e1309d8313eaf",
-                    "php-ext-linux-glibc-x86_64-php8.4.so": "db39378c1bce1f2392fa67d1f6a5925d675e87634106fa416044a5f93b6b8f31",
-                    "php-ext-linux-musl-x86_64-php8.2.so": "aa476d2922abf3549242d32da09bb59f359ca5801e98779791ae38ca31f62eb3",
-                    "php-ext-linux-musl-x86_64-php8.3.so": "ec8d12726ee50bef4f3f389c6d6d65e5202d1670d9416214ca3b467a1d506c97",
-                    "php-ext-linux-musl-x86_64-php8.4.so": "6fd015b9c9eaf74362b784ac6cd94bd59cd2be6fed459d6480f9ef78cc1e69ea",
-                    "php-ext-macos-arm64-php8.2.so": "02af5fd671401b7cd58bc2120c3f1196d47b0a9fefa25f898eae5e48bfa62b58",
-                    "php-ext-macos-arm64-php8.3.so": "10b8de46497c25e6673661f21964b8e27434c35a73b679ea25a5ffe4534ad783",
-                    "php-ext-macos-arm64-php8.4.so": "4858f86d2db56778ccf6a53d5083ca2cfffd925404b25acfc4b6934356471d48",
-                    "php-ext-macos-x86_64-php8.2.so": "9985f28ffd4965a153cfe289535a14066b94012ad97731ba1a0449df151d0d21",
-                    "php-ext-macos-x86_64-php8.3.so": "aef54cba731dc7b2e6f34dc408b8ccfb28e9a034d0bcdfc80e9b475fab7fb8b9",
-                    "php-ext-macos-x86_64-php8.4.so": "bd3d775e060ceac3c863a3c431827e42af59f74f1cb745fdf1c4c813bf49dc58"
-                }
-            }
-        }
+        "class": "CrazyGoat\\ScanMePHP\\Composer\\Plugin"
     },
     "scripts": {
         "test": "phpunit",

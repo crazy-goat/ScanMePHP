@@ -227,9 +227,10 @@ jobs:
         run: ls -la artifacts/
 
       # sha256sum writes the standard "<digest>  <name>" format, so a consumer can
-      # verify a download with `sha256sum -c checksums.txt`. The same digests are
-      # pinned in composer.json (extra.scanmephp.checksums) so the installer can
-      # verify a download before it writes anything to disk.
+      # check the binaries they downloaded with
+      # `sha256sum -c --ignore-missing checksums.txt` (shasum -a 256 on macOS).
+      # It is the published source for the digests a project pins in its
+      # composer.json: the installer never trusts a digest fetched from here.
       - name: Compute SHA-256 checksums
         run: |
           set -euo pipefail

@@ -106,40 +106,78 @@ class PluginTest extends TestCase
         $this->assertStringContainsString('cannot be verified', $output);
         $this->assertStringNotContainsString('already exists', $output);
         $this->assertFileDoesNotExist($binaryPath, 'an unverifiable binary must not stay where the loader can pick it up');
-        $this->assertSame(1, $extDownloader->downloadCalls, 'the verified download path must be attempted exactly once');
+        $this->assertSame(1, $extDownloader->downloadCalls, 'the verified download path must be attempted once');
     }
 
-    public function testPackageInstallReadsChecksumsFromTheInstalledPackage(): void
+    public function testPinnedChecksumReachesTheVerifiedDownloadPath(): void
     {
         if (extension_loaded('scanmeqr')) {
             $this->markTestSkipped('scanmeqr extension loaded; the plugin skips binary installation entirely');
         }
 
         $binaryName = $this->extensionBinaryName();
-        $binaryDir = $this->installPath . '/ext-binaries';
+        $pinned = hash('sha256', 'verified-binary-content');
 
-        $extDownloader = new FailingStubBinaryDownloader($binaryDir);
-        $plugin = new StubDownloaderPlugin($this->downloadFactory($extDownloader));
+        // The downloader resolves the digest it verifies against from this
+        // manager, so a manager that lost the root project's pin would make the
+        // fail-closed download refuse a perfectly good binary.
+        $seen = null;
+        $plugin = new StubDownloaderPlugin(function (string $path, string $version, ChecksumManager $manager) use (&$seen): BinaryDownloader {
+            $seen ??= $manager;
 
-        // The root project pins nothing and the installed package carries the
-        // digests, which is the lookup order the installer uses. (No real release
-        // can pin its *own* digests yet — they only exist after its build — so
-        // this fixture is the mechanism, not a shipped state.)
-        $output = $this->runPackageInstall(['name' => 'test/project'], $plugin, [
-            'name' => 'crazy-goat/scanmephp',
+            return new FailingStubBinaryDownloader($path);
+        });
+
+        $output = $this->runPackageInstall([
+            'name' => 'test/project',
             'extra' => [
                 'scanmephp' => [
                     'checksums' => [
-                        '0.4.6' => [$binaryName => hash('sha256', 'verified-binary-content')],
+                        '0.4.6' => [$binaryName => $pinned],
                     ],
                 ],
             ],
-        ]);
+        ], $plugin);
 
-        $output = implode("\n", $output);
-        $this->assertStringNotContainsString('refused', $output);
-        $this->assertStringContainsString('Extension download failed', $output);
-        $this->assertSame(1, $extDownloader->downloadCalls, 'the shipped checksum must unlock the verified download path');
+        $this->assertNotNull($seen, 'the plugin must hand its ChecksumManager to the downloader');
+        $this->assertSame($pinned, $seen->getChecksum('0.4.6', $binaryName));
+        $this->assertTrue($seen->hasChecksum('0.4.6', $binaryName));
+        $this->assertStringContainsString('Extension download failed', implode("\n", $output));
+    }
+
+    public function testUnremovableBinaryIsReportedInsteadOfDownloaded(): void
+    {
+        if (extension_loaded('scanmeqr')) {
+            $this->markTestSkipped('scanmeqr extension loaded; the plugin skips binary installation entirely');
+        }
+
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            $this->markTestSkipped('root ignores directory permissions, so unlink() cannot be made to fail');
+        }
+
+        $binaryName = $this->extensionBinaryName();
+        $binaryDir = $this->installPath . '/ext-binaries';
+        mkdir($binaryDir, 0777, true);
+        $binaryPath = $binaryDir . '/' . $binaryName;
+        file_put_contents($binaryPath, 'unverified-binary-content');
+        // Read-only directory: unlink() of the entry fails, which must not be
+        // swallowed — the loaders would still find the file there.
+        chmod($binaryDir, 0500);
+
+        try {
+            $extDownloader = new FailingStubBinaryDownloader($binaryDir);
+            $plugin = new StubDownloaderPlugin($this->downloadFactory($extDownloader));
+
+            $output = implode("\n", $this->runPackageInstall(['name' => 'test/project'], $plugin));
+
+            $this->assertStringContainsString('Could not remove the unverifiable binary', $output);
+            $this->assertStringNotContainsString('Downloading extension binary', $output);
+            $this->assertSame(0, $extDownloader->downloadCalls, 'a binary that is still there must not be replaced silently');
+            $this->assertSame('unverified-binary-content', file_get_contents($binaryPath));
+        } finally {
+            chmod($binaryDir, 0700);
+            unlink($binaryPath);
+        }
     }
 
     public function testPackageInstallReplacesBinaryWhenExistingChecksumMismatches(): void
@@ -310,20 +348,12 @@ class PluginTest extends TestCase
 
     /**
      * @param array<string, mixed> $composerJson
-     * @param array<string, mixed>|null $packageComposerJson the installed package's own composer.json
      *
      * @return list<string>
      */
-    private function runPackageInstall(array $composerJson, ?Plugin $plugin = null, ?array $packageComposerJson = null): array
+    private function runPackageInstall(array $composerJson, ?Plugin $plugin = null): array
     {
         file_put_contents($this->tempDir . '/composer.json', json_encode($composerJson));
-
-        if ($packageComposerJson !== null) {
-            if (!is_dir($this->installPath)) {
-                mkdir($this->installPath, 0777, true);
-            }
-            file_put_contents($this->installPath . '/composer.json', json_encode($packageComposerJson));
-        }
 
         $output = [];
         $io = $this->createMock(IOInterface::class);

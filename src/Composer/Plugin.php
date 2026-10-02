@@ -108,9 +108,8 @@ class Plugin implements PluginInterface, EventSubscriberInterface
             return;
         }
 
-        // The installed package ships the checksums of its own release in its composer.json
-        // (extra.scanmephp.checksums); the root project may pin its own, which wins.
-        $checksumManager = new ChecksumManager($this->getProjectRoot(), $installPath);
+        // Checksums are pinned by the root project's composer.json (extra.scanmephp.checksums)
+        $checksumManager = new ChecksumManager($this->getProjectRoot());
 
         // Try to install PHP extension first (preferred for performance)
         $extInstalled = $this->installExtensionBinary($installPath, $os, $variant, $arch, $version, $checksumManager);
@@ -162,7 +161,9 @@ class Plugin implements PluginInterface, EventSubscriberInterface
                 $binaryName,
                 $checksumManager
             ) . '. Re-downloading the verified binary.');
-            @unlink($targetFile);
+            if (!$this->removeUnverifiedBinary($targetFile)) {
+                return false;
+            }
         }
 
         // Create binary directory
@@ -237,7 +238,7 @@ class Plugin implements PluginInterface, EventSubscriberInterface
                 $binaryName,
                 $checksumManager
             ) . '. Re-downloading the verified library.');
-            @unlink($targetFile);
+            $this->removeUnverifiedBinary($targetFile);
         }
 
         // Create binary directory
@@ -284,6 +285,30 @@ class Plugin implements PluginInterface, EventSubscriberInterface
         }
 
         return 'cannot be verified: no SHA-256 checksum is pinned for ' . $binaryName;
+    }
+
+    /**
+     * Delete a binary that failed verification. The loaders probe these paths
+     * themselves, so a file that stays behind would be used even though the
+     * installer refused it — say so instead of carrying on.
+     *
+     * @return bool whether the path is free (true also when nothing was there)
+     */
+    private function removeUnverifiedBinary(string $path): bool
+    {
+        if (!is_file($path)) {
+            return true;
+        }
+
+        if (@unlink($path)) {
+            return true;
+        }
+
+        $this->io->write('⛔ Could not remove the unverifiable binary at: ' . $path);
+        $this->io->write('   Delete it by hand; until then it must not be loaded.');
+        $this->io->write('   The pure PHP encoder will be used instead.');
+
+        return false;
     }
 
     private function getProjectRoot(): string

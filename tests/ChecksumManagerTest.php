@@ -194,7 +194,7 @@ class ChecksumManagerTest extends TestCase
 
         try {
             // No pinned checksum: the file on disk cannot be verified at all, so
-            // it is not accepted (fail-closed) and the caller re-downloads it.
+            // it must not be accepted (fail-closed) — the caller re-downloads it.
             $binaryPath = $tempDir . '/libscanme_qr-linux-glibc-x86_64.so';
             file_put_contents($binaryPath, 'unverified-binary-content');
 
@@ -208,110 +208,34 @@ class ChecksumManagerTest extends TestCase
         }
     }
 
-    public function testExistingBinaryIsInvalidWhenOnlyThePackageShipsNoChecksum(): void
-    {
-        $tempDir = $this->createChecksumFixture(null);
-        $packageDir = $this->createChecksumFixture(null, 'crazy-goat/scanmephp');
-
-        try {
-            $binaryPath = $tempDir . '/libscanme_qr-linux-glibc-x86_64.so';
-            file_put_contents($binaryPath, 'unverified-binary-content');
-
-            $manager = new ChecksumManager($tempDir, $packageDir);
-
-            $this->assertFalse(
-                $manager->existingBinaryIsValid('v0.4.4', 'libscanme_qr-linux-glibc-x86_64.so', $binaryPath)
-            );
-        } finally {
-            $this->cleanupFixture($tempDir, ['libscanme_qr-linux-glibc-x86_64.so']);
-            $this->cleanupFixture($packageDir);
-        }
-    }
-
-    public function testReadsChecksumsShippedWithTheInstalledPackage(): void
-    {
-        $tempDir = $this->createChecksumFixture(null);
-        $packageDir = $this->createChecksumFixture([
-            '0.5.2' => [
-                'libscanme_qr-linux-glibc-x86_64.so' => hash('sha256', 'shipped-binary-content'),
-            ],
-        ], 'crazy-goat/scanmephp');
-
-        try {
-            $binaryPath = $packageDir . '/libscanme_qr-linux-glibc-x86_64.so';
-            file_put_contents($binaryPath, 'shipped-binary-content');
-
-            $manager = new ChecksumManager($tempDir, $packageDir);
-
-            $this->assertTrue($manager->hasChecksum('0.5.2', 'libscanme_qr-linux-glibc-x86_64.so'));
-            $this->assertTrue(
-                $manager->existingBinaryIsValid('0.5.2', 'libscanme_qr-linux-glibc-x86_64.so', $binaryPath)
-            );
-        } finally {
-            $this->cleanupFixture($tempDir);
-            $this->cleanupFixture($packageDir, ['libscanme_qr-linux-glibc-x86_64.so']);
-        }
-    }
-
-    public function testRootProjectChecksumsWinOverTheShippedOnes(): void
+    public function testEmptyChecksumValueIsNotAPin(): void
     {
         $tempDir = $this->createChecksumFixture([
-            '0.5.2' => [
-                'libscanme_qr-linux-glibc-x86_64.so' => hash('sha256', 'root-pinned-content'),
-            ],
-        ]);
-        $packageDir = $this->createChecksumFixture([
-            '0.5.2' => [
-                'libscanme_qr-linux-glibc-x86_64.so' => hash('sha256', 'shipped-content'),
-            ],
-        ], 'crazy-goat/scanmephp');
-
-        try {
-            $binaryPath = $tempDir . '/libscanme_qr-linux-glibc-x86_64.so';
-            file_put_contents($binaryPath, 'root-pinned-content');
-
-            $manager = new ChecksumManager($tempDir, $packageDir);
-
-            $this->assertSame(
-                hash('sha256', 'root-pinned-content'),
-                $manager->getChecksum('0.5.2', 'libscanme_qr-linux-glibc-x86_64.so')
-            );
-            $this->assertTrue(
-                $manager->existingBinaryIsValid('0.5.2', 'libscanme_qr-linux-glibc-x86_64.so', $binaryPath)
-            );
-        } finally {
-            $this->cleanupFixture($tempDir, ['libscanme_qr-linux-glibc-x86_64.so']);
-            $this->cleanupFixture($packageDir);
-        }
-    }
-
-    public function testMissingPackageRootIsIgnored(): void
-    {
-        $tempDir = $this->createChecksumFixture([
-            '0.5.2' => [
-                'libscanme_qr-linux-glibc-x86_64.so' => 'abc123',
-            ],
-        ]);
-
-        try {
-            $manager = new ChecksumManager($tempDir, $tempDir . '/not-installed');
-
-            $this->assertSame('abc123', $manager->getChecksum('0.5.2', 'libscanme_qr-linux-glibc-x86_64.so'));
-        } finally {
-            $this->cleanupFixture($tempDir);
-        }
-    }
-
-    public function testEmptyChecksumValueIsNotAValidPin(): void
-    {
-        $tempDir = $this->createChecksumFixture([
-            '0.5.2' => ['libscanme_qr-linux-glibc-x86_64.so' => ''],
+            'v0.4.4' => ['libscanme_qr-linux-glibc-x86_64.so' => ''],
         ]);
 
         try {
             $manager = new ChecksumManager($tempDir);
 
-            $this->assertFalse($manager->hasChecksum('0.5.2', 'libscanme_qr-linux-glibc-x86_64.so'));
+            $this->assertFalse($manager->hasChecksum('v0.4.4', 'libscanme_qr-linux-glibc-x86_64.so'));
+            $this->assertNull($manager->getChecksum('v0.4.4', 'libscanme_qr-linux-glibc-x86_64.so'));
+        } finally {
+            $this->cleanupFixture($tempDir);
+        }
+    }
+
+    public function testNonStringChecksumValueIsNotAPin(): void
+    {
+        // A hand-edited composer.json can hold anything; a number must not come
+        // back as a checksum (it would raise a TypeError under strict_types).
+        $tempDir = $this->createChecksumFixture([
+            'v0.4.4' => ['libscanme_qr-linux-glibc-x86_64.so' => 12345],
+        ]);
+
+        try {
+            $manager = new ChecksumManager($tempDir);
+
+            $this->assertFalse($manager->hasChecksum('v0.4.4', 'libscanme_qr-linux-glibc-x86_64.so'));
         } finally {
             $this->cleanupFixture($tempDir);
         }
@@ -337,14 +261,14 @@ class ChecksumManagerTest extends TestCase
     }
 
     /**
-     * @param array<string, array<string, string>>|null $checksums
+     * @param array<string, mixed> $checksums
      */
-    private function createChecksumFixture(?array $checksums, string $packageName = 'test/project'): string
+    private function createChecksumFixture(?array $checksums): string
     {
         $tempDir = sys_get_temp_dir() . '/scanme_checksum_test_' . uniqid();
         mkdir($tempDir, 0777, true);
 
-        $composerJson = ['name' => $packageName];
+        $composerJson = ['name' => 'test/project'];
         if ($checksums !== null) {
             $composerJson['extra'] = ['scanmephp' => ['checksums' => $checksums]];
         }

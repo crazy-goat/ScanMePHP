@@ -80,6 +80,9 @@ with the assets. It fails when the section is missing or empty. Tags with a `-` 
 example `v0.6.0-rc.1`) become pre-releases. If the release already exists (also as a draft),
 the workflow uploads the assets to it and publishes it.
 
+`checksums.txt` is the only published record of the digests: the installer trusts only checksums
+pinned in the project's own `composer.json`, so this file is where a user copies them from.
+
 Running the workflow by hand (`workflow_dispatch`) from a branch builds every binary and
 publishes nothing. Do this before tagging when you touched the toolchain, `clib/` or `php-ext/`.
 
@@ -110,20 +113,6 @@ Make sure the next milestone `vX.Y.(Z+1)` (or the next minor) exists.
   bash bin/build-ext-mirror.sh --push vX.Y.Z
   ```
 
-- Pin the checksums of the new binaries in `extra.scanmephp.checksums` of `composer.json`
-  and merge the result. The digests are published in the release's `checksums.txt`:
-
-  ```bash
-  gh release download vX.Y.Z -p 'checksums.txt' -D /tmp/vX.Y.Z
-  grep -E ' (libscanme_qr|php-ext)' /tmp/vX.Y.Z/checksums.txt
-  ```
-
-  Without this the installer of `vX.Y.Z` has no checksum for its own binaries and refuses the
-  download (fail-closed), so the pure PHP encoder is used. This is a chicken-and-egg problem:
-  the checksums exist only after the build, so the entry lands in the *next* release and a fresh
-  install of the newest release has no pin for itself until this step is done. Pin them as soon
-  as possible and keep the previous versions' entries.
-
 - Check that install instructions work with the new version (`composer require
   crazy-goat/scanmephp`, `pie install crazy-goat/qrcode-ext`).
 - If something is wrong, do not move the tag. Fix forward with a patch release.
@@ -136,6 +125,5 @@ Make sure the next milestone `vX.Y.(Z+1)` (or the next minor) exists.
 - [ ] `PHP_SCANME_QR_VERSION` bumped
 - [ ] Annotated tag `vX.Y.Z` pushed
 - [ ] GitHub Release exists with the CHANGELOG notes, all binaries and `checksums.txt`
-- [ ] `composer.json` pins the checksums of the new binaries (see [7. After the release](#7-after-the-release))
 - [ ] `qrcode-ext` mirror published
 - [ ] Milestone closed, next milestone exists
