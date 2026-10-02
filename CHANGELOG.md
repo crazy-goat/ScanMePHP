@@ -40,8 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `FfiEncoder` no longer crashes PHP with a segfault or an "Out of memory" error from a garbage
   matrix size. Every encoder used to load the native library on its own and unload it when it
-  was freed; all encoders for one library path now share a single FFI instance for the life of
-  the process (#201). This also skips re-parsing the header on every `NativeEncoder` call
+  was freed; all encoders for one library path now share a single FFI instance (#201). This also skips re-parsing the header on every `NativeEncoder` call
   without the extension. CI's extension-loaded test pass is blocking again.
 
 ## [0.5.2] - 2026-08-26

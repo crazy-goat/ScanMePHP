@@ -11,7 +11,7 @@ use FFI;
 class FfiEncoder implements EncoderInterface
 {
     /**
-     * One FFI instance per library path for the whole process. Building one per
+     * One FFI instance per library path, shared by all encoders. Building one per
      * encoder dlopened the library and dlclosed it again whenever an encoder was
      * freed, and that unload/reload cycle crashed the process (#201).
      *
