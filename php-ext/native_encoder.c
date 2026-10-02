@@ -186,7 +186,7 @@ void scanme_qr_register_native_encoder(zend_class_entry* parent_ce) {
     INIT_CLASS_ENTRY(ce, "CrazyGoat\\ScanMePHP\\NativeEncoderCore", native_encoder_methods);
     scanme_qr_native_encoder_ce = zend_register_internal_class(&ce);
     scanme_qr_native_encoder_ce->create_object = scanme_qr_native_encoder_create;
-    // Usuwamy flagę FINAL, żeby można było po niej dziedziczyć w PHP
+    // The FINAL flag is not set, so that PHP code can extend this class
     // scanme_qr_native_encoder_ce->ce_flags |= ZEND_ACC_FINAL;
 
     memcpy(&scanme_qr_native_encoder_handlers, &std_object_handlers, sizeof(zend_object_handlers));
