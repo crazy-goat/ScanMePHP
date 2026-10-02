@@ -36,6 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `bin/kb-lint.php` and `bin/README.md`.
 - The committed `vendor/` placeholder and the stray `php-ext/configure~` autoconf backup.
 
+### Fixed
+
+- Building the C library on macOS no longer calls `nproc`. `make -j` uses
+  `sysctl -n hw.ncpu`, then `getconf _NPROCESSORS_ONLN`, then 1 (#95).
+
 ## [0.5.2] - 2026-08-26
 
 v0.5.1 has no binaries behind it: every extension build failed, so `Create
