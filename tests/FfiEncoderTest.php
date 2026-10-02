@@ -155,8 +155,9 @@ class FfiEncoderTest extends TestCase
 
     public function testEncodersShareOneLibraryHandle(): void
     {
-        // Each encoder used to load its own copy of the library and unload it on
-        // destruction, which crashed the suite (#201). The handle is shared now.
+        // Each encoder used to build its own FFI and free it on destruction, which
+        // left PHP's per-opcode field cache dangling and crashed the suite (#201,
+        // #254; see FfiEncoder::$instances). The FFI is shared now.
         $ffi = new \ReflectionProperty(FfiEncoder::class, 'ffi');
         $first = new FfiEncoder(self::$libraryPath);
         $second = new FfiEncoder(self::$libraryPath);
