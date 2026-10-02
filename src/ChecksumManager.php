@@ -27,7 +27,12 @@ class ChecksumManager
             return;
         }
 
-        $this->checksums = $composer['extra']['scanmephp']['checksums'] ?? null;
+        // A malformed section is no pin at all, which is the fail-closed path.
+        // Assigning a scalar to the ?array property would raise a TypeError, and
+        // a TypeError is an \Error: it escapes the plugin's catch (\Exception)
+        // and aborts the whole composer install.
+        $checksums = $composer['extra']['scanmephp']['checksums'] ?? null;
+        $this->checksums = is_array($checksums) ? $checksums : null;
     }
 
     public function getChecksum(string $version, string $binaryName): ?string
@@ -44,9 +49,11 @@ class ChecksumManager
             ?? $this->checksums[$unprefixed][$binaryName]
             ?? null;
 
-        // An empty or non-string value is not a usable digest: a malformed
-        // composer.json must not turn into a checksum that never matches.
-        return is_string($checksum) && $checksum !== '' ? $checksum : null;
+        // Only a SHA-256 digest is usable. Anything else — an empty value, a
+        // number, a whole `sha256sum` line pasted by mistake — is not a pin: it
+        // can never match, so accepting it would fetch the binary and then throw
+        // checksumMismatch on every install instead of refusing up front.
+        return is_string($checksum) && preg_match('/^[0-9a-f]{64}$/', $checksum) === 1 ? $checksum : null;
     }
 
     public function hasChecksum(string $version, string $binaryName): bool

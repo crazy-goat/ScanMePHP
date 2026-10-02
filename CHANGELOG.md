@@ -64,10 +64,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   accepting an unknown binary (#63). The installer says whether the file failed the digest or had
   no digest to check, and reports it instead of downloading when the file cannot be deleted — the
   loaders probe these paths, so a leftover file would still be loaded.
-- A checksum that is present but unusable (empty or not a string in a hand-edited
-  `composer.json`) is no longer treated as a pin (#63). A non-string value used to be returned from
-  `getChecksum(): ?string`, raising a `TypeError` — an `Error`, so it escaped the plugin's
-  `catch (\Exception)` and aborted the whole `composer install`.
+- A malformed `extra.scanmephp.checksums` can no longer abort a `composer install` (#63). A
+  non-string value inside the version map was returned from `getChecksum(): ?string` as a
+  `TypeError`, and a scalar section was assigned to the `?array` property as another one — both
+  `\Error`s, which escape the plugin's `catch (\Exception)`. Either way the install now reads as
+  "nothing is pinned", which is the fail-closed path it should have taken.
+- Only a 64-character lowercase hex digest counts as a pinned checksum (#63). A pin of any other
+  shape — an empty value, an uppercase digest, or a whole `sha256sum` line copied out of
+  `checksums.txt` — can never match, so it is refused up front instead of downloading the binary
+  and then throwing `checksumMismatch` on every install.
 
 Native binaries are still not installed out of the box: the installer only trusts digests pinned
 in the project's own `composer.json`, and a release's digests cannot be part of that release. Every

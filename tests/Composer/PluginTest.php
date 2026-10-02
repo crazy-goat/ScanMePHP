@@ -143,6 +143,64 @@ class PluginTest extends TestCase
         $this->assertSame(1, $extDownloader->downloadCalls);
     }
 
+    public function testPackageInstallSurvivesANonStringChecksumSection(): void
+    {
+        if (extension_loaded('scanmeqr')) {
+            $this->markTestSkipped('scanmeqr extension loaded; the plugin skips binary installation entirely');
+        }
+
+        $binaryName = $this->extensionBinaryName();
+        $binaryDir = $this->installPath . '/ext-binaries';
+        mkdir($binaryDir, 0777, true);
+        $binaryPath = $binaryDir . '/' . $binaryName;
+        file_put_contents($binaryPath, 'unverified-binary-content');
+
+        $extDownloader = new FailingStubBinaryDownloader($binaryDir);
+        $plugin = new StubDownloaderPlugin($this->downloadFactory($extDownloader));
+
+        // A scalar where the version map belongs. On main this reached the
+        // ?array property assignment and raised a TypeError, which is an Error
+        // and therefore escapes the plugin's catch (\Exception).
+        $output = $this->runPackageInstall([
+            'name' => 'test/project',
+            'extra' => ['scanmephp' => ['checksums' => 'oops']],
+        ], $plugin);
+
+        $output = implode("\n", $output);
+        $this->assertStringContainsString('cannot be verified', $output);
+        $this->assertFileDoesNotExist($binaryPath);
+        $this->assertSame(1, $extDownloader->downloadCalls);
+    }
+
+    public function testPackageInstallRefusesAWholeSha256SumLineBeforeDownloading(): void
+    {
+        if (extension_loaded('scanmeqr')) {
+            $this->markTestSkipped('scanmeqr extension loaded; the plugin skips binary installation entirely');
+        }
+
+        $binaryName = $this->extensionBinaryName();
+        $digest = hash('sha256', 'verified-binary-content');
+
+        // The mistake the README warns about: the whole checksums.txt line as
+        // the value. No stub downloader here on purpose — the real one refuses
+        // a download without a usable digest before it opens a connection, so
+        // "refused" in the output is the pre-download refusal and nothing was
+        // fetched.
+        $output = $this->runPackageInstall([
+            'name' => 'test/project',
+            'extra' => [
+                'scanmephp' => [
+                    'checksums' => ['0.4.6' => [$binaryName => $digest . '  ' . $binaryName]],
+                ],
+            ],
+        ]);
+
+        $output = implode("\n", $output);
+        $this->assertStringContainsString('refused', $output);
+        $this->assertStringContainsString('extra.scanmephp.checksums', $output);
+        $this->assertStringNotContainsString('downloaded successfully', $output);
+    }
+
     public function testUnremovableBinaryIsReportedInsteadOfDownloaded(): void
     {
         if (extension_loaded('scanmeqr')) {
