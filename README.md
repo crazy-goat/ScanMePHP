@@ -489,19 +489,19 @@ Prebuilt binaries are available from [GitHub Releases](https://github.com/crazy-
 
 | Platform | Binary | Download |
 |----------|--------|----------|
-| Linux (glibc) | `php-ext-linux-glibc-x86_64.so` | [Latest Release](../../releases/latest) |
-| Linux (musl/Alpine) | `php-ext-linux-musl-x86_64.so` | [Latest Release](../../releases/latest) |
-| macOS Intel | `php-ext-macos-x86_64.so` | [Latest Release](../../releases/latest) |
-| macOS Apple Silicon | `php-ext-macos-arm64.so` | [Latest Release](../../releases/latest) |
+| Linux (glibc) | `php-ext-linux-glibc-x86_64.so` | [Latest Release](https://github.com/crazy-goat/ScanMePHP/releases/latest) |
+| Linux (musl/Alpine) | `php-ext-linux-musl-x86_64.so` | [Latest Release](https://github.com/crazy-goat/ScanMePHP/releases/latest) |
+| macOS Intel | `php-ext-macos-x86_64.so` | [Latest Release](https://github.com/crazy-goat/ScanMePHP/releases/latest) |
+| macOS Apple Silicon | `php-ext-macos-arm64.so` | [Latest Release](https://github.com/crazy-goat/ScanMePHP/releases/latest) |
 
 #### FFI Library Binaries
 
 | Platform | Binary | Download |
 |----------|--------|----------|
-| Linux (glibc) | `libscanme_qr-linux-glibc-x86_64.so` | [Latest Release](../../releases/latest) |
-| Linux (musl/Alpine) | `libscanme_qr-linux-musl-x86_64.so` | [Latest Release](../../releases/latest) |
-| macOS Intel | `libscanme_qr-macos-x86_64.dylib` | [Latest Release](../../releases/latest) |
-| macOS Apple Silicon | `libscanme_qr-macos-arm64.dylib` | [Latest Release](../../releases/latest) |
+| Linux (glibc) | `libscanme_qr-linux-glibc-x86_64.so` | [Latest Release](https://github.com/crazy-goat/ScanMePHP/releases/latest) |
+| Linux (musl/Alpine) | `libscanme_qr-linux-musl-x86_64.so` | [Latest Release](https://github.com/crazy-goat/ScanMePHP/releases/latest) |
+| macOS Intel | `libscanme_qr-macos-x86_64.dylib` | [Latest Release](https://github.com/crazy-goat/ScanMePHP/releases/latest) |
+| macOS Apple Silicon | `libscanme_qr-macos-arm64.dylib` | [Latest Release](https://github.com/crazy-goat/ScanMePHP/releases/latest) |
 
 > **Windows:** no prebuilt binaries are published. ScanMePHP still works —
 > it falls back to the pure-PHP encoder, which needs no extension and no FFI.

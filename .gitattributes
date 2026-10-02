@@ -10,3 +10,5 @@
 /rector.php export-ignore
 BENCHMARK.md export-ignore
 OPTIMIZATION_RESULTS.md export-ignore
+/docs/ export-ignore
+/.clang-format export-ignore
