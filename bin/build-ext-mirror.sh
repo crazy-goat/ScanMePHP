@@ -113,6 +113,8 @@ if find "$OUT" -type l | grep -q .; then
     exit 1
 fi
 
+# $argv is PHP's, not the shell's.
+# shellcheck disable=SC2016
 php -r 'exit(json_decode(file_get_contents($argv[1])) === null ? 1 : 0);' "$OUT/composer.json" \
     || { echo "composer.json is not valid JSON" >&2; exit 1; }
 
@@ -150,8 +152,10 @@ if [ "${tag#v}" != "$version" ]; then
     exit 1
 fi
 
-git -C "$ROOT" diff --quiet && git -C "$ROOT" diff --cached --quiet \
-    || { echo "the working tree is dirty; the mirror must match a committed state" >&2; exit 1; }
+if ! git -C "$ROOT" diff --quiet || ! git -C "$ROOT" diff --cached --quiet; then
+    echo "the working tree is dirty; the mirror must match a committed state" >&2
+    exit 1
+fi
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT

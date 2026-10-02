@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `bin/lint.sh` runs PHP-CS-Fixer, Rector, PHPStan, clang-format (new `.clang-format`),
+  shellcheck and hadolint; `--fix` applies fixes first. `composer lint` and
+  `composer lint-fix` call it. CI has a `lint` job that runs only this script (#241).
+- Development process documentation: `docs/workflow.md` and `docs/release-workflow.md`, with
+  the shared helper scripts `bin/pick-issue.sh`, `bin/worktree.sh`, `bin/worktree-done.sh` and
+  `bin/worktree-setup.sh`.
+- Dependabot for Composer and GitHub Actions, and a pull request template.
+- CI jobs `changes`, `docs` and `ci-ok`; documentation-only changes skip the heavy jobs.
+
+### Changed
+
+- PHPStan runs at level 5 (was 4).
+- The C and C++ sources in `clib/` and `php-ext/` are formatted with clang-format
+  (whitespace only).
+- The release workflow creates the GitHub Release with `gh release create` from the
+  `CHANGELOG.md` section instead of `softprops/action-gh-release`; the binaries are attached as
+  before.
+- CI no longer skips pull requests from outside contributors (the `check-permissions` job is
+  gone).
+- Code comments that were written in Polish are now in English.
+
+### Removed
+
+- The proof-of-work process: `.workflow/`, `bin/gh-branch`, `bin/pick-issue.php`,
+  `bin/kb-lint.php` and `bin/README.md`.
+- The committed `vendor/` placeholder and the stray `php-ext/configure~` autoconf backup.
+
 ## [0.5.2] - 2026-08-26
 
 v0.5.1 has no binaries behind it: every extension build failed, so `Create

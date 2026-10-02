@@ -12,9 +12,7 @@ struct Row3Sse2 {
     uint64_t hi;
 
     static Row3Sse2 from_row3(Row3 r) noexcept {
-        return {_mm_set_epi64x(static_cast<int64_t>(r.w[1]),
-                               static_cast<int64_t>(r.w[0])),
-                r.w[2]};
+        return {_mm_set_epi64x(static_cast<int64_t>(r.w[1]), static_cast<int64_t>(r.w[0])), r.w[2]};
     }
 
     Row3 to_row3() const noexcept {

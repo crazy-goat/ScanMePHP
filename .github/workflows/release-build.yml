@@ -11,7 +11,11 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   # FFI Library Builds
@@ -49,7 +53,7 @@ jobs:
           mkdir -p build && cd build
           cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF \
             -DCMAKE_CXX_FLAGS="${{ matrix.cxx_flags }}"
-          make -j$(nproc)
+          make -j"$(nproc)"
 
       - name: Rename artifact
         working-directory: clib/build
@@ -81,7 +85,7 @@ jobs:
           mkdir -p build && cd build
           cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF \
             -DCMAKE_OSX_ARCHITECTURES="${{ matrix.arch }}"
-          make -j$(sysctl -n hw.ncpu)
+          make -j"$(sysctl -n hw.ncpu)"
 
       - name: Rename artifact
         working-directory: clib/build
@@ -143,7 +147,7 @@ jobs:
           echo "https://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories
           # Alpine uses different naming: php81-dev instead of php8.1-dev
           ALPINE_PHP_VERSION=$(echo "${{ matrix.php-version }}" | tr -d '.')
-          apk add --no-cache php${ALPINE_PHP_VERSION}-dev
+          apk add --no-cache "php${ALPINE_PHP_VERSION}-dev"
 
       - name: Build PHP extension
         working-directory: php-ext
@@ -151,13 +155,13 @@ jobs:
           if [ "${{ matrix.variant }}" = "musl" ]; then
             # Alpine uses different naming: phpize81 instead of phpize8.1
             ALPINE_PHP_VERSION=$(echo "${{ matrix.php-version }}" | tr -d '.')
-            phpize${ALPINE_PHP_VERSION}
-            ./configure --with-php-config=/usr/bin/php-config${ALPINE_PHP_VERSION} --with-scanmeqr-clib="$GITHUB_WORKSPACE/clib"
+            "phpize${ALPINE_PHP_VERSION}"
+            ./configure --with-php-config="/usr/bin/php-config${ALPINE_PHP_VERSION}" --with-scanmeqr-clib="$GITHUB_WORKSPACE/clib"
           else
             phpize${{ matrix.php-version }}
             ./configure --with-php-config=/usr/bin/php-config${{ matrix.php-version }} --with-scanmeqr-clib="$GITHUB_WORKSPACE/clib"
           fi
-          make -j$(nproc)
+          make -j"$(nproc)"
 
       - name: Rename artifact
         working-directory: php-ext/modules
@@ -190,7 +194,7 @@ jobs:
         run: |
           phpize
           ./configure --with-scanmeqr-clib="$GITHUB_WORKSPACE/clib"
-          make -j$(sysctl -n hw.ncpu)
+          make -j"$(sysctl -n hw.ncpu)"
 
       - name: Rename artifact
         working-directory: php-ext/modules
@@ -208,7 +212,11 @@ jobs:
     needs: [build-ffi-linux, build-ffi-macos, build-ext-linux, build-ext-macos]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -218,69 +226,52 @@ jobs:
       - name: List artifacts
         run: ls -la artifacts/
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: artifacts/*
-          generate_release_notes: true
-          body: |
-            ## FFI Library Binaries
+      - name: Extract release notes from CHANGELOG.md
+        # Reads CHANGELOG.md from the tagged commit: merge the `## [X.Y.Z]` section before tagging.
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '
+            /^## \[/ { found = (index($0, "[" v "]") > 0 || index($0, "[v" v "]") > 0); next }
+            /^\[[^]]+\]: / { found = 0 }
+            found
+          ' CHANGELOG.md > release-notes.md
+          if ! grep -q '[^[:space:]]' release-notes.md; then
+            echo "::error::CHANGELOG.md has no non-empty section for ${version}"
+            exit 1
+          fi
+          # GitHub rejects release notes over 125000 characters.
+          python3 - "$GITHUB_REF_NAME" <<'PY'
+          import sys
+          limit = 120000
+          tag = sys.argv[1]
+          text = open('release-notes.md', encoding='utf-8').read()
+          if len(text) > limit:
+              tail = ("\n\n_The notes were shortened because of the GitHub size limit. "
+                      f"See [CHANGELOG.md](https://github.com/crazy-goat/ScanMePHP/blob/{tag}/CHANGELOG.md) "
+                      "for the full text._\n")
+              text = text[:limit - len(tail)]
+              text = text[:text.rfind('\n')] + tail
+              open('release-notes.md', 'w', encoding='utf-8').write(text)
+              print(f"::warning::Release notes truncated to {len(text)} characters")
+          PY
 
-            Prebuilt binaries for the ScanMePHP FFI library are attached to this release:
-
-            - `libscanme_qr-linux-glibc-x86_64.so` - Linux with glibc (Ubuntu, Debian, etc.)
-            - `libscanme_qr-linux-musl-x86_64.so` - Linux with musl (Alpine Linux)
-            - `libscanme_qr-macos-x86_64.dylib` - macOS Intel
-            - `libscanme_qr-macos-arm64.dylib` - macOS Apple Silicon
-
-            ### Installation
-
-            Download the appropriate binary for your platform and place it in your project directory. The PHP FFI encoder will automatically detect and load it.
-
-            ## PHP Extension Binaries
-
-            Precompiled PHP extension binaries are attached to this release for PHP 8.2, 8.3, and 8.4:
-
-            **Linux (glibc)** - Ubuntu, Debian, etc.:
-            - `php-ext-linux-glibc-x86_64-php82.so` - PHP 8.2
-            - `php-ext-linux-glibc-x86_64-php83.so` - PHP 8.3
-            - `php-ext-linux-glibc-x86_64-php84.so` - PHP 8.4
-
-            **Linux (musl)** - Alpine Linux:
-            - `php-ext-linux-musl-x86_64-php82.so` - PHP 8.2
-            - `php-ext-linux-musl-x86_64-php83.so` - PHP 8.3
-            - `php-ext-linux-musl-x86_64-php84.so` - PHP 8.4
-
-            **macOS Intel**:
-            - `php-ext-macos-x86_64-php82.so` - PHP 8.2
-            - `php-ext-macos-x86_64-php83.so` - PHP 8.3
-            - `php-ext-macos-x86_64-php84.so` - PHP 8.4
-
-            **macOS Apple Silicon**:
-            - `php-ext-macos-arm64-php82.so` - PHP 8.2
-            - `php-ext-macos-arm64-php83.so` - PHP 8.3
-            - `php-ext-macos-arm64-php84.so` - PHP 8.4
-
-            ### Installation
-
-            **Option 1: Composer (Recommended)**
-            ```bash
-            composer require crazy-goat/scanmephp
-            ```
-            The Composer plugin will automatically download the correct binary for your PHP version.
-
-            **Option 2: Manual**
-            1. Download the appropriate binary for your platform and PHP version
-            2. Place it in your PHP extensions directory (check `php-config --extension-dir`)
-            3. Add `extension=scanmeqr.so` to your php.ini
-            4. Restart your web server or PHP-FPM
-
-            ### PHP Version Compatibility
-
-            | PHP Version | Linux glibc | Linux musl | macOS x86_64 | macOS arm64 |
-            |-------------|-------------|------------|--------------|-------------|
-            | 8.2 | ✅ | ✅ | ✅ | ✅ |
-            | 8.3 | ✅ | ✅ | ✅ | ✅ |
-            | 8.4 | ✅ | ✅ | ✅ | ✅ |
+      # If the release already exists (created by hand, or a draft left by a failed run),
+      # the binaries are added to it and it is published.
+      - name: Create the GitHub Release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" artifacts/* --clobber
+            gh release edit "$GITHUB_REF_NAME" --draft=false
+            exit 0
+          fi
+          flags=()
+          case "$GITHUB_REF_NAME" in *-*) flags+=(--prerelease) ;; esac
+          gh release create "$GITHUB_REF_NAME" artifacts/* \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file release-notes.md \
+            --verify-tag \
+            "${flags[@]}"
