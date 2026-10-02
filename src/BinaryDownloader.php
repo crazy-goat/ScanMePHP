@@ -40,9 +40,12 @@ class BinaryDownloader
     }
 
     /**
+     * Private on purpose: a subclass must not be able to weaken the HTTPS-only,
+     * redirect and TLS settings.
+     *
      * @return array<int, bool|int>
      */
-    protected static function curlOptions(): array
+    private function curlOptions(): array
     {
         return [
             CURLOPT_FOLLOWLOCATION => true,
@@ -54,6 +57,18 @@ class BinaryDownloader
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
         ];
+    }
+
+    /**
+     * @param array<int, mixed> $options
+     */
+    private function applyCurlOptions(\CurlHandle $ch, array $options, string $url): void
+    {
+        // curl_setopt_array() stops at the first option cURL rejects and returns false;
+        // going on would download without the options that were skipped.
+        if (!curl_setopt_array($ch, $options)) {
+            throw DownloadException::downloadFailed($url, 'Failed to set cURL options');
+        }
     }
 
     public function download(string $binaryName, ?string $expectedChecksum = null): string
@@ -84,7 +99,7 @@ class BinaryDownloader
         }
 
         try {
-            curl_setopt_array($ch, [CURLOPT_FILE => $fp] + static::curlOptions());
+            $this->applyCurlOptions($ch, [CURLOPT_FILE => $fp] + $this->curlOptions(), $url);
 
             $result = curl_exec($ch);
 
