@@ -157,6 +157,8 @@ class BinaryDownloaderTest extends TestCase
 
     private function invokePrivate(string $method, mixed ...$args): mixed
     {
-        return (new \ReflectionMethod(BinaryDownloader::class, $method))->invoke(null, ...$args);
+        $downloader = new BinaryDownloader('crazy-goat/scanmephp', '0.4.4', $this->tempDir);
+
+        return (new \ReflectionMethod(BinaryDownloader::class, $method))->invoke($downloader, ...$args);
     }
 }
