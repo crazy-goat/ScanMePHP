@@ -256,7 +256,8 @@ jobs:
               print(f"::warning::Release notes truncated to {len(text)} characters")
           PY
 
-      # If the release already exists (created by hand), only the binaries are added to it.
+      # If the release already exists (created by hand, or a draft left by a failed run),
+      # the binaries are added to it and it is published.
       - name: Create the GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -264,6 +265,7 @@ jobs:
           set -euo pipefail
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" artifacts/* --clobber
+            gh release edit "$GITHUB_REF_NAME" --draft=false
             exit 0
           fi
           flags=()

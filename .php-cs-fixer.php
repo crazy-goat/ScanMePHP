@@ -2,7 +2,7 @@
 /**
  * php-cs-fixer configuration — PSR-12 plus a few project conventions.
  *
- * Run: composer lint:cs (dry-run) / composer lint:cs-fix (apply).
+ * Run: bin/lint.sh (check) / bin/lint.sh --fix (apply).
  */
 declare(strict_types=1);
 

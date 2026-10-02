@@ -76,18 +76,20 @@ The `release` job runs only when every build job succeeded. It extracts the note
 matching `CHANGELOG.md` section (cut at 120000 characters, below the GitHub limit of
 125000) and runs `gh release create --verify-tag` with the assets. It fails when the
 section is missing or empty. Tags with a `-` (for example `v0.6.0-rc.1`) become
-pre-releases. If the release already exists, the workflow only uploads the assets to it.
+pre-releases. If the release already exists (also as a draft), the workflow uploads the
+assets to it and publishes it.
 
-Running the workflow by hand (`workflow_dispatch`) builds every binary and publishes
-nothing. Do this before tagging when you touched the toolchain, `clib/` or `php-ext/`.
+Running the workflow by hand (`workflow_dispatch`) from a branch builds every binary and
+publishes nothing. Do this before tagging when you touched the toolchain, `clib/` or `php-ext/`.
 
 ```bash
 gh run watch
 gh release view vX.Y.Z
 ```
 
-A failed build job means a release without binaries. Packagist already holds the tag and
-it cannot be moved, so fix forward with the next patch release.
+The release job needs every build job, so a failed build means no release is created.
+For a transient failure, use "Re-run failed jobs". Otherwise fix forward with the next
+patch release: Packagist already holds the tag and it cannot be moved.
 
 ## 6. Close the milestone
 

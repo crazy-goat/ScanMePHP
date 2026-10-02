@@ -2,7 +2,7 @@
 /**
  * Rector configuration — safe, modernizing rules only.
  *
- * Run: composer lint:rector (dry-run) / composer lint:rector-fix (apply).
+ * Run: bin/lint.sh (check) / bin/lint.sh --fix (apply).
  */
 declare(strict_types=1);
 
