@@ -40,6 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The binary download sets explicit cURL limits: HTTPS only (also for redirects), at most 3
   redirects, a 10 s connect timeout and `CURLOPT_SSL_VERIFYHOST` 2 (#64).
+- `BinaryDownloader::download()` throws a `DownloadException` when cURL rejects one of the
+  options, instead of carrying on without the rest of them (HTTPS-only, redirect limit, TLS
+  checks). `BinaryDownloader::curlOptions()` is private now, so a subclass cannot override these
+  settings (#256).
 - `FfiEncoder` no longer crashes PHP with a segfault or an "Out of memory" error from a garbage
   matrix size. Every encoder used to build its own FFI instance and free it with the encoder;
   PHP's FFI then kept reading struct fields through a stale cache entry (the real cause, found in

@@ -112,17 +112,7 @@ class BinaryDownloaderTest extends TestCase
 
     public function testCurlOptionsRestrictRedirectsAndProtocols(): void
     {
-        $downloader = new class ('crazy-goat/scanmephp', '0.4.4', $this->tempDir) extends BinaryDownloader {
-            /**
-             * @return array<int, bool|int>
-             */
-            public static function options(): array
-            {
-                return static::curlOptions();
-            }
-        };
-
-        $options = $downloader::options();
+        $options = $this->curlOptions();
 
         $this->assertTrue($options[CURLOPT_FOLLOWLOCATION]);
         $this->assertSame(3, $options[CURLOPT_MAXREDIRS]);
@@ -131,5 +121,44 @@ class BinaryDownloaderTest extends TestCase
         $this->assertSame(10, $options[CURLOPT_CONNECTTIMEOUT]);
         $this->assertTrue($options[CURLOPT_SSL_VERIFYPEER]);
         $this->assertSame(2, $options[CURLOPT_SSL_VERIFYHOST]);
+    }
+
+    public function testCurlOptionsCannotBeOverridden(): void
+    {
+        $this->assertTrue((new \ReflectionMethod(BinaryDownloader::class, 'curlOptions'))->isPrivate());
+    }
+
+    public function testRejectedCurlOptionAbortsTheDownload(): void
+    {
+        $ch = curl_init('https://example.com');
+        $this->assertInstanceOf(\CurlHandle::class, $ch);
+
+        // libcurl rejects a MAXREDIRS below -1, so curl_setopt_array() returns false.
+        $rejected = [CURLOPT_MAXREDIRS => -5];
+        if (@curl_setopt_array($ch, $rejected)) {
+            $this->markTestSkipped('This libcurl accepts MAXREDIRS -5, so no option can be rejected.');
+        }
+
+        $this->expectException(DownloadException::class);
+        $this->expectExceptionMessage('Failed to set cURL options');
+        $this->invokePrivate('applyCurlOptions', $ch, $rejected, 'https://example.com');
+    }
+
+    /**
+     * @return array<int, bool|int>
+     */
+    private function curlOptions(): array
+    {
+        /** @var array<int, bool|int> $options */
+        $options = $this->invokePrivate('curlOptions');
+
+        return $options;
+    }
+
+    private function invokePrivate(string $method, mixed ...$args): mixed
+    {
+        $downloader = new BinaryDownloader('crazy-goat/scanmephp', '0.4.4', $this->tempDir);
+
+        return (new \ReflectionMethod(BinaryDownloader::class, $method))->invoke($downloader, ...$args);
     }
 }
