@@ -23,12 +23,18 @@ void apply_mask(QRMatrix& m, int mask_id) {
 // different ISAs; on x86-64 we pick the widest one the CPU (and OS) support.
 // ---------------------------------------------------------------------------
 
-namespace generic { int select_best_mask_kernel(const QRMatrix&, int, int*, MaskScratch&); }
+namespace generic {
+int select_best_mask_kernel(const QRMatrix&, int, int*, MaskScratch&);
+}
 #if defined(SCANME_HAVE_AVX2_KERNEL)
-namespace avx2   { int select_best_mask_kernel(const QRMatrix&, int, int*, MaskScratch&); }
+namespace avx2 {
+int select_best_mask_kernel(const QRMatrix&, int, int*, MaskScratch&);
+}
 #endif
 #if defined(SCANME_HAVE_AVX512_KERNEL)
-namespace avx512 { int select_best_mask_kernel(const QRMatrix&, int, int*, MaskScratch&); }
+namespace avx512 {
+int select_best_mask_kernel(const QRMatrix&, int, int*, MaskScratch&);
+}
 #endif
 
 using KernelFn = int (*)(const QRMatrix&, int, int*, MaskScratch&);
@@ -38,14 +44,18 @@ static KernelFn pick_kernel() {
     // is done for an explicit override — forcing an unsupported ISA will SIGILL,
     // so callers must gate on mask_kernel_supported() first.
     const char* forced = std::getenv("SCANME_MASK_KERNEL");
-    if (forced && std::strcmp(forced, "generic") == 0) return &generic::select_best_mask_kernel;
+    if (forced && std::strcmp(forced, "generic") == 0)
+        return &generic::select_best_mask_kernel;
 #if defined(SCANME_HAVE_AVX512_KERNEL)
-    if (forced && std::strcmp(forced, "avx512") == 0) return &avx512::select_best_mask_kernel;
+    if (forced && std::strcmp(forced, "avx512") == 0)
+        return &avx512::select_best_mask_kernel;
 #endif
 #if defined(SCANME_HAVE_AVX2_KERNEL)
-    if (forced && std::strcmp(forced, "avx2") == 0) return &avx2::select_best_mask_kernel;
+    if (forced && std::strcmp(forced, "avx2") == 0)
+        return &avx2::select_best_mask_kernel;
 #endif
-#if (defined(SCANME_HAVE_AVX2_KERNEL) || defined(SCANME_HAVE_AVX512_KERNEL)) && (defined(__GNUC__) || defined(__clang__))
+#if (defined(SCANME_HAVE_AVX2_KERNEL) || defined(SCANME_HAVE_AVX512_KERNEL)) &&                    \
+    (defined(__GNUC__) || defined(__clang__))
     __builtin_cpu_init();
 #if defined(SCANME_HAVE_AVX512_KERNEL)
     if (__builtin_cpu_supports("avx512f") && __builtin_cpu_supports("avx512bw") &&
@@ -62,9 +72,12 @@ static KernelFn pick_kernel() {
 }
 
 bool mask_kernel_supported(const char* name) {
-    if (!name) return false;
-    if (std::strcmp(name, "generic") == 0) return true;
-#if (defined(SCANME_HAVE_AVX2_KERNEL) || defined(SCANME_HAVE_AVX512_KERNEL)) && (defined(__GNUC__) || defined(__clang__))
+    if (!name)
+        return false;
+    if (std::strcmp(name, "generic") == 0)
+        return true;
+#if (defined(SCANME_HAVE_AVX2_KERNEL) || defined(SCANME_HAVE_AVX512_KERNEL)) &&                    \
+    (defined(__GNUC__) || defined(__clang__))
     __builtin_cpu_init();
 #if defined(SCANME_HAVE_AVX512_KERNEL)
     if (std::strcmp(name, "avx512") == 0)
@@ -83,10 +96,12 @@ bool mask_kernel_supported(const char* name) {
 const char* active_mask_kernel() {
     const KernelFn fn = pick_kernel();
 #if defined(SCANME_HAVE_AVX512_KERNEL)
-    if (fn == &avx512::select_best_mask_kernel) return "avx512";
+    if (fn == &avx512::select_best_mask_kernel)
+        return "avx512";
 #endif
 #if defined(SCANME_HAVE_AVX2_KERNEL)
-    if (fn == &avx2::select_best_mask_kernel) return "avx2";
+    if (fn == &avx2::select_best_mask_kernel)
+        return "avx2";
 #endif
     (void)fn;
     return "generic";
@@ -116,8 +131,10 @@ int calculate_penalty_scalar(const Row3* masked_rows, int size, int* rule_out) {
         for (int x = 0; x < size; ++x) {
             if (getModule(x, y) == runColor) {
                 runX++;
-                if (runX == 5) r1_pen += 3;
-                else if (runX > 5) r1_pen++;
+                if (runX == 5)
+                    r1_pen += 3;
+                else if (runX > 5)
+                    r1_pen++;
             } else {
                 runColor = getModule(x, y);
                 runX = 1;
@@ -132,8 +149,10 @@ int calculate_penalty_scalar(const Row3* masked_rows, int size, int* rule_out) {
         for (int y = 0; y < size; ++y) {
             if (getModule(x, y) == runColor) {
                 runY++;
-                if (runY == 5) r1_pen += 3;
-                else if (runY > 5) r1_pen++;
+                if (runY == 5)
+                    r1_pen += 3;
+                else if (runY > 5)
+                    r1_pen++;
             } else {
                 runColor = getModule(x, y);
                 runY = 1;
@@ -145,11 +164,11 @@ int calculate_penalty_scalar(const Row3* masked_rows, int size, int* rule_out) {
     {
         Row3 valid_r2 = mask_low_n(size - 1);
         for (int y = 0; y < size - 1; ++y) {
-            Row3 cur  = masked_rows[y];
+            Row3 cur = masked_rows[y];
             Row3 next = masked_rows[y + 1];
-            Row3 cur_s  = shr1(cur);
+            Row3 cur_s = shr1(cur);
             Row3 next_s = shr1(next);
-            Row3 all_dark  = cur & cur_s & next & next_s & valid_r2;
+            Row3 all_dark = cur & cur_s & next & next_s & valid_r2;
             Row3 all_light = ~cur & ~cur_s & ~next & ~next_s & valid_r2;
             r2_pen += (popcnt(all_dark) + popcnt(all_light)) * 3;
         }
@@ -180,12 +199,17 @@ int select_best_mask_reference(const QRMatrix& m, int ecl, int* penalties_out) {
     int best_mask = 0, best_penalty = INT_MAX;
     for (int mk = 0; mk < 8; ++mk) {
         QRMatrix copy = m;
-        place_format_info(copy, ecl, mk); // format modules are function modules: untouched by the mask
+        place_format_info(copy, ecl,
+                          mk); // format modules are function modules: untouched by the mask
         for (int y = 0; y < size; ++y)
             masked[y] = copy.rows[y] ^ build_mask_row(mk, y, size, copy.func[y]);
         int p = calculate_penalty_scalar(masked, size, nullptr);
-        if (penalties_out) penalties_out[mk] = p;
-        if (p < best_penalty) { best_penalty = p; best_mask = mk; }
+        if (penalties_out)
+            penalties_out[mk] = p;
+        if (p < best_penalty) {
+            best_penalty = p;
+            best_mask = mk;
+        }
     }
     return best_mask;
 }

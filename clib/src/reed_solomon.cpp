@@ -30,12 +30,15 @@ constexpr int max_ec_per_block() {
     int m = 0;
     for (const auto& row : EC_TABLE)
         for (const auto& e : row)
-            if (e.ec_per_block > m) m = e.ec_per_block;
+            if (e.ec_per_block > m)
+                m = e.ec_per_block;
     return m;
 }
 static_assert(max_ec_per_block() <= MAX_EC, "MAX_EC too small for EC_TABLE");
 
-struct alignas(32) RsRow { uint64_t w[ROW_WORDS]; };
+struct alignas(32) RsRow {
+    uint64_t w[ROW_WORDS];
+};
 
 struct RsFactorTable {
     std::once_flag once;
@@ -77,10 +80,7 @@ const RsFactorTable& factor_table(int ec_count) {
 
 } // namespace
 
-void rs_generate_ec(
-    std::span<const uint8_t> data,
-    std::span<uint8_t> ecc
-) {
+void rs_generate_ec(std::span<const uint8_t> data, std::span<uint8_t> ecc) {
     const int ec_count = static_cast<int>(ecc.size());
     const RsFactorTable& ft = factor_table(ec_count);
 

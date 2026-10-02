@@ -10,11 +10,14 @@ static void place_finder(QRMatrix& m, int tx, int ty) {
     for (int dy = -1; dy <= 7; ++dy) {
         for (int dx = -1; dx <= 7; ++dx) {
             int x = tx + dx, y = ty + dy;
-            if (x < 0 || x >= m.size || y < 0 || y >= m.size) continue;
+            if (x < 0 || x >= m.size || y < 0 || y >= m.size)
+                continue;
             bool dark = false;
             if (dx >= 0 && dx <= 6 && dy >= 0 && dy <= 6) {
-                if (dx == 0 || dx == 6 || dy == 0 || dy == 6) dark = true;
-                else if (dx >= 2 && dx <= 4 && dy >= 2 && dy <= 4) dark = true;
+                if (dx == 0 || dx == 6 || dy == 0 || dy == 6)
+                    dark = true;
+                else if (dx >= 2 && dx <= 4 && dy >= 2 && dy <= 4)
+                    dark = true;
             }
             m.set_function(x, y, dark);
         }
@@ -28,16 +31,17 @@ void place_finder_patterns(QRMatrix& m) {
 }
 
 void place_alignment_patterns(QRMatrix& m) {
-    if (m.version < 2) return;
+    if (m.version < 2)
+        return;
     int count = ALIGN_COUNT[m.version];
     const auto& pos = ALIGN_POS[m.version];
     for (int i = 0; i < count; ++i) {
         for (int j = 0; j < count; ++j) {
             int cx = pos[j], cy = pos[i];
             // Skip if overlaps finder patterns
-            if ((cx <= 8 && cy <= 8) ||
-                (cx >= m.size - 8 && cy <= 8) ||
-                (cx <= 8 && cy >= m.size - 8)) continue;
+            if ((cx <= 8 && cy <= 8) || (cx >= m.size - 8 && cy <= 8) ||
+                (cx <= 8 && cy >= m.size - 8))
+                continue;
             for (int dy = -2; dy <= 2; ++dy) {
                 for (int dx = -2; dx <= 2; ++dx) {
                     bool dark = (std::abs(dx) == 2 || std::abs(dy) == 2 || (dx == 0 && dy == 0));
@@ -56,9 +60,7 @@ void place_timing_patterns(QRMatrix& m) {
     }
 }
 
-void place_dark_module(QRMatrix& m) {
-    m.set_function(8, 4 * m.version + 9, true);
-}
+void place_dark_module(QRMatrix& m) { m.set_function(8, 4 * m.version + 9, true); }
 
 void reserve_format_info(QRMatrix& m) {
     int n = m.size;
@@ -107,7 +109,8 @@ void place_format_info(QRMatrix& m, int ecl, int mask) {
 }
 
 void place_version_info(QRMatrix& m) {
-    if (m.version < 7) return;
+    if (m.version < 7)
+        return;
     uint32_t ver = VERSION_INFO[m.version - 7];
     for (int i = 0; i < 18; ++i) {
         bool dark = (ver >> i) & 1;
@@ -124,7 +127,9 @@ static const std::array<uint8_t, 256> REV8 = []() {
     std::array<uint8_t, 256> t{};
     for (int b = 0; b < 256; ++b) {
         uint8_t r = 0;
-        for (int i = 0; i < 8; ++i) if ((b >> i) & 1) r |= static_cast<uint8_t>(1 << (7 - i));
+        for (int i = 0; i < 8; ++i)
+            if ((b >> i) & 1)
+                r |= static_cast<uint8_t>(1 << (7 - i));
         t[static_cast<size_t>(b)] = r;
     }
     return t;
@@ -152,18 +157,20 @@ void place_data(QRMatrix& m, const uint8_t* data, int data_len) {
     // LSB-first copy of the stream, zero padded so peeking past the end reads 0
     // (remainder modules stay light).
     uint8_t stream[8192 + 16];
-    for (int i = 0; i < data_len; ++i) stream[i] = REV8[data[i]];
+    for (int i = 0; i < data_len; ++i)
+        stream[i] = REV8[data[i]];
     std::memset(stream + data_len, 0, 16);
 
     const int n = m.size;
     unsigned bit_idx = 0;
 
     for (int col = n - 1; col > 0; col -= 2) {
-        if (col == 6) col--;  // skip timing column
+        if (col == 6)
+            col--; // skip timing column
         const bool up = ((n - 1 - col) / 2) % 2 == 0;
-        const int x0 = col - 1;          // low column of the pair
-        const int wi = x0 >> 6;          // word holding bit x0
-        const int sh = x0 & 63;          // bit offset of x0 within the word
+        const int x0 = col - 1; // low column of the pair
+        const int wi = x0 >> 6; // word holding bit x0
+        const int sh = x0 & 63; // bit offset of x0 within the word
         // The pair straddles a word boundary only when sh == 63.
         const bool straddle = (sh == 63) && (wi + 1 < 3);
 
@@ -171,7 +178,8 @@ void place_data(QRMatrix& m, const uint8_t* data, int data_len) {
             const int y = up ? (n - 1 - row_step) : row_step;
             Row3& frow = m.func[y];
             uint64_t func2 = frow.w[wi] >> sh;
-            if (straddle) func2 |= frow.w[wi + 1] << 1;
+            if (straddle)
+                func2 |= frow.w[wi + 1] << 1;
             func2 &= 3;
 
             uint64_t peek;
@@ -181,7 +189,8 @@ void place_data(QRMatrix& m, const uint8_t* data, int data_len) {
             const uint64_t out = OUT[func2][d2];
             Row3& drow = m.rows[y];
             drow.w[wi] |= out << sh;
-            if (straddle) drow.w[wi + 1] |= out >> 1;
+            if (straddle)
+                drow.w[wi + 1] |= out >> 1;
             bit_idx += ADV[func2];
         }
     }

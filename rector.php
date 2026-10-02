@@ -2,10 +2,11 @@
 /**
  * Rector configuration — safe, modernizing rules only.
  *
- * Run: composer lint:rector (dry-run) / composer lint:rector-fix (apply).
+ * Run: bin/lint.sh (check) / bin/lint.sh --fix (apply).
  */
 declare(strict_types=1);
 
+use Rector\CodeQuality\Rector\Concat\DirnameDirConcatStringToDirectStringPathRector;
 use Rector\Config\RectorConfig;
 use Rector\Set\ValueObject\SetList;
 
@@ -25,4 +26,7 @@ return RectorConfig::configure()
         __DIR__ . '/clib',
         __DIR__ . '/vendor',
         __DIR__ . '/php-ext',
+        // FfiEncoder::localBuildPath() returns this path to callers; the rewrite would change
+        // the returned string (it would keep a "/src/.." segment), so it is not neutral.
+        DirnameDirConcatStringToDirectStringPathRector::class,
     ]);

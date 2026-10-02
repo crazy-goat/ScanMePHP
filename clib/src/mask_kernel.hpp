@@ -45,62 +45,81 @@ namespace SCANME_KERNEL_NS {
 constexpr int LANES = KERNEL_LANES;
 constexpr int PAD = KERNEL_PAD;
 
-struct V8 { uint64_t v[LANES]; };
+struct V8 {
+    uint64_t v[LANES];
+};
 
 // W = number of 64-bit words needed per row: 1 for size <= 64 (v1-v11),
 // 2 for size <= 128 (v12-v27), 3 otherwise. Templating on W removes 2/3 of
 // the work for the most common (small) symbols.
-template <int W>
-struct RW { V8 w[W]; };
+template <int W> struct RW {
+    V8 w[W];
+};
 
-#define V8_LANE_OP(name, expr)                                        \
-    inline V8 name(V8 a, V8 b) noexcept {                      \
-        V8 r;                                                         \
-        for (int i = 0; i < LANES; ++i) r.v[i] = (expr);              \
-        return r;                                                     \
+#define V8_LANE_OP(name, expr)                                                                     \
+    inline V8 name(V8 a, V8 b) noexcept {                                                          \
+        V8 r;                                                                                      \
+        for (int i = 0; i < LANES; ++i)                                                            \
+            r.v[i] = (expr);                                                                       \
+        return r;                                                                                  \
     }
 V8_LANE_OP(v_and, a.v[i] & b.v[i])
-V8_LANE_OP(v_or,  a.v[i] | b.v[i])
-V8_LANE_OP(v_andnot, ~a.v[i] & b.v[i])   // ~a & b
+V8_LANE_OP(v_or, a.v[i] | b.v[i])
+V8_LANE_OP(v_andnot, ~a.v[i] & b.v[i]) // ~a & b
 #undef V8_LANE_OP
 
 inline V8 v_not(V8 a) noexcept {
     V8 r;
-    for (int i = 0; i < LANES; ++i) r.v[i] = ~a.v[i];
+    for (int i = 0; i < LANES; ++i)
+        r.v[i] = ~a.v[i];
     return r;
 }
 inline V8 v_bcast(uint64_t x) noexcept {
     V8 r;
-    for (int i = 0; i < LANES; ++i) r.v[i] = x;
+    for (int i = 0; i < LANES; ++i)
+        r.v[i] = x;
     return r;
 }
 inline uint64_t v_reduce_or(V8 a) noexcept {
     uint64_t o = 0;
-    for (int i = 0; i < LANES; ++i) o |= a.v[i];
+    for (int i = 0; i < LANES; ++i)
+        o |= a.v[i];
     return o;
 }
 
 template <int W> inline RW<W> operator&(const RW<W>& a, const RW<W>& b) noexcept {
-    RW<W> r; for (int k = 0; k < W; ++k) r.w[k] = v_and(a.w[k], b.w[k]); return r;
+    RW<W> r;
+    for (int k = 0; k < W; ++k)
+        r.w[k] = v_and(a.w[k], b.w[k]);
+    return r;
 }
 template <int W> inline RW<W> operator|(const RW<W>& a, const RW<W>& b) noexcept {
-    RW<W> r; for (int k = 0; k < W; ++k) r.w[k] = v_or(a.w[k], b.w[k]); return r;
+    RW<W> r;
+    for (int k = 0; k < W; ++k)
+        r.w[k] = v_or(a.w[k], b.w[k]);
+    return r;
 }
 template <int W> inline RW<W> operator~(const RW<W>& a) noexcept {
-    RW<W> r; for (int k = 0; k < W; ++k) r.w[k] = v_not(a.w[k]); return r;
+    RW<W> r;
+    for (int k = 0; k < W; ++k)
+        r.w[k] = v_not(a.w[k]);
+    return r;
 }
 // ~a & b
 template <int W> inline RW<W> andnot(const RW<W>& a, const RW<W>& b) noexcept {
-    RW<W> r; for (int k = 0; k < W; ++k) r.w[k] = v_andnot(a.w[k], b.w[k]); return r;
+    RW<W> r;
+    for (int k = 0; k < W; ++k)
+        r.w[k] = v_andnot(a.w[k], b.w[k]);
+    return r;
 }
 template <int W> inline bool any(const RW<W>& a) noexcept {
     V8 o = a.w[0];
-    for (int k = 1; k < W; ++k) o = v_or(o, a.w[k]);
+    for (int k = 1; k < W; ++k)
+        o = v_or(o, a.w[k]);
     return v_reduce_or(o) != 0;
 }
 
-template <int K, int W>
-inline RW<W> shr(const RW<W>& r) noexcept {
+template <int K, int W> inline RW<W> shr(const RW<W>& r) noexcept {
     static_assert(K > 0 && K < 64);
     RW<W> o;
     for (int k = 0; k < W; ++k) {
@@ -112,8 +131,7 @@ inline RW<W> shr(const RW<W>& r) noexcept {
     return o;
 }
 
-template <int K, int W>
-inline RW<W> shl(const RW<W>& r) noexcept {
+template <int K, int W> inline RW<W> shl(const RW<W>& r) noexcept {
     static_assert(K > 0 && K < 64);
     RW<W> o;
     for (int k = 0; k < W; ++k) {
@@ -126,31 +144,32 @@ inline RW<W> shl(const RW<W>& r) noexcept {
 }
 
 // acc[m] += popcount(row m)
-template <int W>
-inline void popcnt_acc(const RW<W>& r, int* acc) noexcept {
+template <int W> inline void popcnt_acc(const RW<W>& r, int* acc) noexcept {
     for (int i = 0; i < LANES; ++i) {
         int c = 0;
-        for (int k = 0; k < W; ++k) c += std::popcount(r.w[k].v[i]);
+        for (int k = 0; k < W; ++k)
+            c += std::popcount(r.w[k].v[i]);
         acc[i] += c;
     }
 }
 
-template <int W>
-inline Row3 lane(const RW<W>& r, int m) noexcept {
+template <int W> inline Row3 lane(const RW<W>& r, int m) noexcept {
     Row3 out = Row3::zero();
-    for (int k = 0; k < W; ++k) out.w[k] = r.w[k].v[m];
+    for (int k = 0; k < W; ++k)
+        out.w[k] = r.w[k].v[m];
     return out;
 }
 
-template <int W>
-inline RW<W> bcast_row(const Row3& r) noexcept {
+template <int W> inline RW<W> bcast_row(const Row3& r) noexcept {
     RW<W> o;
-    for (int k = 0; k < W; ++k) o.w[k] = v_bcast(r.w[k]);
+    for (int k = 0; k < W; ++k)
+        o.w[k] = v_bcast(r.w[k]);
     return o;
 }
 
 template <int W>
-inline int select_best_mask_impl(const QRMatrix& m, int ecl, int* penalties_out, MaskScratch& scratch) {
+inline int select_best_mask_impl(const QRMatrix& m, int ecl, int* penalties_out,
+                                 MaskScratch& scratch) {
     using R8 = RW<W>;
     static_assert(sizeof(R8) * (MAX_QR_SIZE + 2 * PAD) <= sizeof(MaskScratch));
     // Zero padding on both sides so vertical look-ups never branch.
@@ -172,7 +191,8 @@ inline int select_best_mask_impl(const QRMatrix& m, int ecl, int* penalties_out,
         const int ty = y % MASK_Y_PERIOD;
         for (int mk = 0; mk < LANES; ++mk) {
             Row3 r = base ^ (MASK_TILES[mk][ty] & not_func);
-            for (int k = 0; k < W; ++k) P[y].w[k].v[mk] = r.w[k];
+            for (int k = 0; k < W; ++k)
+                P[y].w[k].v[mk] = r.w[k];
         }
     }
     {
@@ -182,27 +202,30 @@ inline int select_best_mask_impl(const QRMatrix& m, int ecl, int* penalties_out,
             for (const FmtBit& fb : pos) {
                 uint64_t& word = P[fb.y].w[fb.x >> 6].v[mk];
                 const uint64_t bit = uint64_t(1) << (fb.x & 63);
-                if ((fmt >> fb.bit) & 1) word |= bit; else word &= ~bit;
+                if ((fmt >> fb.bit) & 1)
+                    word |= bit;
+                else
+                    word &= ~bit;
             }
         }
     }
 
     // ---- Lane-parallel penalty --------------------------------------------
     int r1[LANES] = {}, r2[LANES] = {}, r3[LANES] = {}, dark[LANES] = {};
-    R8 prevR = {}, prevS1 = {};    // previous row and its >>1, for rule 2
-    R8 prevRunsV = {};             // previous row's vertical run-of-5 marks (dark | light)
+    R8 prevR = {}, prevS1 = {}; // previous row and its >>1, for rule 2
+    R8 prevRunsV = {};          // previous row's vertical run-of-5 marks (dark | light)
 
     for (int y = 0; y < size; ++y) {
         const R8 R = P[y];
         const R8 S1 = shr<1>(R);
         const R8 S2 = shr<2>(R);
-        const R8 D2 = R & S1;                // dark at x, x+1
-        const R8 D3 = D2 & S2;               // dark at x..x+2
-        const R8 D4 = D2 & shr<2>(D2);       // dark at x..x+3
+        const R8 D2 = R & S1;          // dark at x, x+1
+        const R8 D3 = D2 & S2;         // dark at x..x+2
+        const R8 D4 = D2 & shr<2>(D2); // dark at x..x+3
         const R8 S5 = shr<5>(R);
-        const R8 D5 = D4 & shr<4>(R);        // dark at x..x+4
-        const R8 D6 = D5 & S5;               // dark at x..x+5
-        const R8 D5v = R & P[y-1] & P[y-2] & P[y-3] & P[y-4]; // dark at rows y-4..y
+        const R8 D5 = D4 & shr<4>(R);                                 // dark at x..x+4
+        const R8 D6 = D5 & S5;                                        // dark at x..x+5
+        const R8 D5v = R & P[y - 1] & P[y - 2] & P[y - 3] & P[y - 4]; // dark at rows y-4..y
 
         // Rule 1 (runs of >= 5). Dark and light marks are disjoint, so their
         // popcounts are summed with a single popcount of the OR.
@@ -220,7 +243,8 @@ inline int select_best_mask_impl(const QRMatrix& m, int ecl, int* penalties_out,
         }
         {
             // Vertical. Rows above the symbol are not light: zero the light mark while y < 4.
-            const R8 L5v = andnot(R | P[y-1] | P[y-2] | P[y-3] | P[y-4], valid) & inside_from4[y >= 4 ? 1 : 0];
+            const R8 L5v = andnot(R | P[y - 1] | P[y - 2] | P[y - 3] | P[y - 4], valid) &
+                           inside_from4[y >= 4 ? 1 : 0];
             const R8 runs = D5v | L5v;
             const R8 starts = andnot(prevRunsV, runs); // topmost bit of each vertical group
             popcnt_acc(runs, r1);
@@ -235,19 +259,20 @@ inline int select_best_mask_impl(const QRMatrix& m, int ecl, int* penalties_out,
         const R8 SL1 = shl<1>(R);
         {
             const R8 core = R & ~S1 & shr<2>(D3) & ~S5 & shr<6>(R) & ~shr<7>(R) & ~SL1;
-            const R8 O3l = R | SL1 | shl<2>(R);               // dark at x, x-1, x-2
-            const R8 A = andnot(shl<2>(O3l), core);          // light at x-2..x-4
-            const R8 O3r = R | S1 | S2;                       // dark at x, x+1, x+2
-            const R8 B = andnot(shr<8>(O3r), core);          // light at x+8..x+10
+            const R8 O3l = R | SL1 | shl<2>(R);     // dark at x, x-1, x-2
+            const R8 A = andnot(shl<2>(O3l), core); // light at x-2..x-4
+            const R8 O3r = R | S1 | S2;             // dark at x, x+1, x+2
+            const R8 B = andnot(shr<8>(O3r), core); // light at x+8..x+10
             popcnt_acc(A, r3);
             popcnt_acc(B, r3);
         }
 
         // Rule 3, vertical, n = 1 (same template down the column).
         {
-            const R8 core = R & ~P[y+1] & P[y+2] & P[y+3] & P[y+4] & ~P[y+5] & P[y+6] & ~P[y+7] & ~P[y-1];
-            const R8 A = andnot(P[y-2] | P[y-3] | P[y-4], core);
-            const R8 B = andnot(P[y+8] | P[y+9] | P[y+10], core);
+            const R8 core = R & ~P[y + 1] & P[y + 2] & P[y + 3] & P[y + 4] & ~P[y + 5] & P[y + 6] &
+                            ~P[y + 7] & ~P[y - 1];
+            const R8 A = andnot(P[y - 2] | P[y - 3] | P[y - 4], core);
+            const R8 B = andnot(P[y + 8] | P[y + 9] | P[y + 10], core);
             popcnt_acc(A, r3);
             popcnt_acc(B, r3);
         }
@@ -260,25 +285,28 @@ inline int select_best_mask_impl(const QRMatrix& m, int ecl, int* penalties_out,
             if (any(anchors)) {
                 for (int mk = 0; mk < LANES; ++mk) {
                     const Row3 a = lane(anchors, mk);
-                    if (is_zero(a)) continue;
+                    if (is_zero(a))
+                        continue;
                     const Row3 row = lane(R, mk);
                     auto get = [&](int x) { return ((row.w[x >> 6] >> (x & 63)) & 1) != 0; };
                     for (int word = 0; word < W; ++word) {
                         uint64_t bits = a.w[word];
                         while (bits) {
-                            r3[mk] += scaled_patterns_at(get, size, word * 64 + std::countr_zero(bits));
+                            r3[mk] +=
+                                scaled_patterns_at(get, size, word * 64 + std::countr_zero(bits));
                             bits &= bits - 1;
                         }
                     }
                 }
             }
             // Vertical: run of >= 6 ending at row y, i.e. starting at y-5.
-            const R8 D6v = D5v & P[y-5];
+            const R8 D6v = D5v & P[y - 5];
             if (any(D6v)) {
-                const R8 anchorsV = andnot(P[y-6] | P[y-7], D6v);
+                const R8 anchorsV = andnot(P[y - 6] | P[y - 7], D6v);
                 for (int mk = 0; mk < LANES; ++mk) {
                     const Row3 a = lane(anchorsV, mk);
-                    if (is_zero(a)) continue;
+                    if (is_zero(a))
+                        continue;
                     for (int word = 0; word < W; ++word) {
                         uint64_t bits = a.w[word];
                         while (bits) {
@@ -295,7 +323,7 @@ inline int select_best_mask_impl(const QRMatrix& m, int ecl, int* penalties_out,
 
         // Rule 2: 2x2 blocks between rows y-1 and y.
         if (y > 0) {
-            const R8 all_dark  = prevR & prevS1 & R & S1 & valid2;
+            const R8 all_dark = prevR & prevS1 & R & S1 & valid2;
             const R8 all_light = andnot(prevR | prevS1 | R | S1, valid2);
             popcnt_acc(all_dark | all_light, r2); // disjoint
         }
@@ -311,9 +339,11 @@ inline int select_best_mask_impl(const QRMatrix& m, int ecl, int* penalties_out,
     int best_mask = 0;
     int best_penalty = INT_MAX;
     for (int mk = 0; mk < LANES; ++mk) {
-        const int k = static_cast<int>((std::abs(dark[mk] * 20L - total * 10L) + total - 1) / total) - 1;
+        const int k =
+            static_cast<int>((std::abs(dark[mk] * 20L - total * 10L) + total - 1) / total) - 1;
         const int p = r1[mk] + r2[mk] * 3 + r3[mk] * 40 + k * 10;
-        if (penalties_out) penalties_out[mk] = p;
+        if (penalties_out)
+            penalties_out[mk] = p;
         if (p < best_penalty) {
             best_penalty = p;
             best_mask = mk;
@@ -323,8 +353,10 @@ inline int select_best_mask_impl(const QRMatrix& m, int ecl, int* penalties_out,
 }
 
 int select_best_mask_kernel(const QRMatrix& m, int ecl, int* penalties_out, MaskScratch& scratch) {
-    if (m.size <= 64)  return select_best_mask_impl<1>(m, ecl, penalties_out, scratch);
-    if (m.size <= 128) return select_best_mask_impl<2>(m, ecl, penalties_out, scratch);
+    if (m.size <= 64)
+        return select_best_mask_impl<1>(m, ecl, penalties_out, scratch);
+    if (m.size <= 128)
+        return select_best_mask_impl<2>(m, ecl, penalties_out, scratch);
     return select_best_mask_impl<3>(m, ecl, penalties_out, scratch);
 }
 

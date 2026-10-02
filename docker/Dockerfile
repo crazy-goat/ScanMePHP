@@ -12,6 +12,9 @@ FROM php:${PHP_VERSION}-cli
 
 # Build tools for the C++ FFI library (clib/) and FFI extension build deps,
 # same as CI (which uses shivammathur/setup-php with ffi,gd extensions).
+# Package versions are not pinned: the base image tracks Debian, and a pin would break the build
+# on the next point release.
+# hadolint ignore=DL3008
 RUN apt-get update \
     && apt-get install -y --no-install-recommends cmake g++ make git libpng-dev libffi-dev \
     && rm -rf /var/lib/apt/lists/*

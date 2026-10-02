@@ -28,4 +28,4 @@ extern zend_module_entry scanme_qr_module_entry;
 ZEND_TSRMLS_CACHE_EXTERN()
 #endif
 
-#endif	/* PHP_SCANME_QR_H */
+#endif /* PHP_SCANME_QR_H */

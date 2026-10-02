@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace CrazyGoat\ScanMePHP;
 
 /**
- * NativeEncoder - Implementacja hybrydowa.
+ * NativeEncoder - Hybrid implementation.
  */
 if (extension_loaded('scanmeqr')) {
-    // Jeśli extension jest, dziedziczymy po klasie z C (NativeEncoderCore)
-    // i implementujemy interfejs PHP.
-    // Dzięki temu mamy szybkość C i zgodność typów PHP.
+    // If the extension is loaded, extend the C class (NativeEncoderCore)
+    // and implement the PHP interface.
+    // This gives the speed of C and the type compatibility of PHP.
     final class NativeEncoder extends NativeEncoderCore implements EncoderInterface
     {
         public function encode(

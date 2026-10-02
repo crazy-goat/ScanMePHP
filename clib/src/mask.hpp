@@ -24,15 +24,24 @@ int calculate_penalty_scalar(const Row3* masked_rows, int size, int* rule_out = 
 
 inline bool mask_condition(int mask_id, int x, int y) noexcept {
     switch (mask_id) {
-        case 0: return (x + y) % 2 == 0;
-        case 1: return y % 2 == 0;
-        case 2: return x % 3 == 0;
-        case 3: return (x + y) % 3 == 0;
-        case 4: return (y / 2 + x / 3) % 2 == 0;
-        case 5: return (x * y) % 2 + (x * y) % 3 == 0;
-        case 6: return ((x * y) % 2 + (x * y) % 3) % 2 == 0;
-        case 7: return ((x + y) % 2 + (x * y) % 3) % 2 == 0;
-        default: return false;
+    case 0:
+        return (x + y) % 2 == 0;
+    case 1:
+        return y % 2 == 0;
+    case 2:
+        return x % 3 == 0;
+    case 3:
+        return (x + y) % 3 == 0;
+    case 4:
+        return (y / 2 + x / 3) % 2 == 0;
+    case 5:
+        return (x * y) % 2 + (x * y) % 3 == 0;
+    case 6:
+        return ((x * y) % 2 + (x * y) % 3) % 2 == 0;
+    case 7:
+        return ((x + y) % 2 + (x * y) % 3) % 2 == 0;
+    default:
+        return false;
     }
 }
 
