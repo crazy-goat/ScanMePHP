@@ -56,6 +56,41 @@ When you install or update the package via Composer, the library will automatica
 If no binary matches your platform — arm64 Linux, an unusual PHP build — the extension can be
 compiled on the spot with [PIE](https://github.com/php/pie): `pie install crazy-goat/qrcode-ext`.
 
+#### Checksum Verification
+
+Every downloaded binary is verified before it is written to disk, and a binary that is already in
+`vendor/crazy-goat/scanmephp/{ext,ffi}-binaries/` is re-verified on every install. Verification is
+fail-closed: without a SHA-256 checksum for the requested version and binary the plugin refuses the
+file and falls back to the pure PHP encoder, which needs no native code.
+
+Checksums are read from `extra.scanmephp.checksums`, first from the root project's `composer.json`
+and then from the installed package, which ships the checksums of its own release. Every release
+also publishes `checksums.txt`, so a manual download can be verified too:
+
+```bash
+gh release download vX.Y.Z -p 'checksums.txt'
+sha256sum -c checksums.txt
+```
+
+If your version has no published checksum yet (for example a version released before this
+mechanism existed, or a PHP build the release does not cover), the plugin tells you which binary it
+wanted. Pin the digest yourself — take it from the release's `checksums.txt` — and the verified
+install works again:
+
+```json
+{
+    "extra": {
+        "scanmephp": {
+            "checksums": {
+                "0.5.2": {
+                    "libscanme_qr-linux-glibc-x86_64.so": "<sha256 from checksums.txt>"
+                }
+            }
+        }
+    }
+}
+```
+
 ### PHP Extension Installation (Recommended)
 
 The PHP extension provides the best performance. The Composer plugin will attempt to download it automatically.

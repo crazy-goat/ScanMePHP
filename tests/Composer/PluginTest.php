@@ -85,7 +85,7 @@ class PluginTest extends TestCase
         $this->assertSame([$binaryName], array_map(basename(...), glob($binaryDir . '/*') ?: []));
     }
 
-    public function testPackageInstallKeepsExistingBinaryWhenNoChecksumConfigured(): void
+    public function testPackageInstallReplacesUnverifiedBinaryWhenNoChecksumIsPinned(): void
     {
         if (extension_loaded('scanmeqr')) {
             $this->markTestSkipped('scanmeqr extension loaded; the plugin skips binary installation entirely');
@@ -97,13 +97,48 @@ class PluginTest extends TestCase
         $binaryPath = $binaryDir . '/' . $binaryName;
         file_put_contents($binaryPath, 'unverified-binary-content');
 
-        $output = $this->runPackageInstall(['name' => 'test/project']);
+        $extDownloader = new FailingStubBinaryDownloader($binaryDir);
+        $plugin = new StubDownloaderPlugin($this->downloadFactory($extDownloader));
+
+        $output = $this->runPackageInstall(['name' => 'test/project'], $plugin);
 
         $output = implode("\n", $output);
-        $this->assertStringContainsString('already exists', $output);
+        $this->assertStringContainsString('cannot be verified', $output);
+        $this->assertStringNotContainsString('already exists', $output);
+        $this->assertFileDoesNotExist($binaryPath, 'an unverifiable binary must not stay where the loader can pick it up');
+        $this->assertSame(1, $extDownloader->downloadCalls, 'the verified download path must be attempted exactly once');
+    }
+
+    public function testPackageInstallUsesTheChecksumsShippedWithThePackage(): void
+    {
+        if (extension_loaded('scanmeqr')) {
+            $this->markTestSkipped('scanmeqr extension loaded; the plugin skips binary installation entirely');
+        }
+
+        $binaryName = $this->extensionBinaryName();
+        $binaryDir = $this->installPath . '/ext-binaries';
+
+        $extDownloader = new FailingStubBinaryDownloader($binaryDir);
+        $plugin = new StubDownloaderPlugin($this->downloadFactory($extDownloader));
+
+        // The root project pins nothing; the installed package ships the
+        // checksums of its own release, which is what makes the verified
+        // download work without any action from the consumer.
+        $output = $this->runPackageInstall(['name' => 'test/project'], $plugin, [
+            'name' => 'crazy-goat/scanmephp',
+            'extra' => [
+                'scanmephp' => [
+                    'checksums' => [
+                        '0.4.6' => [$binaryName => hash('sha256', 'verified-binary-content')],
+                    ],
+                ],
+            ],
+        ]);
+
+        $output = implode("\n", $output);
         $this->assertStringNotContainsString('refused', $output);
-        $this->assertStringNotContainsString('Re-downloading', $output);
-        $this->assertSame('unverified-binary-content', file_get_contents($binaryPath));
+        $this->assertStringContainsString('Extension download failed', $output);
+        $this->assertSame(1, $extDownloader->downloadCalls, 'the shipped checksum must unlock the verified download path');
     }
 
     public function testPackageInstallReplacesBinaryWhenExistingChecksumMismatches(): void
@@ -273,11 +308,21 @@ class PluginTest extends TestCase
     }
 
     /**
+     * @param array<string, mixed> $composerJson
+     * @param array<string, mixed>|null $packageComposerJson the installed package's own composer.json
+     *
      * @return list<string>
      */
-    private function runPackageInstall(array $composerJson, ?Plugin $plugin = null): array
+    private function runPackageInstall(array $composerJson, ?Plugin $plugin = null, ?array $packageComposerJson = null): array
     {
         file_put_contents($this->tempDir . '/composer.json', json_encode($composerJson));
+
+        if ($packageComposerJson !== null) {
+            if (!is_dir($this->installPath)) {
+                mkdir($this->installPath, 0777, true);
+            }
+            file_put_contents($this->installPath . '/composer.json', json_encode($packageComposerJson));
+        }
 
         $output = [];
         $io = $this->createMock(IOInterface::class);

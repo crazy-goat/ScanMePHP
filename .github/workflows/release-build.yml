@@ -226,6 +226,16 @@ jobs:
       - name: List artifacts
         run: ls -la artifacts/
 
+      # sha256sum writes the standard "<digest>  <name>" format, so a consumer can
+      # verify a download with `sha256sum -c checksums.txt`. The same digests are
+      # pinned in composer.json (extra.scanmephp.checksums) so the installer can
+      # verify a download before it writes anything to disk.
+      - name: Compute SHA-256 checksums
+        run: |
+          set -euo pipefail
+          (cd artifacts && sha256sum * > checksums.txt)
+          cat artifacts/checksums.txt
+
       - name: Extract release notes from CHANGELOG.md
         # Reads CHANGELOG.md from the tagged commit: merge the `## [X.Y.Z]` section before tagging.
         run: |

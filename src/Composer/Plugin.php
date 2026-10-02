@@ -108,8 +108,9 @@ class Plugin implements PluginInterface, EventSubscriberInterface
             return;
         }
 
-        // Checksums are pinned by the root project's composer.json (extra.scanmephp.checksums)
-        $checksumManager = new ChecksumManager($this->getProjectRoot());
+        // The installed package ships the checksums of its own release in its composer.json
+        // (extra.scanmephp.checksums); the root project may pin its own, which wins.
+        $checksumManager = new ChecksumManager($this->getProjectRoot(), $installPath);
 
         // Try to install PHP extension first (preferred for performance)
         $extInstalled = $this->installExtensionBinary($installPath, $os, $variant, $arch, $version, $checksumManager);
@@ -154,9 +155,13 @@ class Plugin implements PluginInterface, EventSubscriberInterface
                 return true;
             }
 
-            // Pinned checksum does not match the on-disk file: remove it and
-            // re-download through the verified (fail-closed) download path.
-            $this->io->write('⚠️  Existing extension binary failed SHA-256 verification. Re-downloading the verified binary.');
+            // The on-disk binary cannot be verified: remove it and re-download
+            // through the verified (fail-closed) download path.
+            $this->io->write('⚠️  Existing extension binary ' . $this->verificationFailure(
+                $version,
+                $binaryName,
+                $checksumManager
+            ) . '. Re-downloading the verified binary.');
             @unlink($targetFile);
         }
 
@@ -225,9 +230,13 @@ class Plugin implements PluginInterface, EventSubscriberInterface
                 return;
             }
 
-            // Pinned checksum does not match the on-disk file: remove it and
-            // re-download through the verified (fail-closed) download path.
-            $this->io->write('⚠️  Existing FFI library failed SHA-256 verification. Re-downloading the verified library.');
+            // The on-disk binary cannot be verified: remove it and re-download
+            // through the verified (fail-closed) download path.
+            $this->io->write('⚠️  Existing FFI library ' . $this->verificationFailure(
+                $version,
+                $binaryName,
+                $checksumManager
+            ) . '. Re-downloading the verified library.');
             @unlink($targetFile);
         }
 
@@ -262,6 +271,19 @@ class Plugin implements PluginInterface, EventSubscriberInterface
     protected function createDownloader(string $binaryPath, string $version, ChecksumManager $checksumManager): BinaryDownloader
     {
         return new BinaryDownloader(self::PACKAGE_NAME, $version, $binaryPath, $checksumManager);
+    }
+
+    /**
+     * Why an already-present binary was rejected: a pinned checksum that does
+     * not match, or no checksum at all to check it against.
+     */
+    private function verificationFailure(string $version, string $binaryName, ChecksumManager $checksumManager): string
+    {
+        if ($checksumManager->hasChecksum($version, $binaryName)) {
+            return 'failed SHA-256 verification';
+        }
+
+        return 'cannot be verified: no SHA-256 checksum is pinned for ' . $binaryName;
     }
 
     private function getProjectRoot(): string

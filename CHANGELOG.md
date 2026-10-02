@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `bin/worktree-setup.sh`.
 - Dependabot for Composer and GitHub Actions, and a pull request template.
 - CI jobs `changes`, `docs` and `ci-ok`; documentation-only changes skip the heavy jobs.
+- Every release now publishes a `checksums.txt` asset with the SHA-256 of all its binaries,
+  in `sha256sum` format, so a manual download can be verified with `sha256sum -c checksums.txt`.
+- `composer.json` pins the SHA-256 of the published binaries of `0.5.0` and `0.5.2`
+  (`extra.scanmephp.checksums`), and the installer reads those pins from the installed
+  package, so a verified native install no longer needs any action from the consumer.
+  `docs/release-workflow.md` documents how to add the checksums of a new release.
 
 ### Changed
 
@@ -50,6 +56,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   #254, is not the native library or its unloading). All encoders for one library path now share
   a single FFI instance (#201). This also skips re-parsing the header on every `NativeEncoder` call
   without the extension. CI's extension-loaded test pass is blocking again.
+
+### Security
+
+- `ChecksumManager::existingBinaryIsValid()` no longer trusts a binary that is already on disk
+  when no checksum is pinned for it: such a file cannot be verified, so it is rejected and
+  re-downloaded through the verified (fail-closed) path, which refuses it too instead of
+  accepting an unknown binary (#63).
+- The Composer plugin reads `extra.scanmephp.checksums` from the installed package's
+  `composer.json` (the checksums of that release) as well as from the root project, which takes
+  precedence. A pinned checksum is required for the version and binary in question, so the
+  native binaries are installed again instead of every install being refused (#63).
 
 ## [0.5.2] - 2026-08-26
 
