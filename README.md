@@ -59,23 +59,16 @@ compiled on the spot with [PIE](https://github.com/php/pie): `pie install crazy-
 #### Checksum Verification
 
 Every downloaded binary is verified before it is written to disk, and a binary that is already in
-`vendor/crazy-goat/scanmephp/{ext,ffi}-binaries/` is re-verified on every install. Verification is
+`vendor/crazy-goat/scanmephp/{ext,ffi}-binaries/` is verified again on every install. Verification is
 fail-closed: without a SHA-256 checksum for the requested version and binary the plugin refuses the
 file and falls back to the pure PHP encoder, which needs no native code.
 
 Checksums are read from `extra.scanmephp.checksums`, first from the root project's `composer.json`
-and then from the installed package, which ships the checksums of its own release. Every release
-also publishes `checksums.txt`, so a manual download can be verified too:
-
-```bash
-gh release download vX.Y.Z -p 'checksums.txt'
-sha256sum -c checksums.txt
-```
-
-If your version has no published checksum yet (for example a version released before this
-mechanism existed, or a PHP build the release does not cover), the plugin tells you which binary it
-wanted. Pin the digest yourself — take it from the release's `checksums.txt` — and the verified
-install works again:
+and then from the installed package. A release's digests only exist once that release has been
+built, so they are added to `composer.json` of the *following* release: today it pins 0.5.0 and
+0.5.2. Until the digests of the version you install are in there, the plugin prints which binary it
+wanted and keeps using the pure PHP encoder. Pin the digest yourself — take it from the release's
+`checksums.txt` — and the verified install works:
 
 ```json
 {
@@ -89,6 +82,15 @@ install works again:
         }
     }
 }
+```
+
+Every release publishes `checksums.txt` with the SHA-256 of all its binaries, so a manual download
+can be verified as well:
+
+```bash
+gh release download vX.Y.Z -p checksums.txt
+sha256sum -c --ignore-missing checksums.txt   # Linux
+shasum -a 256 -c --ignore-missing checksums.txt   # macOS
 ```
 
 ### PHP Extension Installation (Recommended)

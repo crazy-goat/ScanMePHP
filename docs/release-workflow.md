@@ -120,8 +120,9 @@ Make sure the next milestone `vX.Y.(Z+1)` (or the next minor) exists.
 
   Without this the installer of `vX.Y.Z` has no checksum for its own binaries and refuses the
   download (fail-closed), so the pure PHP encoder is used. This is a chicken-and-egg problem:
-  the checksums exist only after the build, so the entry lands in the *next* release; pin them
-  as soon as possible and keep the previous versions' entries.
+  the checksums exist only after the build, so the entry lands in the *next* release and a fresh
+  install of the newest release has no pin for itself until this step is done. Pin them as soon
+  as possible and keep the previous versions' entries.
 
 - Check that install instructions work with the new version (`composer require
   crazy-goat/scanmephp`, `pie install crazy-goat/qrcode-ext`).

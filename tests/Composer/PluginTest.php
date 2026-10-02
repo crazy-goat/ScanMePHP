@@ -109,7 +109,7 @@ class PluginTest extends TestCase
         $this->assertSame(1, $extDownloader->downloadCalls, 'the verified download path must be attempted exactly once');
     }
 
-    public function testPackageInstallUsesTheChecksumsShippedWithThePackage(): void
+    public function testPackageInstallReadsChecksumsFromTheInstalledPackage(): void
     {
         if (extension_loaded('scanmeqr')) {
             $this->markTestSkipped('scanmeqr extension loaded; the plugin skips binary installation entirely');
@@ -121,9 +121,10 @@ class PluginTest extends TestCase
         $extDownloader = new FailingStubBinaryDownloader($binaryDir);
         $plugin = new StubDownloaderPlugin($this->downloadFactory($extDownloader));
 
-        // The root project pins nothing; the installed package ships the
-        // checksums of its own release, which is what makes the verified
-        // download work without any action from the consumer.
+        // The root project pins nothing and the installed package carries the
+        // digests, which is the lookup order the installer uses. (No real release
+        // can pin its *own* digests yet — they only exist after its build — so
+        // this fixture is the mechanism, not a shipped state.)
         $output = $this->runPackageInstall(['name' => 'test/project'], $plugin, [
             'name' => 'crazy-goat/scanmephp',
             'extra' => [

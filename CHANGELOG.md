@@ -18,11 +18,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dependabot for Composer and GitHub Actions, and a pull request template.
 - CI jobs `changes`, `docs` and `ci-ok`; documentation-only changes skip the heavy jobs.
 - Every release now publishes a `checksums.txt` asset with the SHA-256 of all its binaries,
-  in `sha256sum` format, so a manual download can be verified with `sha256sum -c checksums.txt`.
+  in `sha256sum` format, so a manual download can be verified with
+  `sha256sum -c --ignore-missing checksums.txt`.
 - `composer.json` pins the SHA-256 of the published binaries of `0.5.0` and `0.5.2`
   (`extra.scanmephp.checksums`), and the installer reads those pins from the installed
-  package, so a verified native install no longer needs any action from the consumer.
+  package as well as from the root project, which takes precedence.
   `docs/release-workflow.md` documents how to add the checksums of a new release.
+  **Known limitation:** a release's digests only exist after it has been built, so they land in
+  `composer.json` of the *next* release. A fresh install of the newest release therefore still
+  finds no checksum for itself, refuses the download and uses the pure PHP encoder until the
+  maintainer pins that release's digests; pinning them in your own root `composer.json` (values
+  are published in `checksums.txt`) makes the verified install work immediately.
 
 ### Changed
 
@@ -64,9 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   re-downloaded through the verified (fail-closed) path, which refuses it too instead of
   accepting an unknown binary (#63).
 - The Composer plugin reads `extra.scanmephp.checksums` from the installed package's
-  `composer.json` (the checksums of that release) as well as from the root project, which takes
-  precedence. A pinned checksum is required for the version and binary in question, so the
-  native binaries are installed again instead of every install being refused (#63).
+  `composer.json` (the digests it ships with) as well as from the root project, which takes
+  precedence, instead of only from the root project (#63).
 
 ## [0.5.2] - 2026-08-26
 
