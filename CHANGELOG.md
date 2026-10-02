@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Every release now publishes a `checksums.txt` asset with the SHA-256 of all its binaries,
   in `sha256sum` format. It is the published source for the digests a project pins in
   `extra.scanmephp.checksums`, and it verifies a manual download with
-  `sha256sum -c --ignore-missing checksums.txt`.
+  `sha256sum -c --ignore-missing checksums.txt` (`shasum -a 256 -c` on macOS).
 
 ### Changed
 
@@ -61,10 +61,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   no checksum is pinned for it. Such a file cannot be verified, so it is now rejected and
   re-downloaded through the verified (fail-closed) path, which refuses it as well instead of
   accepting an unknown binary (#63). The installer says whether the file failed the digest or had
-  no digest to check, and reports it when the file cannot be deleted — the loaders probe these
-  paths themselves, so a file left behind would still be loaded.
+  no digest to check, and reports it instead of downloading when the file cannot be deleted — the
+  loaders probe these paths, so a leftover file would still be loaded.
 - A checksum that is present but unusable (empty or not a string in a hand-edited
-  `composer.json`) is no longer treated as a pin (#63).
+  `composer.json`) is no longer treated as a pin (#63). A non-string value used to be returned from
+  `getChecksum(): ?string`, raising a `TypeError` — an `Error`, so it escaped the plugin's
+  `catch (\Exception)` and aborted the whole `composer install`.
 
 Native binaries are still not installed out of the box: the installer only trusts digests pinned
 in the project's own `composer.json`, and a release's digests cannot be part of that release. Every

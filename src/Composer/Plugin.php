@@ -154,16 +154,17 @@ class Plugin implements PluginInterface, EventSubscriberInterface
                 return true;
             }
 
-            // The on-disk binary cannot be verified: remove it and re-download
+            // The on-disk binary cannot be verified: remove it, then re-download
             // through the verified (fail-closed) download path.
             $this->io->write('⚠️  Existing extension binary ' . $this->verificationFailure(
                 $version,
                 $binaryName,
                 $checksumManager
-            ) . '. Re-downloading the verified binary.');
+            ) . '.');
             if (!$this->removeUnverifiedBinary($targetFile)) {
                 return false;
             }
+            $this->io->write('   Re-downloading the verified binary.');
         }
 
         // Create binary directory
@@ -231,14 +232,17 @@ class Plugin implements PluginInterface, EventSubscriberInterface
                 return;
             }
 
-            // The on-disk binary cannot be verified: remove it and re-download
+            // The on-disk binary cannot be verified: remove it, then re-download
             // through the verified (fail-closed) download path.
             $this->io->write('⚠️  Existing FFI library ' . $this->verificationFailure(
                 $version,
                 $binaryName,
                 $checksumManager
-            ) . '. Re-downloading the verified library.');
-            $this->removeUnverifiedBinary($targetFile);
+            ) . '.');
+            if (!$this->removeUnverifiedBinary($targetFile)) {
+                return;
+            }
+            $this->io->write('   Re-downloading the verified library.');
         }
 
         // Create binary directory
@@ -290,7 +294,8 @@ class Plugin implements PluginInterface, EventSubscriberInterface
     /**
      * Delete a binary that failed verification. The loaders probe these paths
      * themselves, so a file that stays behind would be used even though the
-     * installer refused it — say so instead of carrying on.
+     * installer refused it — say so instead of carrying on. The caller must not
+     * continue with the same path: the download opens it for writing.
      *
      * @return bool whether the path is free (true also when nothing was there)
      */
@@ -305,8 +310,8 @@ class Plugin implements PluginInterface, EventSubscriberInterface
         }
 
         $this->io->write('⛔ Could not remove the unverifiable binary at: ' . $path);
-        $this->io->write('   Delete it by hand; until then it must not be loaded.');
-        $this->io->write('   The pure PHP encoder will be used instead.');
+        $this->io->write('   It is still on disk and can be loaded, so delete it by hand.');
+        $this->io->write('   Nothing was downloaded in its place.');
 
         return false;
     }

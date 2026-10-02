@@ -60,14 +60,20 @@ compiled on the spot with [PIE](https://github.com/php/pie): `pie install crazy-
 
 A downloaded binary is hashed with SHA-256 right after the transfer, compared with the checksum the
 installer expects, and deleted again when it does not match. A binary that is already in
-`vendor/crazy-goat/scanmephp/{ext,ffi}-binaries/` is verified the same way on every install and
-removed when it does not match. Verification is fail-closed: without a checksum for the requested
-version and binary, nothing is kept and the plugin prints which binary it wanted.
+`vendor/crazy-goat/scanmephp/{ext,ffi}-binaries/` is checked the same way whenever the plugin runs,
+that is when ScanMePHP is installed or updated — not on a plain `composer install` that leaves the
+installed version alone. Verification is fail-closed: without a checksum for the requested version
+and binary, nothing is kept and the plugin prints which binary it wanted.
 
 Checksums are read from `extra.scanmephp.checksums` in **your** `composer.json` — the installer
 never trusts a digest it fetched next to the binary it is checking. Every release publishes the
-digests of all its binaries in `checksums.txt`, so pinning the one for your platform takes one
+digests of all its binaries in `checksums.txt`, so pinning the one for your platform is a
 copy-paste:
+
+```bash
+gh release download vX.Y.Z -p checksums.txt
+grep libscanme_qr-linux-glibc checksums.txt   # "<digest>  <binary name>"
+```
 
 ```json
 {
@@ -75,7 +81,7 @@ copy-paste:
         "scanmephp": {
             "checksums": {
                 "0.5.2": {
-                    "libscanme_qr-linux-glibc-x86_64.so": "<sha256 from checksums.txt>"
+                    "libscanme_qr-linux-glibc-x86_64.so": "<the digest, first column only>"
                 }
             }
         }
@@ -83,13 +89,11 @@ copy-paste:
 }
 ```
 
-Download `checksums.txt` of the release you install and check a manual download with:
+Copy the 64-character digest only. A whole `sha256sum` line pasted as the value is a pin that never
+matches, so every install deletes the binary and then refuses to download it again.
 
-```bash
-gh release download vX.Y.Z -p checksums.txt
-sha256sum -c --ignore-missing checksums.txt   # Linux
-shasum -a 256 -c --ignore-missing checksums.txt   # macOS
-```
+The same file verifies a manual download; check just what you have with
+`sha256sum -c --ignore-missing checksums.txt` (Linux) or `shasum -a 256 -c checksums.txt` (macOS).
 
 Until you pin a digest, `composer install` installs no native code and the pure PHP encoder is used.
 
