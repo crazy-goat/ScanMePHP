@@ -20,7 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Every release now publishes a `checksums.txt` asset with the SHA-256 of all its binaries,
   in `sha256sum` format. It is the published source for the digests a project pins in
   `extra.scanmephp.checksums`, and it verifies a manual download with
-  `sha256sum -c --ignore-missing checksums.txt` (`shasum -a 256 -c` on macOS).
+  `sha256sum -c --ignore-missing checksums.txt` (`shasum -a 256 -c` on macOS). The file ships with
+  the first release that contains this change; earlier releases have no `checksums.txt`.
 
 ### Changed
 
@@ -72,7 +73,12 @@ Native binaries are still not installed out of the box: the installer only trust
 in the project's own `composer.json`, and a release's digests cannot be part of that release. Every
 release now publishes them in `checksums.txt`, so pinning one for your platform is a copy-paste
 (see the README). Making the install work without that step needs a release-process decision and is
-tracked separately.
+tracked in #260.
+
+**Behaviour change to be aware of:** `composer update` to a version whose binaries have no pinned
+digest now *deletes* a previously verified binary and then refuses to replace it, so native
+acceleration disappears until the digest is pinned. That is the fail-closed behaviour #63 asks for,
+but it is visible to anyone who updates without pinning.
 
 ## [0.5.2] - 2026-08-26
 

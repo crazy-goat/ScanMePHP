@@ -68,7 +68,9 @@ and binary, nothing is kept and the plugin prints which binary it wanted.
 Checksums are read from `extra.scanmephp.checksums` in **your** `composer.json` — the installer
 never trusts a digest it fetched next to the binary it is checking. Every release publishes the
 digests of all its binaries in `checksums.txt`, so pinning the one for your platform is a
-copy-paste:
+copy-paste. That file exists from the first release that ships this feature; earlier releases have
+none, so there is nothing to copy from them and the pure PHP encoder is used until the release you
+install has one.
 
 ```bash
 gh release download vX.Y.Z -p checksums.txt
@@ -80,7 +82,7 @@ grep libscanme_qr-linux-glibc checksums.txt   # "<digest>  <binary name>"
     "extra": {
         "scanmephp": {
             "checksums": {
-                "0.5.2": {
+                "X.Y.Z": {
                     "libscanme_qr-linux-glibc-x86_64.so": "<the digest, first column only>"
                 }
             }
