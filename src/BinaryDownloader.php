@@ -112,7 +112,6 @@ class BinaryDownloader
                 throw DownloadException::downloadFailed($url, 'HTTP ' . $httpCode);
             }
         } finally {
-            curl_close($ch);
             fclose($fp);
         }
 
