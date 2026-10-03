@@ -43,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Building the C library on macOS no longer calls `nproc`. `make -j` uses
+  `sysctl -n hw.ncpu`, then `getconf _NPROCESSORS_ONLN`, then 1 (#95).
 - The binary download sets explicit cURL limits: HTTPS only (also for redirects), at most 3
   redirects, a 10 s connect timeout and `CURLOPT_SSL_VERIFYHOST` 2 (#64).
 - `BinaryDownloader::download()` throws a `DownloadException` when cURL rejects one of the
