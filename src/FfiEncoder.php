@@ -10,6 +10,22 @@ use FFI;
 
 class FfiEncoder implements EncoderInterface
 {
+    /**
+     * One FFI instance per library path, shared by all encoders, and never freed
+     * while the process runs. Building one per encoder crashed the process (#201,
+     * #254): PHP's FFI caches the struct field it resolved for `$out->size` per
+     * opcode, keyed by the address of the struct type (ext/ffi/ffi.c,
+     * zend_ffi_cdata_read_field). Freeing an FFI frees its types and the cached field
+     * with them; the next FFI::cdef() can put its type at the same address, the cache
+     * hits, and the read goes through a dangling field, returning a garbage size or
+     * segfaulting inside ffi.so. The native library and its unloading are not
+     * involved. Under PHP-FPM the cache is rebuilt for every request, so freeing the
+     * FFI at the end of a request is harmless.
+     *
+     * @var array<string, FFI>
+     */
+    private static array $instances = [];
+
     private readonly FFI $ffi;
 
     public function __construct(string $libraryPath)
@@ -24,8 +40,10 @@ class FfiEncoder implements EncoderInterface
             );
         }
 
-        $header = (string) file_get_contents(__DIR__ . '/ffi/scanme_qr.h');
-        $this->ffi = FFI::cdef($header, $libraryPath);
+        $this->ffi = self::$instances[$libraryPath] ??= FFI::cdef(
+            (string) file_get_contents(__DIR__ . '/ffi/scanme_qr.h'),
+            $libraryPath
+        );
     }
 
     public function encode(

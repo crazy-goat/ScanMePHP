@@ -71,13 +71,17 @@ The workflow builds the binaries and attaches them to the release:
 | `libscanme_qr-macos-x86_64.dylib`, `libscanme_qr-macos-arm64.dylib` | FFI library, macOS |
 | `php-ext-linux-{glibc,musl}-x86_64-php{8.2,8.3,8.4}.so` | PHP extension, Linux (6 files) |
 | `php-ext-macos-{x86_64,arm64}-php{8.2,8.3,8.4}.so` | PHP extension, macOS (6 files) |
+| `checksums.txt` | SHA-256 of every asset above, in `sha256sum` format |
 
 The `release` job runs only when every build job succeeded. It extracts the notes of the
 matching `CHANGELOG.md` section (cut at 120000 characters, below the GitHub limit of
-125000) and runs `gh release create --verify-tag` with the assets. It fails when the
-section is missing or empty. Tags with a `-` (for example `v0.6.0-rc.1`) become
-pre-releases. If the release already exists (also as a draft), the workflow uploads the
-assets to it and publishes it.
+125000), computes the SHA-256 of every artifact and runs `gh release create --verify-tag`
+with the assets. It fails when the section is missing or empty. Tags with a `-` (for
+example `v0.6.0-rc.1`) become pre-releases. If the release already exists (also as a draft),
+the workflow uploads the assets to it and publishes it.
+
+`checksums.txt` is the only published record of the digests: the installer trusts only checksums
+pinned in the project's own `composer.json`, so this file is where a user copies them from.
 
 Running the workflow by hand (`workflow_dispatch`) from a branch builds every binary and
 publishes nothing. Do this before tagging when you touched the toolchain, `clib/` or `php-ext/`.
@@ -120,6 +124,6 @@ Make sure the next milestone `vX.Y.(Z+1)` (or the next minor) exists.
 - [ ] Release PR merged
 - [ ] `PHP_SCANME_QR_VERSION` bumped
 - [ ] Annotated tag `vX.Y.Z` pushed
-- [ ] GitHub Release exists with the CHANGELOG notes and all binaries
+- [ ] GitHub Release exists with the CHANGELOG notes, all binaries and `checksums.txt`
 - [ ] `qrcode-ext` mirror published
 - [ ] Milestone closed, next milestone exists
