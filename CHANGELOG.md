@@ -43,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Build-tool detection uses `where` on Windows instead of Unix-only `which`, and falls back
+  to `clang++` when `g++` is unavailable (#188).
 - Building the C library on macOS no longer calls `nproc`. `make -j` uses
   `sysctl -n hw.ncpu`, then `getconf _NPROCESSORS_ONLN`, then 1 (#95).
 - The source-build installer copies the FFI library under the platform-specific name used
