@@ -43,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Building the C library on macOS no longer calls `nproc`. `make -j` uses
+  `sysctl -n hw.ncpu`, then `getconf _NPROCESSORS_ONLN`, then 1 (#95).
 - The source-build installer copies the FFI library under the platform-specific name used
   by the FFI resolver, so successful fallback builds can be found (#71).
 - `BinaryDownloader::download()` no longer calls `curl_close()`, which is a no-op since PHP 8.0
