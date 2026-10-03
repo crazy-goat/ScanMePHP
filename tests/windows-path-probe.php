@@ -6,7 +6,17 @@ use CrazyGoat\ScanMePHP\Builder;
 
 require dirname(__DIR__) . '/src/Builder.php';
 
-if (PHP_OS_FAMILY !== 'Windows') {
+function checkBuildAvailability(string $root, string $label, bool $expected): void
+{
+    $actual = (new Builder($root))->isBuildAvailable();
+    if ($actual !== $expected) {
+        throw new RuntimeException($label . ': expected ' . var_export($expected, true)
+            . ', got ' . var_export($actual, true));
+    }
+    echo 'PASS: ' . $label . PHP_EOL;
+}
+
+if (php_uname('s') !== 'Windows NT') {
     throw new RuntimeException('This probe requires real Windows.');
 }
 
@@ -37,12 +47,7 @@ try {
         if (!$hasClib) {
             rmdir($root . '/clib');
         }
-        $actual = (new Builder($root))->isBuildAvailable();
-        if ($actual !== $expected) {
-            throw new RuntimeException($label . ': expected ' . var_export($expected, true)
-                . ', got ' . var_export($actual, true));
-        }
-        echo 'PASS: ' . $label . PHP_EOL;
+        checkBuildAvailability($root, $label, $expected);
     }
 } finally {
     putenv('PATH=' . $originalPath);
