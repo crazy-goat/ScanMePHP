@@ -4,6 +4,8 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 builder="$root/src/Builder.php"
 
+# The single quotes are the point: this is a source search, not a command.
+# shellcheck disable=SC2016
 if grep -q '$(nproc)' "$builder"; then
   echo "Builder.php still calls nproc" >&2
   exit 1
