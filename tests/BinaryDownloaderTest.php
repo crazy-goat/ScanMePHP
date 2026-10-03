@@ -110,6 +110,18 @@ class BinaryDownloaderTest extends TestCase
         $downloader->download('libscanme_qr-linux-glibc-x86_64.so');
     }
 
+    public function testDownloaderDoesNotCallDeprecatedCurlClose(): void
+    {
+        $source = file_get_contents(__DIR__ . '/../src/BinaryDownloader.php');
+        $this->assertIsString($source);
+
+        foreach (token_get_all($source) as $token) {
+            if (is_array($token) && $token[0] === T_STRING) {
+                $this->assertNotSame('curl_close', strtolower($token[1]));
+            }
+        }
+    }
+
     public function testCurlOptionsRestrictRedirectsAndProtocols(): void
     {
         $options = $this->curlOptions();
