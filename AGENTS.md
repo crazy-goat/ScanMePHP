@@ -5,26 +5,49 @@ Pure PHP QR code generator with zero dependencies. PHP 8.2+.
 ## Build & Test Commands
 
 ```bash
+# Install dependencies
+composer install
+
 # Run all tests
-composer test
-# OR
-vendor/bin/phpunit
+composer test            # OR: vendor/bin/phpunit
 
-# Run a single test method
+# Run a single test method / file
 vendor/bin/phpunit --filter testBasicAsciiQrCode
-
-# Run tests from a specific file
 vendor/bin/phpunit tests/QRCodeTest.php
-
-# Run with coverage (if xdebug installed)
-vendor/bin/phpunit --coverage-text
 
 # Validate composer files
 composer validate --strict
 
-# Install dependencies
-composer install
+# Lint: PHP-CS-Fixer, Rector, PHPStan, clang-format, shellcheck, hadolint
+bin/lint.sh              # check only, runs every step, non-zero on any failure
+bin/lint.sh --fix        # apply fixes first, then check
+composer lint            # same as bin/lint.sh (composer lint-fix = --fix)
 ```
+
+`bin/lint.sh` needs `clang-format` 23.1.2, `shellcheck` and `hadolint` on the `PATH`; a missing
+tool is a failure. CI installs pinned versions (see `.github/workflows/ci.yml`).
+
+### C++ library and PHP extension
+
+The PHP tests fall back to the pure-PHP encoder when no native build exists. Build these only
+when you change `clib/` or `php-ext/`; CI builds and tests both:
+
+```bash
+# C++ FFI library (clib/) and its tests, also used by the FFI tests in tests/
+cmake -S clib -B clib/build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DBUILD_BENCH=ON
+cmake --build clib/build -j && (cd clib/build && ctest --output-on-failure)
+
+# PHP extension (php-ext/), built with phpize
+(cd php-ext && phpize && ./configure && make -j && make test TESTS=tests NO_INTERACTION=1)
+php -d extension=php-ext/modules/scanmeqr.so vendor/bin/phpunit
+
+# Assemble and build the qrcode-ext (PIE) mirror in build/ext-mirror
+bash bin/build-ext-mirror.sh
+```
+
+C and C++ sources are formatted with `.clang-format` (whitespace only; `bin/lint.sh --fix`
+applies it). `php-ext/` and `clib/` are the only places these sources are edited:
+`crazy-goat/qrcode-ext` is generated from them by `bin/build-ext-mirror.sh`.
 
 ## Code Style Guidelines
 
@@ -107,46 +130,38 @@ src/
   *.php               # Main classes, interfaces, enums
 tests/
   *Test.php           # PHPUnit tests
+clib/                 # C++ core, FFI library and C++ tests
+php-ext/              # PHP extension (also the source of crazy-goat/qrcode-ext)
+bin/                  # lint, worktree and release helper scripts
+docs/                 # workflow and release process
 examples/             # Usage examples
 ```
 
 ## CI/CD
 
-GitHub Actions runs on PHP 8.2, 8.3, 8.4.
-Requires write permissions to run CI.
+GitHub Actions (`.github/workflows/ci.yml`) runs on pull requests and pushes to `main`:
+`changes` (skips the heavy jobs for documentation-only changes), `docs`, `lint`
+(`bin/lint.sh`) and `test` on PHP 8.2, 8.3 and 8.4 (C++ tests, extension build, PHPUnit).
+The required check is `ci-ok`. `release-build.yml` builds the binaries and creates the GitHub
+Release when a `v*` tag is pushed.
 
-## GitHub Workflow
+## Workflow
 
-### Task/Issue Management
-- List open issues: `gh issue list`
-- View specific issue: `gh issue view <number>`
-- List open PRs: `gh pr list`
-- View specific PR: `gh pr view <number>`
-- Create new issue: `gh issue create --title "..." --body "..."`
-- Close issue: `gh issue close <number>`
+The development process (issue, worktree, code, review, PR, CI, merge, findings, cleanup) is
+in [docs/workflow.md](docs/workflow.md); releases are in
+[docs/release-workflow.md](docs/release-workflow.md). Short version:
 
-### Branches & PRs
-- **NEVER push directly to `main`** - always create a Pull Request for review
-- Always work on a feature branch: `git checkout -b feature/<name>`
-- Push branch and create PR: `gh pr create`
-- Wait for CI to pass: `gh pr checks <number> --watch`
-- **Merge only after developer approval** - never merge your own PR without review
-- Merge PR: `gh pr merge <number> --merge --delete-branch`
-
-### Releasing a Version
-**ALWAYS update CHANGELOG.md before committing a release.**
-
-1. Update `CHANGELOG.md`:
-   - Move items from `## [Unreleased]` to a new `## [X.Y.Z] - YYYY-MM-DD` section
-   - Add new `[Unreleased]` link and versioned link at the bottom
-2. Commit: `git commit -m "docs: update CHANGELOG for vX.Y.Z release"`
-3. Push to main
-4. Create GitHub release: `gh release create vX.Y.Z --title "vX.Y.Z" --notes "..."`
+- `bin/pick-issue.sh` picks an issue, `bin/worktree.sh <issue>` creates the worktree
+  (`bin/worktree-setup.sh` runs `composer install`), `bin/worktree-done.sh <issue>` cleans up.
+- **Never push directly to `main`.** One issue, one worktree, one branch, one pull request,
+  squash merge once `ci-ok` is green.
+- Commits and PR titles are Conventional Commits, for example `fix: handle empty data (#42)`.
+- Everything is written in English: code, comments, commits, docs, issues.
 
 ### CHANGELOG Rules
 - Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
-- Sections: `Added`, `Changed`, `Fixed`, `Removed`
-- Every PR that adds features or fixes bugs must have a CHANGELOG entry under `## [Unreleased]`
-- On release: move `[Unreleased]` entries to the new version section
-- Never leave released changes under `[Unreleased]`
+- Sections: `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`
+- Every PR that changes user-visible behaviour must have a CHANGELOG entry under `## [Unreleased]`
+- On release the entries move to the new version section; see
+  [docs/release-workflow.md](docs/release-workflow.md)
 - `version` field must NOT be present in `composer.json` (Packagist uses git tags)

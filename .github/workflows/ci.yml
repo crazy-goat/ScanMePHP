@@ -2,61 +2,81 @@ name: CI
 
 on:
   push:
-    branches: [ main, master, develop ]
+    branches: [main]
   pull_request:
-    branches: [ main, master, develop ]
+    branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Composer fetches dists from codeload.github.com, which rate-limits unauthenticated
+  # requests. The automatic token needs no setup and raises the limit.
+  COMPOSER_AUTH: '{"github-oauth":{"github.com":"${{ secrets.GITHUB_TOKEN }}"}}'
+
 jobs:
-  check-permissions:
+  # No tests read Markdown, so the shared default of the docs-only paths applies.
+  changes:
+    name: Changes
+    uses: crazy-goat/.github/.github/workflows/changes.yml@main
+
+  docs:
+    name: Docs
+    uses: crazy-goat/.github/.github/workflows/docs-check.yml@main
+
+  # Setup only; every check lives in bin/lint.sh (php-cs-fixer, Rector, PHPStan, clang-format,
+  # shellcheck, hadolint). One PHP version is enough: these tools do not vary across runtimes.
+  lint:
+    name: lint
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
-    outputs:
-      has-permissions: ${{ steps.check.outputs.has-permissions }}
     steps:
-      - name: Check if actor has write permissions
-        id: check
-        uses: actions/github-script@v7
+      - uses: actions/checkout@v7
+
+      - uses: shivammathur/setup-php@v2
         with:
-          script: |
-            const actor = context.actor;
-            const owner = context.repo.owner;
-            
-            // Always allow repo owner
-            if (actor === owner) {
-              core.setOutput('has-permissions', 'true');
-              return;
-            }
-            
-            // Check if actor has write permissions
-            try {
-              const { data: permission } = await github.rest.repos.getCollaboratorPermissionLevel({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                username: actor
-              });
-              
-              const allowedPermissions = ['admin', 'write', 'maintain'];
-              if (allowedPermissions.includes(permission.permission)) {
-                core.setOutput('has-permissions', 'true');
-              } else {
-                core.setOutput('has-permissions', 'false');
-                core.info(`User ${actor} has permission level: ${permission.permission}. Skipping CI.`);
-              }
-            } catch (error) {
-              core.setOutput('has-permissions', 'false');
-              core.info(`Could not verify permissions for ${actor}. Skipping CI.`);
-            }
+          php-version: '8.2'
+          extensions: ffi, gd
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress
+
+      # Pinned: the versions the image ships would change under us without a commit here.
+      - name: Install clang-format, shellcheck and hadolint
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          PIPX_BIN_DIR="$HOME/.local/bin" pipx install clang-format==23.1.2
+          curl -fsSL https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz \
+            | tar -xJ --strip-components=1 -C "$HOME/.local/bin" shellcheck-v0.11.0/shellcheck
+          curl -fsSL -o "$HOME/.local/bin/hadolint" https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64
+          chmod +x "$HOME/.local/bin/hadolint"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/clang-format" --version
+          "$HOME/.local/bin/shellcheck" --version
+          "$HOME/.local/bin/hadolint" --version
+
+      - name: Lint
+        run: bin/lint.sh
 
   test:
-    needs: check-permissions
-    if: needs.check-permissions.outputs.has-permissions == 'true'
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
         php-version: ['8.2', '8.3', '8.4']
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Setup PHP
       uses: shivammathur/setup-php@v2
@@ -67,15 +87,6 @@ jobs:
 
     - name: Validate composer.json and composer.lock
       run: composer validate --strict
-
-    - name: Cache Composer packages
-      id: composer-cache
-      uses: actions/cache@v3
-      with:
-        path: vendor
-        key: ${{ runner.os }}-php-${{ matrix.php-version }}-${{ hashFiles('**/composer.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-php-${{ matrix.php-version }}-
 
     - name: Install dependencies
       run: composer install --prefer-dist --no-progress
@@ -91,7 +102,7 @@ jobs:
         rm -rf build
         mkdir -p build && cd build
         cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DBUILD_BENCH=ON
-        make -j$(nproc)
+        make -j"$(nproc)"
 
     # Runs the nayuki fixtures and the mask-penalty equivalence test on x86-64,
     # once per SIMD kernel (generic / avx2 / avx512), each followed by the C++
@@ -121,7 +132,7 @@ jobs:
       run: |
         phpize
         ./configure
-        make -j$(nproc)
+        make -j"$(nproc)"
 
     - name: Test PHP extension
       working-directory: php-ext
@@ -136,11 +147,28 @@ jobs:
     - name: Run test suite
       run: composer run-script test
 
-    # continue-on-error until #201 is fixed: the suite corrupts memory and
-    # segfaults on roughly half of all runs, on main as much as here, and this
-    # second pass doubles the exposure. The output still lands in the log, so a
-    # failure this step introduces is visible; it just does not block a PR on a
-    # crash that predates it.
     - name: Run test suite with the extension loaded
-      continue-on-error: true
-      run: php -d extension=$GITHUB_WORKSPACE/php-ext/modules/scanmeqr.so vendor/bin/phpunit
+      run: php -d extension="$GITHUB_WORKSPACE/php-ext/modules/scanmeqr.so" vendor/bin/phpunit
+
+  ci-ok:
+    name: ci-ok
+    needs: [changes, docs, lint, test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        env:
+          CODE: ${{ needs.changes.outputs.code }}
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Code changes: $CODE"
+          echo "Results: $RESULTS"
+          for r in $RESULTS; do
+            case "$r" in failure|cancelled) exit 1 ;; esac
+          done
+          # Documentation-only changes skip the heavy jobs; code changes need all of them.
+          if [ "$CODE" = "true" ]; then
+            for r in $RESULTS; do
+              [ "$r" = "success" ] || exit 1
+            done
+          fi

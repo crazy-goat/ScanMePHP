@@ -7,6 +7,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `bin/lint.sh` runs PHP-CS-Fixer, Rector, PHPStan, clang-format (new `.clang-format`),
+  shellcheck and hadolint; `--fix` applies fixes first. `composer lint` and
+  `composer lint-fix` call it. CI has a `lint` job that runs only this script (#241).
+- Development process documentation: `docs/workflow.md` and `docs/release-workflow.md`, with
+  the shared helper scripts `bin/pick-issue.sh`, `bin/worktree.sh`, `bin/worktree-done.sh` and
+  `bin/worktree-setup.sh`.
+- Dependabot for Composer and GitHub Actions, and a pull request template.
+- CI jobs `changes`, `docs` and `ci-ok`; documentation-only changes skip the heavy jobs.
+- Every release now publishes a `checksums.txt` asset with the SHA-256 of all its binaries,
+  in `sha256sum` format. It is the published source for the digests a project pins in
+  `extra.scanmephp.checksums`, and it verifies a manual download with
+  `sha256sum -c --ignore-missing checksums.txt` (`shasum -a 256 -c` on macOS). The file ships with
+  the first release that contains this change; earlier releases have no `checksums.txt`.
+
+### Changed
+
+- PHPStan runs at level 5 (was 4).
+- The C and C++ sources in `clib/` and `php-ext/` are formatted with clang-format
+  (whitespace only).
+- The release workflow creates the GitHub Release with `gh release create` from the
+  `CHANGELOG.md` section instead of `softprops/action-gh-release`; the binaries are attached as
+  before.
+- CI no longer skips pull requests from outside contributors (the `check-permissions` job is
+  gone).
+- Code comments that were written in Polish are now in English.
+
+### Removed
+
+- The proof-of-work process: `.workflow/`, `bin/gh-branch`, `bin/pick-issue.php`,
+  `bin/kb-lint.php` and `bin/README.md`.
+- The committed `vendor/` placeholder and the stray `php-ext/configure~` autoconf backup.
+
+### Fixed
+
+- Building the C library on macOS no longer calls `nproc`. `make -j` uses
+  `sysctl -n hw.ncpu`, then `getconf _NPROCESSORS_ONLN`, then 1 (#95).
+- The source-build installer copies the FFI library under the platform-specific name used
+  by the FFI resolver, so successful fallback builds can be found (#71).
+- `BinaryDownloader::download()` no longer calls `curl_close()`, which is a no-op since PHP 8.0
+  and deprecated since PHP 8.5 (#193).
+- The binary download sets explicit cURL limits: HTTPS only (also for redirects), at most 3
+  redirects, a 10 s connect timeout and `CURLOPT_SSL_VERIFYHOST` 2 (#64).
+- `BinaryDownloader::download()` throws a `DownloadException` when cURL rejects one of the
+  options, instead of carrying on without the rest of them (HTTPS-only, redirect limit, TLS
+  checks). `BinaryDownloader::curlOptions()` is private now, so a subclass cannot override these
+  settings (#256).
+- `FfiEncoder` no longer crashes PHP with a segfault or an "Out of memory" error from a garbage
+  matrix size. Every encoder used to build its own FFI instance and free it with the encoder;
+  PHP's FFI then kept reading struct fields through a stale cache entry (the real cause, found in
+  #254, is not the native library or its unloading). All encoders for one library path now share
+  a single FFI instance (#201). This also skips re-parsing the header on every `NativeEncoder` call
+  without the extension. CI's extension-loaded test pass is blocking again.
+
+### Security
+
+- `ChecksumManager::existingBinaryIsValid()` no longer trusts a binary that is already on disk when
+  no checksum is pinned for it. Such a file cannot be verified, so it is now rejected and
+  re-downloaded through the verified (fail-closed) path, which refuses it as well instead of
+  accepting an unknown binary (#63). The installer says whether the file failed the digest or had
+  no digest to check, and reports it instead of downloading when the file cannot be deleted — the
+  loaders probe these paths, so a leftover file would still be loaded.
+- A malformed `extra.scanmephp.checksums` can no longer abort a `composer install` (#63). A
+  non-string value inside the version map was returned from `getChecksum(): ?string` as a
+  `TypeError`, and a scalar section was assigned to the `?array` property as another one — both
+  `\Error`s, which escape the plugin's `catch (\Exception)`. Either way the install now reads as
+  "nothing is pinned", which is the fail-closed path it should have taken.
+- Only a 64-character lowercase hex digest counts as a pinned checksum (#63). A pin of any other
+  shape — an empty value, an uppercase digest, or a whole `sha256sum` line copied out of
+  `checksums.txt` — can never match, so it is refused up front instead of downloading the binary
+  and then throwing `checksumMismatch` on every install.
+
+Native binaries are still not installed out of the box: the installer only trusts digests pinned
+in the project's own `composer.json`, and a release's digests cannot be part of that release. Every
+release now publishes them in `checksums.txt`, so pinning one for your platform is a copy-paste
+(see the README). Making the install work without that step needs a release-process decision and is
+tracked in #260.
+
+**Behaviour change to be aware of:** `composer update` to a version whose binaries have no pinned
+digest now *deletes* a previously verified binary and then refuses to replace it, so native
+acceleration disappears until the digest is pinned. That is the fail-closed behaviour #63 asks for,
+but it is visible to anyone who updates without pinning.
+
 ## [0.5.2] - 2026-08-26
 
 v0.5.1 has no binaries behind it: every extension build failed, so `Create

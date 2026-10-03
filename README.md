@@ -56,6 +56,49 @@ When you install or update the package via Composer, the library will automatica
 If no binary matches your platform — arm64 Linux, an unusual PHP build — the extension can be
 compiled on the spot with [PIE](https://github.com/php/pie): `pie install crazy-goat/qrcode-ext`.
 
+#### Checksum Verification
+
+A downloaded binary is hashed with SHA-256 right after the transfer, compared with the checksum the
+installer expects, and deleted again when it does not match. A binary that is already in
+`vendor/crazy-goat/scanmephp/{ext,ffi}-binaries/` is checked the same way whenever the plugin runs,
+that is when ScanMePHP is installed or updated — not on a plain `composer install` that leaves the
+installed version alone. Verification is fail-closed: without a checksum for the requested version
+and binary, nothing is kept and the plugin prints which binary it wanted.
+
+Checksums are read from `extra.scanmephp.checksums` in **your** `composer.json` — the installer
+never trusts a digest it fetched next to the binary it is checking. Every release publishes the
+digests of all its binaries in `checksums.txt`, so pinning the one for your platform is a
+copy-paste. That file exists from the first release that ships this feature; earlier releases have
+none, so there is nothing to copy from them and the pure PHP encoder is used until the release you
+install has one.
+
+```bash
+gh release download vX.Y.Z -p checksums.txt
+grep libscanme_qr-linux-glibc checksums.txt   # "<digest>  <binary name>"
+```
+
+```json
+{
+    "extra": {
+        "scanmephp": {
+            "checksums": {
+                "X.Y.Z": {
+                    "libscanme_qr-linux-glibc-x86_64.so": "<the digest, first column only>"
+                }
+            }
+        }
+    }
+}
+```
+
+Copy the 64-character digest only. A whole `sha256sum` line pasted as the value is a pin that never
+matches, so every install deletes the binary and then refuses to download it again.
+
+The same file verifies a manual download; check just what you have with
+`sha256sum -c --ignore-missing checksums.txt` (Linux) or `shasum -a 256 -c checksums.txt` (macOS).
+
+Until you pin a digest, `composer install` installs no native code and the pure PHP encoder is used.
+
 ### PHP Extension Installation (Recommended)
 
 The PHP extension provides the best performance. The Composer plugin will attempt to download it automatically.
@@ -489,19 +532,19 @@ Prebuilt binaries are available from [GitHub Releases](https://github.com/crazy-
 
 | Platform | Binary | Download |
 |----------|--------|----------|
-| Linux (glibc) | `php-ext-linux-glibc-x86_64.so` | [Latest Release](../../releases/latest) |
-| Linux (musl/Alpine) | `php-ext-linux-musl-x86_64.so` | [Latest Release](../../releases/latest) |
-| macOS Intel | `php-ext-macos-x86_64.so` | [Latest Release](../../releases/latest) |
-| macOS Apple Silicon | `php-ext-macos-arm64.so` | [Latest Release](../../releases/latest) |
+| Linux (glibc) | `php-ext-linux-glibc-x86_64.so` | [Latest Release](https://github.com/crazy-goat/ScanMePHP/releases/latest) |
+| Linux (musl/Alpine) | `php-ext-linux-musl-x86_64.so` | [Latest Release](https://github.com/crazy-goat/ScanMePHP/releases/latest) |
+| macOS Intel | `php-ext-macos-x86_64.so` | [Latest Release](https://github.com/crazy-goat/ScanMePHP/releases/latest) |
+| macOS Apple Silicon | `php-ext-macos-arm64.so` | [Latest Release](https://github.com/crazy-goat/ScanMePHP/releases/latest) |
 
 #### FFI Library Binaries
 
 | Platform | Binary | Download |
 |----------|--------|----------|
-| Linux (glibc) | `libscanme_qr-linux-glibc-x86_64.so` | [Latest Release](../../releases/latest) |
-| Linux (musl/Alpine) | `libscanme_qr-linux-musl-x86_64.so` | [Latest Release](../../releases/latest) |
-| macOS Intel | `libscanme_qr-macos-x86_64.dylib` | [Latest Release](../../releases/latest) |
-| macOS Apple Silicon | `libscanme_qr-macos-arm64.dylib` | [Latest Release](../../releases/latest) |
+| Linux (glibc) | `libscanme_qr-linux-glibc-x86_64.so` | [Latest Release](https://github.com/crazy-goat/ScanMePHP/releases/latest) |
+| Linux (musl/Alpine) | `libscanme_qr-linux-musl-x86_64.so` | [Latest Release](https://github.com/crazy-goat/ScanMePHP/releases/latest) |
+| macOS Intel | `libscanme_qr-macos-x86_64.dylib` | [Latest Release](https://github.com/crazy-goat/ScanMePHP/releases/latest) |
+| macOS Apple Silicon | `libscanme_qr-macos-arm64.dylib` | [Latest Release](https://github.com/crazy-goat/ScanMePHP/releases/latest) |
 
 > **Windows:** no prebuilt binaries are published. ScanMePHP still works —
 > it falls back to the pure-PHP encoder, which needs no extension and no FFI.

@@ -26,26 +26,22 @@ struct QRMatrix {
     void set_module(int x, int y, bool dark) noexcept {
         uint64_t bit = uint64_t(1) << (x & 63);
         int word = x >> 6;
-        if (dark) rows[y].w[word] |= bit;
-        else      rows[y].w[word] &= ~bit;
+        if (dark)
+            rows[y].w[word] |= bit;
+        else
+            rows[y].w[word] &= ~bit;
     }
 
-    bool get_module(int x, int y) const noexcept {
-        return (rows[y].w[x >> 6] >> (x & 63)) & 1;
-    }
+    bool get_module(int x, int y) const noexcept { return (rows[y].w[x >> 6] >> (x & 63)) & 1; }
 
     void set_function(int x, int y, bool dark) noexcept {
         set_module(x, y, dark);
         func[y].w[x >> 6] |= uint64_t(1) << (x & 63);
     }
 
-    bool is_function(int x, int y) const noexcept {
-        return (func[y].w[x >> 6] >> (x & 63)) & 1;
-    }
+    bool is_function(int x, int y) const noexcept { return (func[y].w[x >> 6] >> (x & 63)) & 1; }
 
-    void mark_function(int x, int y) noexcept {
-        func[y].w[x >> 6] |= uint64_t(1) << (x & 63);
-    }
+    void mark_function(int x, int y) noexcept { func[y].w[x >> 6] |= uint64_t(1) << (x & 63); }
 };
 
 void place_finder_patterns(QRMatrix& m);

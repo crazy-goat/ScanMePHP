@@ -1,9 +1,7 @@
-/vendor/*
-!/vendor/crazy-goat/scanmephp/ffi-binaries/.gitkeep
+/vendor/
 /.idea/
 /.phpunit.cache/
 composer.lock
-/docs/
 /.worktrees/
 /clib/build/
 /clib/build-*/
@@ -19,3 +17,8 @@ review-reports/
 
 # Assembled by bin/build-ext-mirror.sh; the published copy lives in crazy-goat/qrcode-ext.
 /build/
+
+# Worktree process files (bin/worktree.sh)
+/findings.md
+/review.md
+/.env.worktree
