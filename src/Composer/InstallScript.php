@@ -110,9 +110,7 @@ class InstallScript
                 $builtPath = $builder->build();
 
                 // Copy to ffi-binaries directory
-                $targetPath = $binaryPath . '/' . basename($builtPath);
-                copy($builtPath, $targetPath);
-                chmod($targetPath, 0755);
+                $targetPath = self::installBuiltLibrary($builtPath, $binaryPath);
 
                 echo "✓ Binary built and installed at: $targetPath\n";
                 echo "\n🎉 FFI binary is ready to use!\n";
@@ -122,6 +120,15 @@ class InstallScript
                 echo "   You can manually download the binary from GitHub releases.\n";
             }
         }
+    }
+
+    private static function installBuiltLibrary(string $builtPath, string $binaryPath): string
+    {
+        $targetPath = $binaryPath . '/' . PlatformDetector::getCurrentPlatformBinaryName();
+        copy($builtPath, $targetPath);
+        chmod($targetPath, 0755);
+
+        return $targetPath;
     }
 
     public static function getBinaryPath(string $projectRoot): string

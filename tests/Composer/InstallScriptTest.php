@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CrazyGoat\ScanMePHP\Tests\Composer;
 
 use CrazyGoat\ScanMePHP\Composer\InstallScript;
+use CrazyGoat\ScanMePHP\PlatformDetector;
 use PHPUnit\Framework\TestCase;
 
 class InstallScriptTest extends TestCase
@@ -46,6 +47,20 @@ class InstallScriptTest extends TestCase
     {
         $path = InstallScript::getBinaryPath($this->tempDir);
         $this->assertStringContainsString('ffi-binaries', $path);
+    }
+
+    public function testSourceBuildIsInstalledUnderResolverPlatformName(): void
+    {
+        $builtPath = $this->tempDir . '/libscanme_qr.dylib';
+        file_put_contents($builtPath, 'built library contents');
+        $binaryPath = InstallScript::getBinaryPath($this->tempDir);
+
+        $targetPath = (new \ReflectionMethod(InstallScript::class, 'installBuiltLibrary'))
+            ->invoke(null, $builtPath, $binaryPath);
+
+        $this->assertSame($binaryPath . '/' . PlatformDetector::getCurrentPlatformBinaryName(), $targetPath);
+        $this->assertSame('built library contents', file_get_contents($targetPath));
+        $this->assertFileDoesNotExist($binaryPath . '/libscanme_qr.dylib');
     }
 
     public function testGetPackageVersionFromComposer(): void
