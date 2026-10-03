@@ -1,0 +1,20 @@
+name: Windows PATH probe
+
+on:
+  push:
+    branches: [chore/pr-240-windows-ci-probe]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+      - name: Exercise real Windows tool lookup
+        run: php tests/windows-path-probe.php
