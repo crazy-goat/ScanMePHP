@@ -83,7 +83,9 @@ class Encoder implements EncoderInterface
         ?Mode $forcedMode = null
     ): Matrix {
         $data = $url;
-        if (empty($data)) {
+        // `empty()` is wrong here: in PHP empty("0") is true, so the one-character
+        // payload "0" would be rejected as empty (#75). Compare explicitly.
+        if ($data === '') {
             throw InvalidDataException::emptyData();
         }
 

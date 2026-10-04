@@ -48,7 +48,10 @@ class QRCode
 
     private function validateUrl(string $url): void
     {
-        if (empty($url)) {
+        // `empty()` is wrong here: in PHP empty("0") is true, so the non-empty
+        // payload "0" would be reported as empty data instead of failing URL
+        // validation below (#75). Compare explicitly.
+        if ($url === '') {
             throw InvalidDataException::emptyData();
         }
 
