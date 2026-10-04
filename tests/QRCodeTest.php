@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use CrazyGoat\ScanMePHP\ErrorCorrectionLevel;
 use CrazyGoat\ScanMePHP\Exception\InvalidConfigurationException;
+use CrazyGoat\ScanMePHP\Exception\InvalidDataException;
 use CrazyGoat\ScanMePHP\ModuleStyle;
 use CrazyGoat\ScanMePHP\QRCode;
 use CrazyGoat\ScanMePHP\QRCodeConfig;
@@ -345,5 +346,23 @@ class QRCodeTest extends TestCase
         $this->expectExceptionMessage('Module size must be greater than 0');
 
         new SvgRenderer(moduleSize: -5);
+    }
+
+    public function testEmptyUrlThrowsEmptyData(): void
+    {
+        $this->expectException(InvalidDataException::class);
+        $this->expectExceptionMessage('Data cannot be empty');
+
+        new QRCode('');
+    }
+
+    public function testZeroPayloadIsReportedAsInvalidUrlNotEmptyData(): void
+    {
+        // "0" is not an empty string, but empty("0") is true in PHP, so it used to be
+        // reported as empty data (#75). It must fail URL validation instead.
+        $this->expectException(InvalidDataException::class);
+        $this->expectExceptionMessage('Invalid URL provided: "0"');
+
+        new QRCode('0');
     }
 }
