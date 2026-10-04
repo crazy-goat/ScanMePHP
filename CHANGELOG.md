@@ -66,7 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Encoder::encode()` no longer rejects the payload `"0"` as empty data. Emptiness was
   checked with `empty($data)`, and `empty("0")` is `true` in PHP, so a perfectly valid
   one-character payload threw `InvalidDataException: Data cannot be empty` while
-  `FastEncoder` encoded it. Both sites now compare against `''` explicitly (#75).
+  `FastEncoder` encoded it. The check now compares against `''` explicitly (#75).
 - `QRCode` no longer reports `"0"` as empty data either. The same `empty($url)` check ran
   before URL validation, so `"0"` was rejected with "Data cannot be empty" instead of the
   accurate "Invalid URL provided". `QRCode` still requires a valid URL, so `"0"` remains
